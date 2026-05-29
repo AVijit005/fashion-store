@@ -37,6 +37,7 @@ import { StudioModule } from './modules/studio/studio.module';
             port: parseInt(url.port || '6379', 10),
             username: url.username || undefined,
             password: url.password || undefined,
+            tls: url.protocol === 'rediss:' ? { rejectUnauthorized: false } : undefined,
           },
         };
       },
