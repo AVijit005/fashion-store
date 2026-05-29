@@ -72,10 +72,10 @@ export class CartController {
     @Headers('x-cart-session-id') sessionId?: string,
   ) {
     const { userId, sessionId: sId } = this.getSessionOrUserId(user, sessionId);
-    return this.cartService.addItem(dto.variantId, dto.quantity, userId, sId);
+    return this.cartService.addItem(dto.itemId, dto.quantity, userId, sId, dto.customData);
   }
 
-  @Patch('items/:variantId')
+  @Patch('items/:itemId')
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Update cart item quantity' })
   @ApiHeader({
@@ -84,16 +84,16 @@ export class CartController {
     description: 'Guest cart session ID (UUID)',
   })
   async updateItem(
-    @Param('variantId') variantId: string,
+    @Param('itemId') itemId: string,
     @Body() dto: UpdateCartItemDto,
     @CurrentUser() user?: RequestUser,
     @Headers('x-cart-session-id') sessionId?: string,
   ) {
     const { userId, sessionId: sId } = this.getSessionOrUserId(user, sessionId);
-    return this.cartService.updateItem(variantId, dto.quantity, userId, sId);
+    return this.cartService.updateItem(itemId, dto.quantity, userId, sId);
   }
 
-  @Delete('items/:variantId')
+  @Delete('items/:itemId')
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Remove item from cart' })
   @ApiHeader({
@@ -102,12 +102,12 @@ export class CartController {
     description: 'Guest cart session ID (UUID)',
   })
   async removeItem(
-    @Param('variantId') variantId: string,
+    @Param('itemId') itemId: string,
     @CurrentUser() user?: RequestUser,
     @Headers('x-cart-session-id') sessionId?: string,
   ) {
     const { userId, sessionId: sId } = this.getSessionOrUserId(user, sessionId);
-    return this.cartService.removeItem(variantId, userId, sId);
+    return this.cartService.removeItem(itemId, userId, sId);
   }
 
   @Delete()

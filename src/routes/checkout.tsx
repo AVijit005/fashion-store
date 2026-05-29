@@ -160,11 +160,7 @@ function CheckoutPage() {
     setOrderError(null);
 
     try {
-      if (items.some((item) => !item.variantId)) {
-        throw new Error(
-          "One or more bag items are unavailable for checkout. Please re-add them from the product page.",
-        );
-      }
+      // Custom studio items are now handled dynamically via customData so they don't require variantId
 
       const razorpayKeyId = (import.meta.env.VITE_RAZORPAY_KEY_ID as string) ?? "";
       if (!/^rzp_(test|live)_/.test(razorpayKeyId) || razorpayKeyId.includes("placeholder")) {
@@ -216,21 +212,27 @@ function CheckoutPage() {
           razorpay_payment_id: string;
           razorpay_signature: string;
         }) => {
-          // 2. Verify payment signature on backend
-          await apiClient.post("/orders/verify-payment", {
-            razorpayOrderId: response.razorpay_order_id,
-            razorpayPaymentId: response.razorpay_payment_id,
-            razorpaySignature: response.razorpay_signature,
-          });
+          try {
+            // 2. Verify payment signature on backend
+            await apiClient.post("/orders/verify-payment", {
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            });
 
-          // 3. Clear local + backend cart only after confirmed payment
-          clear();
+            // 3. Clear local + backend cart only after confirmed payment
+            clear();
 
-          // 4. Navigate to success
-          await navigate({
-            to: "/checkout/success",
-            search: { orderId: checkoutRes.orderId },
-          });
+            // 4. Navigate to success
+            await navigate({
+              to: "/checkout/success",
+              search: { orderId: checkoutRes.orderId },
+            });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : "Payment verification failed. Please contact support.";
+            setOrderError(message);
+            setIsPlacing(false);
+          }
         },
         modal: {
           ondismiss: () => {

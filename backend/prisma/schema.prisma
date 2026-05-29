@@ -237,8 +237,9 @@ model OrderItem {
   id               String         @id @default(uuid())
   orderId          String         @map("order_id")
   order            Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productVariantId String         @map("product_variant_id")
-  productVariant   ProductVariant @relation(fields: [productVariantId], references: [id])
+  productVariantId String?        @map("product_variant_id")
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
+  customData       Json?          @map("custom_data")
   quantity         Int
   priceAtPurchase  Decimal        @map("price_at_purchase") @db.Decimal(10, 2)
 
@@ -423,8 +424,9 @@ model CartItem {
   id               String         @id @default(uuid())
   cartId           String         @map("cart_id")
   cart             Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  productVariantId String         @map("product_variant_id")
-  productVariant   ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+  productVariantId String?        @map("product_variant_id")
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+  customData       Json?          @map("custom_data")
   quantity         Int
   createdAt        DateTime       @default(now()) @map("created_at")
   updatedAt        DateTime       @updatedAt @map("updated_at")

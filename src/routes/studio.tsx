@@ -120,6 +120,12 @@ function Studio() {
       size: "M",
       color,
       custom: true,
+      customData: {
+        productId,
+        color,
+        hex: colorHex,
+        layers,
+      },
     });
   };
 

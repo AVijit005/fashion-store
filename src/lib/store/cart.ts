@@ -21,6 +21,7 @@ export type CartItem = {
   color: string;
   qty: number;
   custom?: boolean;
+  customData?: any;
 };
 
 type CartState = {
@@ -38,34 +39,49 @@ type CartState = {
 
 const keyFor = (i: { id: string; size: string; color: string }) => `${i.id}-${i.size}-${i.color}`;
 
-// Fire-and-forget backend sync — never blocks the UI.
-// Errors are logged but do not affect the local cart state.
-function syncAdd(variantId: string, quantity: number) {
-  cartApi
-    .addItem(variantId, quantity)
-    .catch((err) => console.error("[cart] Backend sync addItem failed:", err));
+// Simple queue for backend sync to prevent race conditions
+const syncQueue: (() => Promise<void>)[] = [];
+let isSyncing = false;
+
+async function processQueue() {
+  if (isSyncing || syncQueue.length === 0) return;
+  isSyncing = true;
+  while (syncQueue.length > 0) {
+    const task = syncQueue.shift();
+    if (task) {
+      try {
+        await task();
+      } catch (err) {
+        console.error("[cart] Backend sync failed:", err);
+      }
+    }
+  }
+  isSyncing = false;
 }
 
-function syncUpdate(variantId: string, qty: number) {
+function enqueueSync(task: () => Promise<void>) {
+  syncQueue.push(task);
+  processQueue();
+}
+
+function syncAdd(itemId: string, quantity: number, customData?: any) {
+  enqueueSync(() => cartApi.addItem(itemId, quantity, customData).then(() => {}));
+}
+
+function syncUpdate(itemId: string, qty: number) {
   if (qty <= 0) {
-    cartApi
-      .removeItem(variantId)
-      .catch((err) => console.error("[cart] Backend sync removeItem failed:", err));
+    enqueueSync(() => cartApi.removeItem(itemId).then(() => {}));
   } else {
-    cartApi
-      .updateItem(variantId, qty)
-      .catch((err) => console.error("[cart] Backend sync updateItem failed:", err));
+    enqueueSync(() => cartApi.updateItem(itemId, qty).then(() => {}));
   }
 }
 
-function syncRemove(variantId: string) {
-  cartApi
-    .removeItem(variantId)
-    .catch((err) => console.error("[cart] Backend sync removeItem failed:", err));
+function syncRemove(itemId: string) {
+  enqueueSync(() => cartApi.removeItem(itemId).then(() => {}));
 }
 
 function syncClear() {
-  cartApi.clearCart().catch((err) => console.error("[cart] Backend sync clearCart failed:", err));
+  enqueueSync(() => cartApi.clearCart().then(() => {}));
 }
 
 export const useCart = create<CartState>()(
@@ -89,19 +105,15 @@ export const useCart = create<CartState>()(
           set({ items: [...get().items, { ...i, qty }], open: true });
         }
 
-        // Sync to backend only for real product variants (not custom studio items)
-        if (i.variantId) {
-          syncAdd(i.variantId, qty);
-        }
+        // Sync to backend
+        syncAdd(i.variantId || i.id, qty, i.customData);
       },
 
       remove: (k) => {
         const item = get().items.find((it) => keyFor(it) === k);
         set({ items: get().items.filter((it) => keyFor(it) !== k) });
 
-        if (item?.variantId) {
-          syncRemove(item.variantId);
-        }
+        syncRemove(item?.variantId || k);
       },
 
       setQty: (k, qty) => {
@@ -112,8 +124,8 @@ export const useCart = create<CartState>()(
             .filter((it) => it.qty > 0),
         });
 
-        if (item?.variantId) {
-          syncUpdate(item.variantId, qty);
+        if (item) {
+          syncUpdate(item.variantId || k, qty);
         }
       },
 

@@ -6,6 +6,12 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { Role, TemplateStatus } from '@prisma/client';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+
+interface RequestUser {
+  id: string;
+  role: string;
+}
 
 @ApiTags('Creator Templates')
 @ApiBearerAuth()
@@ -17,8 +23,8 @@ export class CreatorTemplateController {
   @Roles(Role.CREATOR, Role.ADMIN)
   @Post()
   @ApiOperation({ summary: 'Create a new template (Creator/Admin only)' })
-  create(@Req() req: any, @Body() createDto: CreateCreatorTemplateDto) {
-    return this.templateService.create(req.user.id, createDto);
+  create(@CurrentUser() user: RequestUser, @Body() createDto: CreateCreatorTemplateDto) {
+    return this.templateService.create(user.id, createDto);
   }
 
   @UseGuards(AuthGuard)
@@ -27,31 +33,31 @@ export class CreatorTemplateController {
     summary: 'List all templates. Admins/Creators see all, Customers see PUBLISHED only.',
   })
   @ApiQuery({ name: 'status', enum: TemplateStatus, required: false })
-  findAll(@Req() req: any, @Query('status') status?: TemplateStatus) {
+  findAll(@CurrentUser() user: RequestUser, @Query('status') status?: TemplateStatus) {
     // Customers can only see published templates
-    const finalStatus = req.user.role === Role.CUSTOMER ? TemplateStatus.PUBLISHED : status;
-    return this.templateService.findAll(req.user.id, req.user.role, finalStatus);
+    const finalStatus = user.role === Role.CUSTOMER ? TemplateStatus.PUBLISHED : status;
+    return this.templateService.findAll(user.id, user.role as Role, finalStatus);
   }
 
   @UseGuards(AuthGuard)
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific template' })
-  findOne(@Req() req: any, @Param('id') id: string) {
-    return this.templateService.findOne(id, req.user.id, req.user.role);
+  findOne(@CurrentUser() user: RequestUser, @Param('id') id: string) {
+    return this.templateService.findOne(id, user.id, user.role as Role);
   }
 
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(Role.CREATOR, Role.ADMIN)
   @Patch(':id')
   @ApiOperation({ summary: 'Update a template (Owner/Admin only)' })
-  update(@Req() req: any, @Param('id') id: string, @Body() updateDto: UpdateCreatorTemplateDto) {
-    return this.templateService.update(req.user.id, req.user.role, id, updateDto);
+  update(@CurrentUser() user: RequestUser, @Param('id') id: string, @Body() updateDto: UpdateCreatorTemplateDto) {
+    return this.templateService.update(user.id, user.role as Role, id, updateDto);
   }
 
   @UseGuards(AuthGuard)
   @Post(':id/clone')
   @ApiOperation({ summary: 'Clone a published template to a user design' })
-  cloneToDesign(@Req() req: any, @Param('id') id: string) {
-    return this.templateService.cloneToDesign(req.user.id, id);
+  cloneToDesign(@CurrentUser() user: RequestUser, @Param('id') id: string) {
+    return this.templateService.cloneToDesign(user.id, id);
   }
 }

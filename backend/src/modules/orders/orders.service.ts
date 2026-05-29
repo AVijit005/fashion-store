@@ -71,14 +71,18 @@ export class OrdersService {
     // 2. Perform DB Transaction for inventory locking and order creation
     const createdOrder = await this.prisma.$transaction(async (tx) => {
       // Delegate sorted locking and reservation logic to InventoryService
-      await this.inventoryService.reserveInventory(
-        cart.items.map((item) => ({
-          variantId: item.variantId,
+      // Only reserve inventory for standard variant items
+      const inventoryItems = cart.items
+        .filter((item) => item.variantId !== null)
+        .map((item) => ({
+          variantId: item.variantId as string,
           quantity: item.quantity,
-          sku: item.sku,
-        })),
-        tx,
-      );
+          sku: item.sku as string,
+        }));
+        
+      if (inventoryItems.length > 0) {
+        await this.inventoryService.reserveInventory(inventoryItems, tx);
+      }
 
       // Create Order
       return tx.order.create({
@@ -104,6 +108,7 @@ export class OrdersService {
               productVariantId: item.variantId,
               quantity: item.quantity,
               priceAtPurchase: new Prisma.Decimal(item.unitPrice),
+              customData: item.customData || undefined,
             })),
           },
           statusHistory: {

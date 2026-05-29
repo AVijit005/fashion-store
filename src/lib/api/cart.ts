@@ -64,27 +64,27 @@ export const cartApi = {
     });
   },
 
-  /** Add a variant to the backend cart. */
-  async addItem(variantId: string, quantity: number): Promise<BackendCart> {
+  /** Add an item to the backend cart. */
+  async addItem(itemId: string, quantity: number, customData?: unknown): Promise<BackendCart> {
     return apiClient.post<BackendCart>(
       "/cart/items",
-      { variantId, quantity },
+      { itemId, quantity, customData },
       { headers: cartHeaders() },
     );
   },
 
   /** Update the quantity of an existing cart item. */
-  async updateItem(variantId: string, quantity: number): Promise<BackendCart> {
+  async updateItem(itemId: string, quantity: number): Promise<BackendCart> {
     return apiClient.patch<BackendCart>(
-      `/cart/items/${variantId}`,
+      `/cart/items/${itemId}`,
       { quantity },
       { headers: cartHeaders() },
     );
   },
 
   /** Remove an item from the backend cart. */
-  async removeItem(variantId: string): Promise<BackendCart> {
-    return apiClient.delete<BackendCart>(`/cart/items/${variantId}`, {
+  async removeItem(itemId: string): Promise<BackendCart> {
+    return apiClient.delete<BackendCart>(`/cart/items/${itemId}`, {
       headers: cartHeaders(),
     });
   },
