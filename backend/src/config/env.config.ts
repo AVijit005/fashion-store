@@ -1,0 +1,36 @@
+import { z } from 'zod';
+
+export const envSchema = z.object({
+  PORT: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .default('3000'),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  DATABASE_URL: z.string().url(),
+  REDIS_URL: z.string().url(),
+  JWT_SECRET: z.string(),
+  JWT_EXPIRES_IN: z.string().default('15m'),
+  REFRESH_TOKEN_EXPIRES_IN_DAYS: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .default('7'),
+  RAZORPAY_KEY_ID: z.string(),
+  RAZORPAY_KEY_SECRET: z.string(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  AWS_ACCESS_KEY_ID: z.string(),
+  AWS_SECRET_ACCESS_KEY: z.string(),
+  AWS_REGION: z.string(),
+  AWS_S3_BUCKET: z.string(),
+  AWS_S3_ENDPOINT: z.string().optional(),
+});
+
+export type Env = z.infer<typeof envSchema>;
+
+export const validateEnv = (config: Record<string, unknown>) => {
+  const result = envSchema.safeParse(config);
+  if (!result.success) {
+    console.error('❌ Invalid environment variables configuration:', result.error.format());
+    throw new Error('Invalid environment variables');
+  }
+  return result.data;
+};

@@ -1,0 +1,366 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import {
+  Check,
+  ChevronDown,
+  Download,
+  Filter,
+  Mail,
+  PackageCheck,
+  Printer,
+  RotateCcw,
+  Search,
+  Truck,
+} from "lucide-react";
+import { SectionHeader, Panel } from "@/components/admin/section-header";
+import { StatusChip, orderTone } from "@/components/admin/status-chip";
+import { AdminDrawer } from "@/components/admin/drawer";
+import { orders as ALL_ORDERS, type Order, type OrderStatus } from "@/lib/admin/data";
+import { compactInr, inr, longDate, relTime } from "@/lib/admin/format";
+
+export const Route = createFileRoute("/admin/orders")({
+  head: () => ({
+    meta: [
+      { title: "Orders — Admin · Ink Studio" },
+      { name: "robots", content: "noindex,nofollow" },
+    ],
+  }),
+  component: OrdersPage,
+});
+
+const STATUSES: ("all" | OrderStatus)[] = [
+  "all",
+  "pending",
+  "paid",
+  "fulfilled",
+  "shipped",
+  "delivered",
+  "refunded",
+];
+const FULFILL_STEPS = [
+  "received",
+  "picked",
+  "packed",
+  "shipped",
+  "out_for_delivery",
+  "delivered",
+] as const;
+const FULFILL_LABEL: Record<string, string> = {
+  received: "Order received",
+  picked: "Picked",
+  packed: "Packed",
+  shipped: "Shipped",
+  out_for_delivery: "Out for delivery",
+  delivered: "Delivered",
+};
+
+function OrdersPage() {
+  const [status, setStatus] = useState<(typeof STATUSES)[number]>("all");
+  const [q, setQ] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [active, setActive] = useState<Order | null>(null);
+
+  const list = useMemo(() => {
+    return ALL_ORDERS.filter((o) => {
+      if (status !== "all" && o.status !== status) return false;
+      if (q) {
+        const needle = q.toLowerCase();
+        if (
+          !o.number.toLowerCase().includes(needle) &&
+          !o.customer.name.toLowerCase().includes(needle) &&
+          !o.customer.email.toLowerCase().includes(needle)
+        )
+          return false;
+      }
+      return true;
+    });
+  }, [status, q]);
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: ALL_ORDERS.length };
+    for (const s of STATUSES.slice(1)) c[s] = ALL_ORDERS.filter((o) => o.status === s).length;
+    return c;
+  }, []);
+
+  const toggle = (id: string) =>
+    setSelected((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
+
+  const allSelected = list.length > 0 && list.every((o) => selected.includes(o.id));
+  const toggleAll = () => setSelected(allSelected ? [] : list.map((o) => o.id));
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader
+        eyebrow={`${ALL_ORDERS.length} orders · Last 30 days`}
+        title="Orders"
+        description="Fulfillment, payments, refunds and returns in one view."
+        actions={
+          <>
+            <button className="press flex items-center gap-2 border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute transition hover:border-ink hover:text-ink">
+              <Download className="h-3.5 w-3.5" /> Export
+            </button>
+            <button className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper">
+              + Manual order
+            </button>
+          </>
+        }
+      />
+
+      {/* Status tabs */}
+      <div className="flex flex-wrap items-center gap-1 border border-line bg-paper p-1">
+        {STATUSES.map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatus(s)}
+            className={`flex items-center gap-2 px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] transition ${status === s ? "bg-ink text-paper" : "text-mute hover:text-ink"}`}
+          >
+            <span>{s}</span>
+            <span className="font-mono tabular-nums opacity-70">{counts[s] ?? 0}</span>
+          </button>
+        ))}
+        <div className="ml-auto flex items-center gap-2 pr-1">
+          <label className="relative">
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-mute"
+              aria-hidden="true"
+            />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search orders…"
+              className="h-8 w-56 border border-line bg-paper pl-8 pr-3 text-[12px] outline-none transition placeholder:text-mute focus:border-ink"
+            />
+          </label>
+          <button className="flex h-8 items-center gap-1.5 border border-line bg-paper px-2.5 text-[11px] uppercase tracking-[0.18em] text-mute transition hover:border-ink hover:text-ink">
+            <Filter className="h-3.5 w-3.5" /> Filters <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+
+      {/* Bulk action bar */}
+      {selected.length > 0 && (
+        <div className="sticky top-14 z-20 flex items-center justify-between border border-ink bg-ink px-4 py-2.5 text-paper">
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em]">
+            {selected.length} selected
+          </p>
+          <div className="flex items-center gap-2">
+            <BulkBtn icon={<Printer className="h-3.5 w-3.5" />}>Print labels</BulkBtn>
+            <BulkBtn icon={<Truck className="h-3.5 w-3.5" />}>Mark shipped</BulkBtn>
+            <BulkBtn icon={<Mail className="h-3.5 w-3.5" />}>Email customers</BulkBtn>
+            <button
+              onClick={() => setSelected([])}
+              className="font-mono text-[10px] uppercase tracking-[0.2em] text-paper/70 hover:text-paper"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
+      <Panel bodyClassName="p-0">
+        <table className="w-full text-[13px]">
+          <thead className="border-b border-line bg-fog/40 text-left">
+            <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
+              <th className="w-10 px-3 py-2.5">
+                <Checkbox checked={allSelected} onChange={toggleAll} aria-label="Select all" />
+              </th>
+              <th className="px-3 py-2.5 font-normal">Order</th>
+              <th className="px-3 py-2.5 font-normal">Customer</th>
+              <th className="px-3 py-2.5 font-normal">Status</th>
+              <th className="px-3 py-2.5 font-normal">Fulfillment</th>
+              <th className="px-3 py-2.5 font-normal">Payment</th>
+              <th className="px-3 py-2.5 font-normal">Channel</th>
+              <th className="px-3 py-2.5 text-right font-normal">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((o) => (
+              <tr
+                key={o.id}
+                onClick={() => setActive(o)}
+                className="cursor-pointer border-b border-line/60 transition hover:bg-fog/40"
+              >
+                <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={selected.includes(o.id)}
+                    onChange={() => toggle(o.id)}
+                    aria-label={`Select ${o.number}`}
+                  />
+                </td>
+                <td className="px-3 py-3">
+                  <p className="font-mono text-[12px] text-ink">{o.number}</p>
+                  <p className="text-[11px] text-mute">{relTime(o.createdAt)}</p>
+                </td>
+                <td className="px-3 py-3">
+                  <p className="text-ink">{o.customer.name}</p>
+                  <p className="text-[11px] text-mute">{o.city}</p>
+                </td>
+                <td className="px-3 py-3">
+                  <div className="flex flex-col items-start gap-1">
+                    <StatusChip label={o.status} tone={orderTone(o.status)} />
+                    {o.refundRequested && <StatusChip label="Refund requested" tone="warn" />}
+                    {o.returnRequested && <StatusChip label="Return open" tone="info" />}
+                  </div>
+                </td>
+                <td className="px-3 py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-mute">
+                  {FULFILL_LABEL[o.fulfillment]}
+                </td>
+                <td className="px-3 py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-mute">
+                  {o.payment}
+                </td>
+                <td className="px-3 py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-mute">
+                  {o.channel}
+                </td>
+                <td className="px-3 py-3 text-right font-mono tabular-nums">
+                  {compactInr(o.total)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+
+      <AdminDrawer
+        open={!!active}
+        onClose={() => setActive(null)}
+        eyebrow={active ? `${longDate(active.createdAt)}` : ""}
+        title={active ? `Order ${active.number}` : ""}
+        footer={
+          <div className="flex items-center justify-between gap-2">
+            <button className="press flex items-center gap-1.5 border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink">
+              <RotateCcw className="h-3.5 w-3.5" /> Refund
+            </button>
+            <div className="flex items-center gap-2">
+              <button className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink">
+                Print invoice
+              </button>
+              <button className="press flex items-center gap-1.5 bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper">
+                <PackageCheck className="h-3.5 w-3.5" /> Fulfill
+              </button>
+            </div>
+          </div>
+        }
+      >
+        {active && <OrderDetail order={active} />}
+      </AdminDrawer>
+    </div>
+  );
+}
+
+function OrderDetail({ order }: { order: Order }) {
+  const currentStep = FULFILL_STEPS.indexOf(order.fulfillment);
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <StatusChip label={order.status} tone={orderTone(order.status)} />
+        <StatusChip label={`${order.payment} · paid`} tone="info" />
+        {order.refundRequested && <StatusChip label="Refund requested" tone="warn" />}
+      </div>
+
+      {/* Fulfillment timeline */}
+      <section>
+        <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-mute">
+          Fulfillment timeline
+        </p>
+        <ol className="mt-3 space-y-3">
+          {FULFILL_STEPS.map((step, i) => {
+            const done = i <= currentStep;
+            const current = i === currentStep;
+            return (
+              <li key={step} className="flex items-start gap-3">
+                <span
+                  className={`mt-0.5 flex h-5 w-5 items-center justify-center border text-[10px] ${done ? "border-ink bg-ink text-paper" : "border-line text-mute"}`}
+                >
+                  {done ? <Check className="h-3 w-3" /> : i + 1}
+                </span>
+                <div className="flex-1">
+                  <p className={`text-[13px] ${done ? "text-ink" : "text-mute"}`}>
+                    {FULFILL_LABEL[step]}
+                  </p>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-mute">
+                    {current ? "In progress" : done ? "Completed" : "Pending"}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+
+      {/* Items */}
+      <section>
+        <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-mute">
+          Items · {order.items.length}
+        </p>
+        <ul className="mt-3 divide-y divide-line/60 border border-line">
+          {order.items.map((it, idx) => (
+            <li key={idx} className="flex gap-3 p-3">
+              <img src={it.image} alt="" className="h-14 w-12 object-cover" />
+              <div className="flex-1">
+                <p className="text-[13px] text-ink">{it.name}</p>
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-mute">
+                  {it.sku} · ×{it.qty}
+                </p>
+              </div>
+              <p className="font-mono text-[12px] tabular-nums">{inr(it.price * it.qty)}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* Totals + customer */}
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="border border-line p-4">
+          <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-mute">Customer</p>
+          <p className="mt-2 text-[14px] text-ink">{order.customer.name}</p>
+          <p className="text-[12px] text-mute">{order.customer.email}</p>
+          <p className="mt-3 text-[12px] text-mute">
+            Ships to <span className="text-ink">{order.city}, IN</span>
+          </p>
+        </div>
+        <div className="border border-line p-4">
+          <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-mute">Totals</p>
+          <dl className="mt-2 space-y-1.5 text-[12px]">
+            <Row label="Subtotal" value={inr(order.total)} />
+            <Row label="Shipping" value="Free" />
+            <Row label="Tax" value="Included" />
+            <div className="mt-2 flex items-baseline justify-between border-t border-line pt-2 text-ink">
+              <dt className="text-[11px] uppercase tracking-[0.22em] text-mute">Total</dt>
+              <dd className="font-mono text-lg tabular-nums">{inr(order.total)}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between">
+      <dt className="text-mute">{label}</dt>
+      <dd className="font-mono tabular-nums text-ink">{value}</dd>
+    </div>
+  );
+}
+
+function Checkbox({ checked, onChange, ...rest }: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked as boolean}
+      onChange={onChange}
+      className="h-3.5 w-3.5 cursor-pointer accent-ink"
+      {...rest}
+    />
+  );
+}
+
+function BulkBtn({ children, icon }: { children: React.ReactNode; icon: React.ReactNode }) {
+  return (
+    <button className="flex items-center gap-1.5 border border-paper/20 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-paper transition hover:bg-paper/10">
+      {icon}
+      {children}
+    </button>
+  );
+}

@@ -1,0 +1,286 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
+import {
+  Package,
+  Heart,
+  MapPin,
+  CreditCard,
+  LogOut,
+  Bell,
+  Settings,
+  RotateCcw,
+  Check,
+} from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
+export const Route = createFileRoute("/account")({
+  head: () => ({
+    meta: [
+      { title: "Account — Ink Studio" },
+      { name: "description", content: "Your orders, addresses, payments, and preferences." },
+    ],
+  }),
+  component: Account,
+});
+
+const orders = [
+  {
+    id: "INK-48201",
+    date: "12 Nov 2025",
+    total: "₹3,498",
+    status: "Delivered",
+    items: 2,
+    eta: "Delivered Nov 14",
+  },
+  {
+    id: "INK-47812",
+    date: "28 Oct 2025",
+    total: "₹1,299",
+    status: "Delivered",
+    items: 1,
+    eta: "Delivered Oct 30",
+  },
+  {
+    id: "INK-46930",
+    date: "03 Oct 2025",
+    total: "₹2,798",
+    status: "Delivered",
+    items: 2,
+    eta: "Delivered Oct 06",
+  },
+  {
+    id: "INK-49120",
+    date: "26 Nov 2025",
+    total: "₹1,499",
+    status: "In transit",
+    items: 1,
+    eta: "Arriving Nov 28",
+  },
+];
+
+const trackingSteps = [
+  "Order placed",
+  "Confirmed",
+  "Packed",
+  "Shipped",
+  "Out for delivery",
+  "Delivered",
+];
+
+function Account() {
+  const [openOrder, setOpenOrder] = useState<string | null>(null);
+
+  return (
+    <div className="mx-auto max-w-[1480px] px-5 py-12 lg:px-10 lg:py-16">
+      <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Account</p>
+      <h1 className="mt-2 font-display text-5xl lg:text-6xl">Hello, Arjun.</h1>
+      <p className="mt-2 text-mute">Member since 2024 · 7 orders · 2,840 ink points</p>
+
+      <Tabs defaultValue="orders" className="mt-10">
+        <TabsList className="flex flex-wrap justify-start gap-1 bg-transparent p-0">
+          {[
+            { v: "orders", l: "Orders", i: Package },
+            { v: "returns", l: "Returns", i: RotateCcw },
+            { v: "addresses", l: "Addresses", i: MapPin },
+            { v: "payment", l: "Payment", i: CreditCard },
+            { v: "notifications", l: "Notifications", i: Bell },
+            { v: "preferences", l: "Preferences", i: Settings },
+            { v: "saved", l: "Saved", i: Heart },
+          ].map((t) => (
+            <TabsTrigger
+              key={t.v}
+              value={t.v}
+              className="flex items-center gap-2 rounded-none border border-line bg-paper px-4 py-2 text-[12px] uppercase tracking-[0.18em] data-[state=active]:border-ink data-[state=active]:bg-ink data-[state=active]:text-paper"
+            >
+              <t.i className="h-4 w-4" />
+              {t.l}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        {/* Orders */}
+        <TabsContent value="orders" className="mt-8">
+          <ul className="divide-y divide-line border-y border-line">
+            {orders.map((o) => (
+              <li key={o.id} className="py-5">
+                <button
+                  onClick={() => setOpenOrder(openOrder === o.id ? null : o.id)}
+                  className="flex w-full flex-wrap items-center justify-between gap-3 text-left"
+                >
+                  <div>
+                    <p className="text-[14px]">{o.id}</p>
+                    <p className="text-[12px] text-mute">
+                      {o.date} · {o.items} item{o.items > 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <p
+                    className={`text-[12px] uppercase tracking-[0.18em] ${o.status === "Delivered" ? "text-mute" : "text-accent"}`}
+                  >
+                    {o.status}
+                  </p>
+                  <p className="tabular-nums">{o.total}</p>
+                  <span className="text-[12px] uppercase tracking-[0.18em] underline-offset-4 hover:underline">
+                    {openOrder === o.id ? "Close" : "View →"}
+                  </span>
+                </button>
+                {openOrder === o.id && (
+                  <div className="mt-6 border border-line bg-fog/40 p-6">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Tracking</p>
+                    <p className="mt-1 font-display text-2xl">{o.eta}</p>
+                    <ol className="mt-6 space-y-3">
+                      {trackingSteps.map((s, i) => {
+                        const reachedIdx = o.status === "Delivered" ? trackingSteps.length - 1 : 3;
+                        const done = i <= reachedIdx;
+                        return (
+                          <li key={s} className="flex items-center gap-3">
+                            <span
+                              className={`flex h-5 w-5 items-center justify-center rounded-full border ${done ? "border-ink bg-ink text-paper" : "border-line text-mute"}`}
+                            >
+                              {done && <Check className="h-3 w-3" />}
+                            </span>
+                            <span className={done ? "" : "text-mute"}>{s}</span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </TabsContent>
+
+        {/* Returns */}
+        <TabsContent value="returns" className="mt-8">
+          <div className="border border-line bg-paper p-8 text-center">
+            <p className="font-display text-3xl">No active returns.</p>
+            <p className="mt-2 text-mute">
+              Start one from any delivered order in three quick steps.
+            </p>
+            <ol className="mx-auto mt-8 grid max-w-2xl grid-cols-3 gap-4 text-left text-[12px]">
+              {["1. Select item", "2. Reason & pickup", "3. Refund confirmed"].map((s) => (
+                <li key={s} className="border border-line p-4 uppercase tracking-[0.18em]">
+                  {s}
+                </li>
+              ))}
+            </ol>
+          </div>
+        </TabsContent>
+
+        {/* Addresses */}
+        <TabsContent value="addresses" className="mt-8">
+          <div className="grid gap-4 md:grid-cols-2">
+            {[
+              {
+                tag: "Home",
+                name: "Arjun Mehta",
+                addr: "B-204, Skyline Heights, Bandra West, Mumbai 400050",
+                phone: "+91 98765 43210",
+              },
+              {
+                tag: "Office",
+                name: "Arjun Mehta",
+                addr: "Floor 7, BKC One, Bandra Kurla Complex, Mumbai 400051",
+                phone: "+91 98765 43210",
+              },
+            ].map((a) => (
+              <div key={a.tag} className="border border-line p-6">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mute">{a.tag}</p>
+                <p className="mt-2 font-medium">{a.name}</p>
+                <p className="mt-1 text-sm text-mute">{a.addr}</p>
+                <p className="mt-1 text-sm text-mute">{a.phone}</p>
+                <div className="mt-4 flex gap-3 text-[12px] uppercase tracking-[0.18em]">
+                  <button className="underline-offset-4 hover:underline">Edit</button>
+                  <button className="text-mute hover:text-ink">Remove</button>
+                </div>
+              </div>
+            ))}
+            <button className="flex min-h-[160px] items-center justify-center border border-dashed border-line text-[12px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink">
+              + Add address
+            </button>
+          </div>
+        </TabsContent>
+
+        {/* Payment */}
+        <TabsContent value="payment" className="mt-8">
+          <div className="grid gap-4 md:grid-cols-2">
+            {[
+              { l: "HDFC Debit", v: "•••• 4221", e: "08/27" },
+              { l: "UPI", v: "arjun@ybl", e: "Verified" },
+            ].map((c) => (
+              <div key={c.v} className="border border-line p-6">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mute">{c.l}</p>
+                <p className="mt-2 font-display text-2xl tracking-widest">{c.v}</p>
+                <p className="mt-1 text-[12px] text-mute">{c.e}</p>
+              </div>
+            ))}
+          </div>
+        </TabsContent>
+
+        {/* Notifications */}
+        <TabsContent value="notifications" className="mt-8">
+          <ul className="divide-y divide-line border-y border-line">
+            {[
+              ["Order updates", "Shipping, tracking and delivery."],
+              ["Drop alerts", "Be first to know when a drop goes live."],
+              ["Restocks", "Get pinged when something you saved is back."],
+              ["Sale & offers", "Quarterly only. No spam."],
+            ].map(([t, d], i) => (
+              <li key={t} className="flex items-center justify-between py-5">
+                <div>
+                  <p>{t}</p>
+                  <p className="text-[12px] text-mute">{d}</p>
+                </div>
+                <input
+                  type="checkbox"
+                  defaultChecked={i < 3}
+                  className="h-5 w-9 cursor-pointer appearance-none rounded-full bg-line transition checked:bg-ink"
+                />
+              </li>
+            ))}
+          </ul>
+        </TabsContent>
+
+        {/* Preferences */}
+        <TabsContent value="preferences" className="mt-8">
+          <div className="grid gap-6 md:grid-cols-2">
+            {[
+              { l: "Language", v: ["English", "हिंदी"] },
+              { l: "Currency", v: ["INR ₹", "USD $", "EUR €"] },
+              { l: "Default size", v: ["S", "M", "L", "XL"] },
+              { l: "Fit", v: ["Regular", "Oversized"] },
+            ].map((p) => (
+              <div key={p.l}>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mute">{p.l}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {p.v.map((opt, i) => (
+                    <button
+                      key={opt}
+                      className={`border px-4 py-2 text-[12px] uppercase tracking-[0.18em] ${i === 0 ? "border-ink bg-ink text-paper" : "border-line"}`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="saved" className="mt-8">
+          <p className="text-mute">
+            Your saved pieces live in your{" "}
+            <Link to="/wishlist" className="text-ink hover:underline">
+              wishlist
+            </Link>
+            .
+          </p>
+        </TabsContent>
+      </Tabs>
+
+      <button className="mt-16 flex items-center gap-2 text-[12px] uppercase tracking-[0.22em] text-mute hover:text-ink">
+        <LogOut className="h-4 w-4" /> Sign out
+      </button>
+    </div>
+  );
+}
