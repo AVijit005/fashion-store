@@ -122,6 +122,27 @@ export class OrdersService {
       });
     });
 
+    // Schedule expiry job BEFORE making the Razorpay API call (Fix Deadlock)
+    try {
+      await this.orderExpiryQueue.add(
+        'expire',
+        { orderId: createdOrder.id },
+        {
+          delay: 900000,
+          jobId: createdOrder.id,
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 30000 },
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to schedule expiry job for orderId=${createdOrder.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+
     // 3. Create Razorpay order (mocked if keys are local mock values)
     const keyId = this.configService.get<string>('RAZORPAY_KEY_ID') || '';
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
@@ -145,11 +166,13 @@ export class OrdersService {
 
       try {
         const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+        const idempotencyKey = `req_${crypto.randomUUID()}`;
         const response = await fetch('https://api.razorpay.com/v1/orders', {
           method: 'POST',
           headers: {
             Authorization: `Basic ${auth}`,
             'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey,
           },
           body: JSON.stringify({
             amount: totalAmount.mul(100).round().toNumber(), // convert to paise precisely using Decimal
@@ -193,25 +216,7 @@ export class OrdersService {
       data: { razorpayOrderId },
     });
 
-    try {
-      await this.orderExpiryQueue.add(
-        'expire',
-        { orderId: createdOrder.id },
-        {
-          delay: 900000,
-          jobId: createdOrder.id,
-          attempts: 5,
-          backoff: { type: 'exponential', delay: 30000 },
-          removeOnComplete: true,
-          removeOnFail: false,
-        },
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to schedule expiry job for orderId=${createdOrder.id}`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
+
 
     return {
       orderId: createdOrder.id,
@@ -232,8 +237,14 @@ export class OrdersService {
       .update(`${dto.razorpayOrderId}|${dto.razorpayPaymentId}`)
       .digest('hex');
 
-    const expectedBuffer = Buffer.from(expectedSignature, 'hex');
-    const actualBuffer = Buffer.from(dto.razorpaySignature, 'hex');
+    let expectedBuffer: Buffer;
+    let actualBuffer: Buffer;
+    try {
+      expectedBuffer = Buffer.from(expectedSignature, 'hex');
+      actualBuffer = Buffer.from(dto.razorpaySignature, 'hex');
+    } catch {
+      throw new BadRequestException('Malformed signature encoding');
+    }
 
     if (
       expectedBuffer.length !== actualBuffer.length ||
@@ -301,8 +312,14 @@ export class OrdersService {
       throw new BadRequestException('Invalid or missing webhook signature');
     }
 
-    const expectedBuffer = Buffer.from(expectedSignature, 'hex');
-    const actualBuffer = Buffer.from(signature, 'hex');
+    let expectedBuffer: Buffer;
+    let actualBuffer: Buffer;
+    try {
+      expectedBuffer = Buffer.from(expectedSignature, 'hex');
+      actualBuffer = Buffer.from(signature, 'hex');
+    } catch {
+      throw new BadRequestException('Malformed webhook signature encoding');
+    }
 
     if (
       expectedBuffer.length !== actualBuffer.length ||
@@ -392,7 +409,7 @@ export class OrdersService {
   }
 
   // Fetch orders for a user
-  async getMyOrders(userId: string) {
+  async getMyOrders(userId: string, limit = 10, offset = 0) {
     return this.prisma.order.findMany({
       where: { userId },
       include: {
@@ -407,6 +424,8 @@ export class OrdersService {
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset,
     });
   }
 

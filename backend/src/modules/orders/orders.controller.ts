@@ -79,7 +79,7 @@ export class OrdersController {
   @ApiOperation({ summary: 'Get details of a single order by ID' })
   async getOrderById(
     @Param('id') id: string,
-    @Query('guestToken') guestToken?: string,
+    @Headers('x-guest-token') guestToken?: string,
     @CurrentUser() user?: RequestUser,
   ) {
     return this.ordersService.getOrderById(id, user?.id, guestToken);

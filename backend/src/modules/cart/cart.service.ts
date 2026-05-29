@@ -123,19 +123,19 @@ export class CartService {
           // In studio.tsx we don't pass price in customData. We passed productId, color, hex, layers.
           // Wait, studio.tsx addToCart adds price: product.price + 200.
           // To be safe, let's assume price is 1499 for custom.
-          const fallbackPrice = new Prisma.Decimal(1499);
+          const fallbackPrice = new Prisma.Decimal(item.customData.price || 1499);
           const itemTotal = fallbackPrice.mul(item.quantity);
           totalAmount = totalAmount.add(itemTotal);
           return {
             id: item.id,
             variantId: null,
             sku: null,
-            size: 'M',
-            color: item.customData.color,
+            size: item.customData.size || 'M',
+            color: item.customData.color || '#000000',
             quantity: item.quantity,
             unitPrice: fallbackPrice.toNumber(),
             totalPrice: itemTotal.toNumber(),
-            productTitle: 'Custom ' + item.customData.productId,
+            productTitle: 'Custom Studio Piece',
             productSlug: null,
             thumbnailUrl: null,
             stockQuantity: null,
@@ -219,39 +219,23 @@ export class CartService {
     await this.prisma.$transaction(async (tx) => {
       const cart = await this.getOrCreateCart(tx, userId, sessionId);
       
-      // Use atomic increment to fix race conditions (Bug 3)
-      try {
-        const existing = await tx.cartItem.findUnique({
-          where: {
-            cartId_productVariantId: {
-              cartId: cart.id,
-              productVariantId: variantId,
-            },
-          },
-        });
-        
-        if (existing) {
-          if (existing.quantity + quantity > variant.stockQuantity) {
-            throw new BadRequestException(`Requested quantity exceeds available stock`);
-          }
-          await tx.cartItem.update({
-            where: { id: existing.id },
-            data: { quantity: { increment: quantity } },
-          });
-        } else {
-          if (quantity > variant.stockQuantity) {
-            throw new BadRequestException(`Requested quantity exceeds available stock`);
-          }
-          await tx.cartItem.create({
-            data: {
-              cartId: cart.id,
-              productVariantId: variantId,
-              quantity,
-            },
-          });
-        }
-      } catch (err) {
-        throw err;
+      // Use atomic SQL to fix TOCTOU race conditions (Bug 1 Audit)
+      const updatedCount = await tx.$executeRawUnsafe(
+        `
+        INSERT INTO cart_items (id, cart_id, product_variant_id, quantity, updated_at)
+        SELECT gen_random_uuid(), $1, $2, $3, NOW()
+        WHERE $3 <= (SELECT stock_quantity FROM product_variants WHERE id = $2)
+        ON CONFLICT (cart_id, product_variant_id) DO UPDATE
+        SET quantity = cart_items.quantity + EXCLUDED.quantity, updated_at = NOW()
+        WHERE cart_items.quantity + EXCLUDED.quantity <= (SELECT stock_quantity FROM product_variants WHERE id = EXCLUDED.product_variant_id)
+        `,
+        cart.id,
+        variantId,
+        quantity,
+      );
+
+      if (updatedCount === 0) {
+        throw new BadRequestException('Requested quantity exceeds available stock');
       }
     });
 
@@ -288,25 +272,27 @@ export class CartService {
     }
 
     if (item.productVariantId) {
-      const variant = await this.prisma.productVariant.findFirst({
-        where: { id: item.productVariantId, product: { status: ProductStatus.PUBLISHED } },
+      const updatedCount = await this.prisma.$executeRawUnsafe(
+        `
+        UPDATE cart_items
+        SET quantity = $1, updated_at = NOW()
+        WHERE id = $2
+        AND $1 <= (SELECT stock_quantity FROM product_variants WHERE id = $3)
+        `,
+        quantity,
+        item.id,
+        item.productVariantId,
+      );
+
+      if (updatedCount === 0) {
+        throw new BadRequestException('Requested quantity exceeds available stock');
+      }
+    } else {
+      await this.prisma.cartItem.update({
+        where: { id: item.id },
+        data: { quantity },
       });
-
-      if (!variant) {
-        throw new NotFoundException('Product variant not found');
-      }
-
-      if (variant.stockQuantity < quantity) {
-        throw new BadRequestException(
-          `Requested quantity exceeds available stock (${variant.stockQuantity})`,
-        );
-      }
     }
-
-    await this.prisma.cartItem.update({
-      where: { id: item.id },
-      data: { quantity },
-    });
 
     await this.invalidateCache(userId, sessionId);
     return this.getCart(userId, sessionId);
