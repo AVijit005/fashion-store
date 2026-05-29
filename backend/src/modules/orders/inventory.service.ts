@@ -57,7 +57,9 @@ export class InventoryService {
 
     if (items.length === 0) return;
 
-    const variantIds = items.map((item) => item.productVariantId);
+    const variantIds = items
+      .map((item) => item.productVariantId)
+      .filter((id): id is string => id !== null);
     // Sort variant IDs to prevent deadlocks
     const sortedVariantIds = [...variantIds].sort();
 
@@ -73,6 +75,7 @@ export class InventoryService {
     const dbVariantMap = new Map(dbVariants.map((v) => [v.id, v]));
 
     for (const item of items) {
+      if (!item.productVariantId) continue;
       const variant = dbVariantMap.get(item.productVariantId);
       if (variant) {
         await tx.productVariant.update({

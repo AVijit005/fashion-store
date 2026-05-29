@@ -141,7 +141,7 @@ export class CartService {
             stockQuantity: null,
             isAvailable: true,
             customData: item.customData,
-          };
+          } as HydratedCartItem;
         }
 
         const variant = variantMap.get(item.variantId!);
@@ -170,7 +170,7 @@ export class CartService {
           thumbnailUrl: variant.thumbnailUrl || variant.mediaUrls[0] || null,
           stockQuantity: variant.stockQuantity,
           isAvailable: variant.stockQuantity >= item.quantity,
-        };
+        } as HydratedCartItem;
       })
       .filter((item): item is HydratedCartItem => item !== null);
 
@@ -372,7 +372,7 @@ export class CartService {
     await this.prisma.$transaction(async (tx) => {
       const userCart = await this.getOrCreateCart(tx, userId);
       const variants = await tx.productVariant.findMany({
-        where: { id: { in: guestCart.items.map((item) => item.productVariantId) } },
+        where: { id: { in: guestCart.items.map((item) => item.productVariantId).filter((id): id is string => id !== null) } },
         select: { id: true, stockQuantity: true },
       });
       const stockByVariant = new Map(

@@ -105,10 +105,10 @@ export class OrdersService {
           paymentStatus: 'PENDING',
           items: {
             create: cart.items.map((item) => ({
-              productVariantId: item.variantId,
+              productVariantId: item.variantId || undefined,
               quantity: item.quantity,
               priceAtPurchase: new Prisma.Decimal(item.unitPrice),
-              customData: item.customData || undefined,
+              customData: item.customData ? (item.customData as any) : Prisma.JsonNull,
             })),
           },
           statusHistory: {
@@ -371,7 +371,6 @@ export class OrdersService {
         await tx.webhookEvent.create({
           data: {
             id: eventId,
-            type: eventType,
             status: result,
             payload: payload as any,
           },
