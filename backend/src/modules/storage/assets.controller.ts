@@ -19,6 +19,14 @@ import { StorageService } from './storage.service';
 import { PrismaService } from '../../config/prisma.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import * as crypto from 'crypto';
+import { Request } from 'express';
+
+interface RequestWithUser extends Request {
+  user: {
+    id: string;
+    role: string;
+  };
+}
 
 @ApiTags('Assets')
 @ApiBearerAuth()
@@ -36,19 +44,24 @@ export class AssetsController {
     status: 201,
     description: 'Returns the asset record and the presigned upload URL',
   })
-  async requestUploadUrl(@Req() req: any, @Body() dto: CreateAssetDto) {
+  async requestUploadUrl(@Req() req: RequestWithUser, @Body() dto: CreateAssetDto) {
     // Basic validations
     if (dto.size > 10 * 1024 * 1024) {
       throw new BadRequestException('File size exceeds 10MB limit');
     }
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedMimeTypes.includes(dto.mimeType)) {
       throw new BadRequestException('Invalid file type');
     }
 
     const userId = req.user.id;
     // Generate a unique storage key
-    const extension = dto.filename.split('.').pop() || '';
+    const extension =
+      dto.filename
+        .split('.')
+        .pop()
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]/g, '') || '';
     const storageKey = `assets/${userId}/${crypto.randomUUID()}.${extension}`;
 
     // Create the asset record in the database
@@ -79,7 +92,7 @@ export class AssetsController {
   @Patch(':id/confirm')
   @ApiOperation({ summary: 'Confirm asset upload completed successfully' })
   @ApiResponse({ status: 200, description: 'Asset status updated to UPLOADED' })
-  async confirmUpload(@Req() req: any, @Param('id') id: string) {
+  async confirmUpload(@Req() req: RequestWithUser, @Param('id') id: string) {
     const asset = await this.prisma.asset.findUnique({
       where: { id },
     });
@@ -92,9 +105,18 @@ export class AssetsController {
       throw new ForbiddenException('You do not have permission to access this asset');
     }
 
+    const metadata = await this.storageService.getObjectMetadata(asset.storageKey);
+    if (!metadata.ContentLength || metadata.ContentLength === 0) {
+      await this.prisma.asset.update({
+        where: { id },
+        data: { status: 'FAILED' },
+      });
+      throw new BadRequestException('Uploaded file is empty or missing from storage');
+    }
+
     const result = await this.prisma.asset.updateMany({
       where: { id, status: 'PENDING' },
-      data: { status: 'UPLOADED' },
+      data: { status: 'UPLOADED', size: metadata.ContentLength },
     });
 
     if (result.count === 0) {
@@ -151,13 +173,13 @@ export class AssetsController {
       throw new ForbiddenException('You do not have permission to delete this asset');
     }
 
-    // Delete from S3
-    await this.storageService.deleteObject(asset.storageKey);
-
     // Soft delete in database by setting status to DELETED
     await this.prisma.asset.update({
       where: { id },
       data: { status: 'DELETED' },
     });
+
+    // Delete from S3 after the database no longer exposes the asset
+    await this.storageService.deleteObject(asset.storageKey);
   }
 }

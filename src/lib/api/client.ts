@@ -1,7 +1,7 @@
 // Typed HTTP API Client wrapper around native fetch.
 // Communicates with NestJS API running on http://localhost:3000.
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string) || "https://fashion-store-duva.onrender.com";
+const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3000";
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
@@ -20,6 +20,13 @@ export class APIError extends Error {
 }
 
 let refreshPromise: Promise<void> | null = null;
+
+function unwrapApiData<T>(parsed: unknown): T {
+  if (parsed && typeof parsed === "object" && "success" in parsed && "data" in parsed) {
+    return (parsed as Record<string, unknown>).data as T;
+  }
+  return parsed as T;
+}
 
 export const apiClient = {
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -57,6 +64,7 @@ export const apiClient = {
     const config: RequestInit = {
       ...options,
       headers,
+      credentials: "include",
     };
 
     let response: Response;
@@ -70,30 +78,32 @@ export const apiClient = {
     if (!response.ok) {
       if (response.status === 401 && path !== "/auth/refresh" && path !== "/auth/login") {
         if (typeof window !== "undefined") {
-          const refreshToken = localStorage.getItem("ink_refresh_token");
-          if (refreshToken) {
+          const token = localStorage.getItem("ink_access_token");
+          if (token) {
             if (!refreshPromise) {
               refreshPromise = (async () => {
                 const refreshUrl = new URL(`${BASE_URL}/auth/refresh`);
                 const refreshRes = await fetch(refreshUrl.toString(), {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ refreshToken }),
+                  credentials: "include",
                 });
 
                 if (refreshRes.ok) {
-                  const tokens = await refreshRes.json();
+                  const tokens = unwrapApiData<{ accessToken: string }>(await refreshRes.json());
                   localStorage.setItem("ink_access_token", tokens.accessToken);
-                  localStorage.setItem("ink_refresh_token", tokens.refreshToken);
                 } else {
                   // If refresh fails, clear tokens to force login
                   localStorage.removeItem("ink_access_token");
-                  localStorage.removeItem("ink_refresh_token");
                   throw new Error("Refresh failed");
                 }
-              })().finally(() => {
-                refreshPromise = null;
-              });
+              })()
+                .catch((err) => {
+                  console.error("Background token rotation failed:", err);
+                })
+                .finally(() => {
+                  refreshPromise = null;
+                });
             }
 
             try {
@@ -106,11 +116,7 @@ export const apiClient = {
                   if (retryResponse.status === 204) {
                     return null as unknown as T;
                   }
-                  const parsed = await retryResponse.json();
-                  if (parsed && typeof parsed === "object" && "success" in parsed && "data" in parsed) {
-                    return (parsed as Record<string, unknown>).data as T;
-                  }
-                  return parsed as T;
+                  return unwrapApiData<T>(await retryResponse.json());
                 }
               }
             } catch (err) {
@@ -142,11 +148,7 @@ export const apiClient = {
     }
 
     try {
-      const parsed = await response.json();
-      if (parsed && typeof parsed === "object" && "success" in parsed && "data" in parsed) {
-        return (parsed as Record<string, unknown>).data as T;
-      }
-      return parsed as T;
+      return unwrapApiData<T>(await response.json());
     } catch {
       return null as unknown as T;
     }

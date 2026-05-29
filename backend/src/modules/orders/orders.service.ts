@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
@@ -21,13 +22,15 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.REFUNDED],
   [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
   [OrderStatus.DELIVERED]: [OrderStatus.REFUNDED],
-  [OrderStatus.CANCELLED]: [],
+  [OrderStatus.CANCELLED]: [OrderStatus.PAID],
   [OrderStatus.REFUNDED]: [],
-  [OrderStatus.FAILED]: [],
+  [OrderStatus.FAILED]: [OrderStatus.PAID],
 };
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly cartService: CartService,
@@ -119,7 +122,19 @@ export class OrdersService {
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
     let razorpayOrderId = `rzp_mock_${crypto.randomUUID().replace(/-/g, '')}`;
 
-    if (keyId !== 'mock_razorpay_key' && !keyId.startsWith('mock')) {
+    if (!keyId.startsWith('mock')) {
+      if (!/^rzp_(test|live)_/.test(keyId) || keySecret.length < 8) {
+        await this.prisma.$transaction(async (tx) => {
+          await this.transitionStatus(
+            createdOrder.id,
+            OrderStatus.FAILED,
+            'SYSTEM',
+            'Razorpay credentials are not configured.',
+            tx,
+          );
+        });
+        throw new InternalServerErrorException('Payment gateway is not configured');
+      }
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased timeout to 15s
 
@@ -173,15 +188,25 @@ export class OrdersService {
       data: { razorpayOrderId },
     });
 
-    // 4. Clear the cart
-    await this.cartService.clearCart(activeUserId, activeSessionId);
-
-    // 5. Schedule order expiration after 15 minutes (900000 ms) in BullMQ
-    await this.orderExpiryQueue.add(
-      'expire',
-      { orderId: createdOrder.id },
-      { delay: 900000, jobId: createdOrder.id }, // deduplicate by order ID
-    );
+    try {
+      await this.orderExpiryQueue.add(
+        'expire',
+        { orderId: createdOrder.id },
+        {
+          delay: 900000,
+          jobId: createdOrder.id,
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 30000 },
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to schedule expiry job for orderId=${createdOrder.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
 
     return {
       orderId: createdOrder.id,
@@ -225,6 +250,9 @@ export class OrdersService {
       }
 
       if (order.status === OrderStatus.PAID) {
+        if (order.razorpayPaymentId && order.razorpayPaymentId !== dto.razorpayPaymentId) {
+          throw new BadRequestException('Order has already been paid with a different payment');
+        }
         return { success: true, orderId: order.id, status: order.status };
       }
 
@@ -264,6 +292,10 @@ export class OrdersService {
       .update(rawBody)
       .digest('hex');
 
+    if (!signature || typeof signature !== 'string') {
+      throw new BadRequestException('Invalid or missing webhook signature');
+    }
+
     const expectedBuffer = Buffer.from(expectedSignature, 'hex');
     const actualBuffer = Buffer.from(signature, 'hex');
 
@@ -274,74 +306,85 @@ export class OrdersService {
       throw new BadRequestException('Invalid webhook signature');
     }
 
-    const payload = JSON.parse(rawBody);
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      throw new BadRequestException('Invalid webhook payload');
+    }
     const eventId = payload.id;
     const eventType = payload.event;
-
-    // Idempotency check: verify if webhook event has already been processed
-    const existingEvent = await this.prisma.webhookEvent.findUnique({
-      where: { id: eventId },
-    });
-    if (existingEvent) {
-      return { status: 'ignored', reason: 'duplicate' };
+    if (!eventId || !eventType) {
+      throw new BadRequestException('Webhook payload is missing event metadata');
     }
 
-    // Save event to WebhookEvent table to prevent duplicates
+    let status: string;
     try {
-      await this.prisma.webhookEvent.create({
-        data: {
-          id: eventId,
-          status: 'PROCESSED',
-          payload,
-        },
+      status = await this.prisma.$transaction(async (tx) => {
+        let result = 'processed';
+
+        if (eventType === 'order.paid' || eventType === 'payment.captured') {
+          const razorpayOrderId =
+            payload.payload?.payment?.entity?.order_id || payload.payload?.order?.entity?.id;
+          const razorpayPaymentId = payload.payload?.payment?.entity?.id;
+
+          if (!razorpayOrderId) {
+            result = 'skipped';
+          } else {
+            const orders = await tx.$queryRawUnsafe<Order[]>(
+              `SELECT * FROM orders WHERE "razorpay_order_id" = $1 FOR UPDATE`,
+              razorpayOrderId,
+            );
+            const order = orders[0];
+
+            if (!order) {
+              result = 'skipped';
+            } else if (order.status !== OrderStatus.PAID) {
+              await this.transitionStatus(
+                order.id,
+                OrderStatus.PAID,
+                'WEBHOOK',
+                `Payment captured via webhook: ${eventType}`,
+                tx,
+              );
+
+              await tx.order.update({
+                where: { id: order.id },
+                data: {
+                  razorpayPaymentId,
+                  paymentStatus: 'PAID',
+                },
+              });
+            }
+          }
+        } else {
+          result = 'skipped';
+        }
+
+        // Record successful or skipped event inside the transaction
+        // This leverages Postgres unique constraints for true concurrency safety.
+        await tx.webhookEvent.create({
+          data: {
+            id: eventId,
+            type: eventType,
+            status: result,
+            payload: payload as any,
+          },
+        });
+
+        return result;
       });
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    } catch (error: any) {
+      // P2002 is Prisma's Unique Constraint Violation error code
+      if (error.code === 'P2002') {
+        this.logger.warn(`Duplicate webhook received and ignored: ${eventId}`);
         return { status: 'ignored', reason: 'duplicate' };
       }
-      throw err;
+      this.logger.error(`Webhook transaction failed: ${error.message}`, error.stack);
+      throw error;
     }
 
-    if (eventType === 'order.paid' || eventType === 'payment.captured') {
-      const razorpayOrderId =
-        payload.payload?.payment?.entity?.order_id || payload.payload?.order?.entity?.id;
-      const razorpayPaymentId = payload.payload?.payment?.entity?.id;
-
-      if (!razorpayOrderId) {
-        return { status: 'skipped', reason: 'missing order ID' };
-      }
-
-      await this.prisma.$transaction(async (tx) => {
-        const orders = await tx.$queryRawUnsafe<Order[]>(
-          `SELECT * FROM orders WHERE "razorpay_order_id" = $1 FOR UPDATE`,
-          razorpayOrderId,
-        );
-        const order = orders[0];
-
-        if (!order) {
-          return;
-        }
-
-        if (order.status !== OrderStatus.PAID) {
-          await this.transitionStatus(
-            order.id,
-            OrderStatus.PAID,
-            'WEBHOOK',
-            `Payment captured via webhook: ${eventType}`,
-            tx,
-          );
-          await tx.order.update({
-            where: { id: order.id },
-            data: {
-              razorpayPaymentId,
-              paymentStatus: 'PAID',
-            },
-          });
-        }
-      });
-    }
-
-    return { status: 'processed' };
+    return { status };
   }
 
   // Fetch orders for a user

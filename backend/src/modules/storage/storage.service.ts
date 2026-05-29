@@ -5,6 +5,8 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
+  type S3ClientConfig,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -21,7 +23,7 @@ export class StorageService {
     const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID') || '';
     const secretAccessKey = this.configService.get<string>('AWS_SECRET_ACCESS_KEY') || '';
 
-    const s3Config: any = {
+    const s3Config: S3ClientConfig = {
       region,
       credentials: {
         accessKeyId,
@@ -41,13 +43,14 @@ export class StorageService {
   async generateUploadPresignedUrl(
     key: string,
     mimeType: string,
-    expiresInSeconds: number = 300,
+    expiresInSeconds: number = 900,
   ): Promise<string> {
     try {
       const command = new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
         ContentType: mimeType,
+        ServerSideEncryption: 'AES256',
       });
 
       // 5 minutes by default
@@ -86,6 +89,19 @@ export class StorageService {
     } catch (error) {
       this.logger.error(`Failed to delete object in S3: ${key}`, error);
       throw new InternalServerErrorException('Failed to delete asset from storage');
+    }
+  }
+
+  async getObjectMetadata(key: string) {
+    try {
+      const command = new HeadObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      });
+      return await this.s3Client.send(command);
+    } catch (error) {
+      this.logger.error(`Failed to read object metadata in S3: ${key}`, error);
+      throw new InternalServerErrorException('Failed to verify uploaded asset');
     }
   }
 }
