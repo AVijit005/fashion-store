@@ -106,7 +106,11 @@ export const apiClient = {
                   if (retryResponse.status === 204) {
                     return null as unknown as T;
                   }
-                  return (await retryResponse.json()) as T;
+                  const parsed = await retryResponse.json();
+                  if (parsed && typeof parsed === "object" && "success" in parsed && "data" in parsed) {
+                    return (parsed as Record<string, unknown>).data as T;
+                  }
+                  return parsed as T;
                 }
               }
             } catch (err) {
@@ -138,7 +142,11 @@ export const apiClient = {
     }
 
     try {
-      return (await response.json()) as T;
+      const parsed = await response.json();
+      if (parsed && typeof parsed === "object" && "success" in parsed && "data" in parsed) {
+        return (parsed as Record<string, unknown>).data as T;
+      }
+      return parsed as T;
     } catch {
       return null as unknown as T;
     }
