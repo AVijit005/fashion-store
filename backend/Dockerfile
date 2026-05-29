@@ -20,10 +20,10 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci --omit=dev
+RUN npm ci
 
 COPY --from=builder /usr/src/app/dist ./dist
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate resolve --rolled-back 20260529000000_sync || true && npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "npx prisma migrate resolve --rolled-back 20260529000000_sync || true && npx prisma migrate deploy && npm run db:seed && node dist/main"]
