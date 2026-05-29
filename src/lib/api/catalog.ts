@@ -122,6 +122,14 @@ export function mapBackendProduct(p: BackendProduct): Product {
     images,
     badges: (p.tags || []) as Product["badges"],
     story: p.description || "Designed for durability and style.",
+    variants: p.variants?.map((v: BackendVariant) => ({
+      id: v.id,
+      size: v.size,
+      color: v.color,
+      sku: v.sku,
+      stockQuantity: v.stockQuantity,
+      priceOverride: v.priceOverride ? Number(v.priceOverride) : null,
+    })),
   };
 }
 

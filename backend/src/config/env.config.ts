@@ -16,7 +16,7 @@ export const envSchema = z.object({
     .default('7'),
   RAZORPAY_KEY_ID: z.string(),
   RAZORPAY_KEY_SECRET: z.string(),
-  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().min(8),
   AWS_ACCESS_KEY_ID: z.string(),
   AWS_SECRET_ACCESS_KEY: z.string(),
   AWS_REGION: z.string(),

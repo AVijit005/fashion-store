@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { apiClient } from "../api/client";
+import { cartApi, getOrCreateCartSessionId } from "../api/cart";
 
 export interface UserProfile {
   id: string;
@@ -26,7 +27,8 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  accessToken: typeof window !== "undefined" ? localStorage.getItem("ink_access_token") : null,
+  accessToken:
+    typeof window !== "undefined" ? localStorage.getItem("ink_access_token") : null,
   isAuthenticated: false,
   isLoading: true,
   authModalOpen: false,
@@ -48,16 +50,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const res = await apiClient.post<{ accessToken: string; refreshToken: string }>(
         "/auth/login",
-        {
-          email,
-          password,
-        },
+        { email, password },
       );
       get().setTokens(res.accessToken, res.refreshToken);
 
       // Fetch profile
       const user = await apiClient.get<UserProfile>("/auth/me");
       set({ user, isAuthenticated: true, authModalOpen: false });
+
+      // Merge guest cart into authenticated user cart after login
+      const guestSessionId = getOrCreateCartSessionId();
+      if (guestSessionId) {
+        cartApi.mergeCart(guestSessionId).catch((err) =>
+          console.error("[auth] Cart merge after login failed:", err),
+        );
+      }
     } catch (error) {
       get().logout();
       throw error;
@@ -77,24 +84,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    // Clear local state FIRST so the UI reflects logged-out state immediately,
+    // even if the network request to revoke the session is slow or fails.
     const refreshToken =
       typeof window !== "undefined" ? localStorage.getItem("ink_refresh_token") : null;
-    if (refreshToken) {
-      try {
-        await apiClient.post("/auth/logout", { refreshToken });
-      } catch (err) {
-        console.error("Logout request failed:", err);
-      }
-    }
+
     if (typeof window !== "undefined") {
       localStorage.removeItem("ink_access_token");
       localStorage.removeItem("ink_refresh_token");
     }
     set({ user: null, accessToken: null, isAuthenticated: false });
+
+    // Revoke server session in the background (best-effort)
+    if (refreshToken) {
+      apiClient
+        .post("/auth/logout", { refreshToken })
+        .catch((err) => console.error("[auth] Logout request failed:", err));
+    }
   },
 
   initialize: async () => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("ink_access_token") : null;
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("ink_access_token") : null;
     if (!token) {
       set({ isLoading: false, isAuthenticated: false, user: null });
       return;
@@ -111,9 +122,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         try {
           const res = await apiClient.post<{ accessToken: string; refreshToken: string }>(
             "/auth/refresh",
-            {
-              refreshToken: refresh,
-            },
+            { refreshToken: refresh },
           );
           get().setTokens(res.accessToken, res.refreshToken);
           const user = await apiClient.get<UserProfile>("/auth/me");

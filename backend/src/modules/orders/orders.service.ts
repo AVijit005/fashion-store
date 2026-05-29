@@ -2,7 +2,6 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
-  Inject,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -56,7 +55,7 @@ export class OrdersService {
       );
     }
 
-    const variantIds = cart.items.map((item) => item.variantId);
+    // Variant IDs are extracted inside the transaction for sorted locking.
 
     // Flat shipping fee of ₹100 and dynamic GST calculation of 18%
     const shippingFee = new Prisma.Decimal(100.0);
@@ -252,10 +251,12 @@ export class OrdersService {
 
   // Idempotent webhook handler
   async handleWebhook(rawBody: string, signature: string) {
-    const webhookSecret =
-      this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET') ||
-      this.configService.get<string>('RAZORPAY_KEY_SECRET') ||
-      '';
+    // Webhook secret — required by env schema (startup fails if not set).
+    // No fallback to RAZORPAY_KEY_SECRET: they are different secrets with different purposes.
+    const webhookSecret = this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET') ?? '';
+    if (!webhookSecret) {
+      throw new InternalServerErrorException('Webhook secret is not configured');
+    }
 
     // Webhook verification
     const expectedSignature = crypto

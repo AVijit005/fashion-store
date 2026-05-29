@@ -19,6 +19,10 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   app.use(helmet());
+  app.use(cookieParser());
+
+  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalInterceptors(new ResponseTransformInterceptor());
 
   app.enableCors({
     origin:
@@ -36,22 +40,27 @@ async function bootstrap() {
     }),
   );
 
-  // Swagger Documentation Setup
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Aura Streetwear API')
-    .setDescription('Premium streetwear e-commerce platform backend API documentation')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
+  // Swagger API documentation — available in development/staging only.
+  // In production, /docs returns 404 to avoid exposing internal API schemas.
+  if (configService.get<string>('NODE_ENV') !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Aura Streetwear API')
+      .setDescription('Premium streetwear e-commerce platform backend API documentation')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document);
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, document);
+  }
 
   app.enableShutdownHooks();
 
   const port = configService.get<number>('PORT') || 3000;
   await app.listen(port);
   console.log(`🚀 Aura Streetwear Backend is running on: http://localhost:${port}`);
-  console.log(`📖 API Documentation available at: http://localhost:${port}/docs`);
+  if (configService.get<string>('NODE_ENV') !== 'production') {
+    console.log(`📖 API Documentation available at: http://localhost:${port}/docs`);
+  }
 }
 bootstrap();

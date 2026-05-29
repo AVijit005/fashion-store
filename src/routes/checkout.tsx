@@ -1,11 +1,25 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useId, useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useId, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ChevronRight, Lock, Smartphone, CreditCard, Banknote } from "lucide-react";
+import { Check, ChevronRight, Lock, Smartphone, CreditCard, Banknote, AlertCircle, Loader2 } from "lucide-react";
 import { z } from "zod";
 import { useCart } from "@/lib/store/cart";
+import { apiClient } from "@/lib/api/client";
+import { getOrCreateCartSessionId } from "@/lib/api/cart";
 import { inr } from "@/lib/format";
 
+// ---------------------------------------------------------------------------
+// Razorpay SDK type declaration
+// ---------------------------------------------------------------------------
+declare global {
+  interface Window {
+    Razorpay: new (options: Record<string, unknown>) => { open(): void };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Route
+// ---------------------------------------------------------------------------
 export const Route = createFileRoute("/checkout")({
   head: () => ({
     meta: [
@@ -17,8 +31,14 @@ export const Route = createFileRoute("/checkout")({
   component: CheckoutPage,
 });
 
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 const STEPS = ["Address", "Shipping", "Payment"] as const;
 
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
 const addressSchema = z.object({
   name: z.string().trim().min(2, "Enter your full name").max(80),
   phone: z
@@ -50,13 +70,50 @@ const EMPTY: Address = {
   pin: "",
 };
 
+// ---------------------------------------------------------------------------
+// Checkout API response type
+// ---------------------------------------------------------------------------
+interface CheckoutResponse {
+  orderId: string;
+  razorpayOrderId: string;
+  amount: number;
+  currency: string;
+  guestToken: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Razorpay SDK loader — idempotent, only loads once per page session
+// ---------------------------------------------------------------------------
+function useRazorpayScript() {
+  useEffect(() => {
+    const existing = document.querySelector(
+      'script[src="https://checkout.razorpay.com/v1/checkout.js"]',
+    );
+    if (existing) return;
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    document.head.appendChild(script);
+    // No cleanup — we want the SDK to persist across navigations
+  }, []);
+}
+
+// ---------------------------------------------------------------------------
+// CheckoutPage
+// ---------------------------------------------------------------------------
 function CheckoutPage() {
-  const { items, subtotal, savings } = useCart();
+  useRazorpayScript();
+
+  const navigate = useNavigate();
+  const { items, subtotal, savings, clear } = useCart();
+
   const [step, setStep] = useState(0);
   const [shipping, setShipping] = useState("standard");
   const [pay, setPay] = useState("upi");
   const [addr, setAddr] = useState<Address>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});
+  const [isPlacing, setIsPlacing] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   const sub = subtotal();
   const ship = sub > 999 || sub === 0 ? 0 : shipping === "express" ? 149 : 0;
@@ -81,8 +138,121 @@ function CheckoutPage() {
       }
     }
     setStep(step + 1);
+    setOrderError(null);
   };
 
+  // -------------------------------------------------------------------------
+  // Place Order — calls backend, then opens Razorpay modal
+  // -------------------------------------------------------------------------
+  const handlePlaceOrder = async () => {
+    if (isPlacing) return;
+    setIsPlacing(true);
+    setOrderError(null);
+
+    try {
+      const guestSessionId = getOrCreateCartSessionId() || undefined;
+
+      // 1. Create order on backend (reserves inventory, creates Razorpay order)
+      const checkoutRes = await apiClient.post<CheckoutResponse>("/orders/checkout", {
+        shippingName: addr.name,
+        shippingEmail: addr.email,
+        shippingPhone: addr.phone,
+        shippingStreet: addr.line1 + (addr.line2 ? `, ${addr.line2}` : ""),
+        shippingCity: addr.city,
+        shippingState: addr.state,
+        shippingPostalCode: addr.pin,
+        shippingCountry: "IN",
+        guestSessionId,
+      });
+
+      // Persist guest token so order confirmation page can look up the order
+      if (checkoutRes.guestToken && typeof window !== "undefined") {
+        sessionStorage.setItem("ink_order_guest_token", checkoutRes.guestToken);
+      }
+
+      const razorpayKeyId = (import.meta.env.VITE_RAZORPAY_KEY_ID as string) ?? "";
+      const isMockKey =
+        !razorpayKeyId ||
+        razorpayKeyId.startsWith("rzp_test_placeholder") ||
+        razorpayKeyId.includes("placeholder");
+
+      // -----------------------------------------------------------------------
+      // Dev / mock flow — skip Razorpay when key is a placeholder
+      // -----------------------------------------------------------------------
+      if (isMockKey) {
+        clear(); // clear local + backend cart
+        await navigate({
+          to: "/checkout/success",
+          search: { orderId: checkoutRes.orderId },
+        });
+        return;
+      }
+
+      // -----------------------------------------------------------------------
+      // Production flow — open Razorpay modal
+      // -----------------------------------------------------------------------
+      if (typeof window === "undefined" || !window.Razorpay) {
+        throw new Error("Payment SDK failed to load. Please refresh and try again.");
+      }
+
+      const rzp = new window.Razorpay({
+        key: razorpayKeyId,
+        amount: Math.round(checkoutRes.amount * 100), // backend returns ₹, Razorpay needs paise
+        currency: checkoutRes.currency,
+        order_id: checkoutRes.razorpayOrderId,
+        name: "Ink Studio",
+        description: `Order ${checkoutRes.orderId}`,
+        prefill: {
+          name: addr.name,
+          email: addr.email,
+          contact: addr.phone,
+        },
+        theme: { color: "#0d0d0d" },
+        handler: async (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          // 2. Verify payment signature on backend
+          await apiClient.post("/orders/verify-payment", {
+            razorpayOrderId: response.razorpay_order_id,
+            razorpayPaymentId: response.razorpay_payment_id,
+            razorpaySignature: response.razorpay_signature,
+          });
+
+          // 3. Clear local + backend cart only after confirmed payment
+          clear();
+
+          // 4. Navigate to success
+          await navigate({
+            to: "/checkout/success",
+            search: { orderId: checkoutRes.orderId },
+          });
+        },
+        modal: {
+          ondismiss: () => {
+            // User closed the modal — order remains PAYMENT_PENDING until expiry
+            setIsPlacing(false);
+            setOrderError(
+              "Payment was cancelled. Your cart is saved — complete payment when ready.",
+            );
+          },
+        },
+      });
+
+      rzp.open();
+      // Don't reset isPlacing here — ondismiss handles it above
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Checkout failed. Please try again.";
+      setOrderError(message);
+      setIsPlacing(false);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Empty cart guard
+  // -------------------------------------------------------------------------
   if (items.length === 0) {
     return (
       <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-6 text-center">
@@ -99,6 +269,9 @@ function CheckoutPage() {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // Main render
+  // -------------------------------------------------------------------------
   return (
     <div className="mx-auto grid max-w-[1480px] grid-cols-1 gap-12 px-5 py-12 lg:grid-cols-[1fr_400px] lg:gap-16 lg:px-10 lg:py-16">
       <div>
@@ -321,10 +494,22 @@ function CheckoutPage() {
           </AnimatePresence>
         </div>
 
+        {/* Error banner */}
+        {orderError && (
+          <div
+            role="alert"
+            className="mt-6 flex items-start gap-3 border border-ink/20 bg-ink/5 px-4 py-3 text-[13px]"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-ink" aria-hidden="true" />
+            <span>{orderError}</span>
+          </div>
+        )}
+
+        {/* Navigation */}
         <div className="mt-10 flex items-center justify-between">
           <button
             onClick={() => setStep(Math.max(0, step - 1))}
-            disabled={step === 0}
+            disabled={step === 0 || isPlacing}
             className="press text-[12px] uppercase tracking-[0.22em] text-mute disabled:opacity-30"
           >
             ← Back
@@ -337,16 +522,26 @@ function CheckoutPage() {
               Continue →
             </button>
           ) : (
-            <Link
-              to="/checkout/success"
-              className="press bg-ink px-8 py-4 text-[12px] uppercase tracking-[0.22em] text-paper"
+            <button
+              id="place-order-btn"
+              onClick={handlePlaceOrder}
+              disabled={isPlacing}
+              className="press flex items-center gap-2 bg-ink px-8 py-4 text-[12px] uppercase tracking-[0.22em] text-paper disabled:opacity-70"
             >
-              Place order · {inr(total)}
-            </Link>
+              {isPlacing ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  Processing…
+                </>
+              ) : (
+                <>Place order · {inr(total)}</>
+              )}
+            </button>
           )}
         </div>
       </div>
 
+      {/* Order summary sidebar */}
       <aside className="lg:sticky lg:top-24 lg:self-start" aria-label="Order summary">
         <div className="border border-line bg-paper">
           <div className="border-b border-line p-5">
@@ -358,7 +553,13 @@ function CheckoutPage() {
           <ul className="max-h-[260px] overflow-y-auto">
             {items.map((it, i) => (
               <li key={i} className="flex gap-3 border-b border-line p-4">
-                <img src={it.image} alt="" className="h-16 w-14 object-cover" />
+                <img
+                  src={it.image}
+                  alt=""
+                  width={56}
+                  height={64}
+                  className="h-16 w-14 object-cover"
+                />
                 <div className="flex-1 text-[13px]">
                   <p className="truncate">{it.name}</p>
                   <p className="text-[11px] text-mute">
@@ -395,6 +596,9 @@ function CheckoutPage() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Field component
+// ---------------------------------------------------------------------------
 type FieldProps = {
   label: string;
   value: string;

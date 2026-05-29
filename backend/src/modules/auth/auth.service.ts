@@ -47,7 +47,6 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const accessToken = this.generateAccessToken(user.id, user.role);
     const refreshToken = this.generateRandomToken();
     const tokenHash = this.hashToken(refreshToken);
 
@@ -55,7 +54,9 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expiryDays);
 
-    await this.prisma.session.create({
+    // Create session first so we can embed its ID in the access token.
+    // The AuthGuard uses this sessionId to check session.isRevoked on each request.
+    const session = await this.prisma.session.create({
       data: {
         userId: user.id,
         tokenHash,
@@ -64,6 +65,8 @@ export class AuthService {
         expiresAt,
       },
     });
+
+    const accessToken = this.generateAccessToken(user.id, user.role, session.id);
 
     this.logger.log(`Audit: User logged in. userId=${user.id} ip=${ipAddress}`);
 
@@ -106,7 +109,6 @@ export class AuthService {
     });
 
     // Generate new token pair
-    const accessToken = this.generateAccessToken(session.userId, session.user.role);
     const newRefreshToken = this.generateRandomToken();
     const newTokenHash = this.hashToken(newRefreshToken);
 
@@ -114,8 +116,8 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expiryDays);
 
-    // Create new session record
-    await this.prisma.session.create({
+    // Create new session first so its ID can be embedded in the new access token.
+    const newSession = await this.prisma.session.create({
       data: {
         userId: session.userId,
         tokenHash: newTokenHash,
@@ -124,6 +126,8 @@ export class AuthService {
         expiresAt,
       },
     });
+
+    const accessToken = this.generateAccessToken(session.userId, session.user.role, newSession.id);
 
     this.logger.log(`Audit: Refresh token rotated. userId=${session.userId}`);
 
@@ -162,13 +166,12 @@ export class AuthService {
     };
   }
 
-  private generateAccessToken(userId: string, role: string): string {
+  private generateAccessToken(userId: string, role: string, sessionId: string): string {
     const secret = this.configService.get<string>('JWT_SECRET');
     const expiresIn = this.configService.get<string>('JWT_EXPIRES_IN') || '15m';
 
     return this.jwtService.sign(
-      { sub: userId, role },
-
+      { sub: userId, role, sessionId },
       { secret, expiresIn: expiresIn as any },
     );
   }

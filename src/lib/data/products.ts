@@ -13,6 +13,14 @@ export type Product = {
   images: string[];
   badges: ("new" | "trending" | "limited" | "oversized" | "anime" | "bestseller")[];
   story: string;
+  variants?: {
+    id: string;
+    size: string;
+    color: string;
+    sku: string;
+    stockQuantity: number;
+    priceOverride?: number | null;
+  }[];
 };
 
 const u = (id: string, w = 900) =>
