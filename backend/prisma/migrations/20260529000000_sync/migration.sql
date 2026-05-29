@@ -15,8 +15,7 @@ BEGIN;
 CREATE TYPE "OrderStatus_new" AS ENUM ('PENDING', 'PAYMENT_PENDING', 'PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED', 'FAILED');
 ALTER TABLE "public"."orders" ALTER COLUMN "status" DROP DEFAULT;
 ALTER TABLE "orders" ALTER COLUMN "status" TYPE "OrderStatus_new" USING ("status"::text::"OrderStatus_new");
-ALTER TABLE "order_status_histories" ALTER COLUMN "old_status" TYPE "OrderStatus_new" USING ("old_status"::text::"OrderStatus_new");
-ALTER TABLE "order_status_histories" ALTER COLUMN "new_status" TYPE "OrderStatus_new" USING ("new_status"::text::"OrderStatus_new");
+
 ALTER TYPE "OrderStatus" RENAME TO "OrderStatus_old";
 ALTER TYPE "OrderStatus_new" RENAME TO "OrderStatus";
 DROP TYPE "public"."OrderStatus_old";
