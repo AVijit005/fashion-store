@@ -21,6 +21,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { CommandPalette } from "@/components/search/command-palette";
 import { PaperGrain } from "@/components/ui/paper-grain";
 import { RouteTransition } from "@/components/layout/route-transition";
+import { useEffect } from "react";
+import { useAuthStore } from "@/lib/store/auth";
+import { AuthModal } from "@/components/layout/auth-modal";
 
 function NotFoundComponent() {
   return (
@@ -131,6 +134,11 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isAdmin = pathname.startsWith("/admin");
+  const initializeAuth = useAuthStore((state) => state.initialize);
+
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
 
   if (isAdmin) {
     return (
@@ -161,6 +169,7 @@ function RootComponent() {
         <Footer />
         <BottomTabBar />
         <CartDrawer />
+        <AuthModal />
         <FlyToCartPortal />
         <WelcomeModal />
         <CommandPalette />

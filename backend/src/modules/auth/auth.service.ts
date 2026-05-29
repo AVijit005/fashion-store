@@ -150,6 +150,18 @@ export class AuthService {
     this.logger.log(`Audit: All sessions invalidated for userId=${userId}`);
   }
 
+  async getMe(userId: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    };
+  }
+
   private generateAccessToken(userId: string, role: string): string {
     const secret = this.configService.get<string>('JWT_SECRET');
     const expiresIn = this.configService.get<string>('JWT_EXPIRES_IN') || '15m';

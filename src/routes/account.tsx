@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Package,
   Heart,
@@ -12,6 +12,8 @@ import {
   Check,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useAuthStore } from "@/lib/store/auth";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -69,12 +71,51 @@ const trackingSteps = [
 
 function Account() {
   const [openOrder, setOpenOrder] = useState<string | null>(null);
+  const { isAuthenticated, user, logout, setAuthModalOpen, isLoading } = useAuthStore();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      setAuthModalOpen(true);
+    }
+  }, [isLoading, isAuthenticated, setAuthModalOpen]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center bg-paper">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-ink border-t-transparent mx-auto"></div>
+          <p className="mt-4 text-mute uppercase tracking-widest text-[11px]">Loading Account...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="mx-auto max-w-[1480px] px-5 py-24 lg:px-10 lg:py-32 text-center bg-paper flex flex-col items-center justify-center">
+        <p className="font-display text-4xl">Sign In to View Account</p>
+        <p className="mt-2 text-mute max-w-sm">
+          Please sign in to access your order history and account preferences.
+        </p>
+        <button
+          onClick={() => setAuthModalOpen(true)}
+          className="mt-6 bg-ink px-6 py-4 text-[12px] uppercase tracking-[0.22em] text-paper cursor-pointer"
+        >
+          Sign In
+        </button>
+      </div>
+    );
+  }
+
+  const username = user?.email.split("@")[0] || "Customer";
 
   return (
     <div className="mx-auto max-w-[1480px] px-5 py-12 lg:px-10 lg:py-16">
       <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Account</p>
-      <h1 className="mt-2 font-display text-5xl lg:text-6xl">Hello, Arjun.</h1>
-      <p className="mt-2 text-mute">Member since 2024 · 7 orders · 2,840 ink points</p>
+      <h1 className="mt-2 font-display text-5xl lg:text-6xl capitalize">Hello, {username}.</h1>
+      <p className="mt-2 text-mute">
+        Registered email: {user?.email} · Account type: {user?.role}
+      </p>
 
       <Tabs defaultValue="orders" className="mt-10">
         <TabsList className="flex flex-wrap justify-start gap-1 bg-transparent p-0">
@@ -278,7 +319,13 @@ function Account() {
         </TabsContent>
       </Tabs>
 
-      <button className="mt-16 flex items-center gap-2 text-[12px] uppercase tracking-[0.22em] text-mute hover:text-ink">
+      <button
+        onClick={async () => {
+          await logout();
+          toast.success("Signed out successfully.");
+        }}
+        className="mt-16 flex items-center gap-2 text-[12px] uppercase tracking-[0.22em] text-mute hover:text-ink cursor-pointer"
+      >
         <LogOut className="h-4 w-4" /> Sign out
       </button>
     </div>

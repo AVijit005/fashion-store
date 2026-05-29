@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState, useRouter } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Heart, Search, ShoppingBag, User, Menu, X, ArrowRight } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -8,6 +8,7 @@ import { useCommandPalette } from "@/lib/store/command-palette";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { categories } from "@/lib/data/categories";
 import { products } from "@/lib/data/products";
+import { useAuthStore } from "@/lib/store/auth";
 
 type MegaKey = "Shop" | "Anime" | "Studio" | null;
 
@@ -165,6 +166,17 @@ export function Navbar() {
   const setSearchOpen = (_v: boolean) => openPalette(true);
   const searchOpen = false;
 
+  const { isAuthenticated, user, setAuthModalOpen } = useAuthStore();
+  const router = useRouter();
+
+  const handleAccountClick = () => {
+    if (isAuthenticated) {
+      router.navigate({ to: "/account" });
+    } else {
+      setAuthModalOpen(true);
+    }
+  };
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
     onScroll();
@@ -237,6 +249,16 @@ export function Navbar() {
                 />
               )}
             </Link>
+            <button
+              onClick={handleAccountClick}
+              className="icon-btn relative hidden md:inline-flex"
+              aria-label="Account"
+            >
+              <User className="h-[18px] w-[18px]" />
+              {isAuthenticated && (
+                <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-green-500" />
+              )}
+            </button>
             <button
               data-cart-target
               onClick={() => setCartOpen(true)}
@@ -485,6 +507,30 @@ export function Navbar() {
                       </Link>
                     </li>
                   ))}
+                </ul>
+                <p className="mt-8 text-[11px] uppercase tracking-[0.22em] text-mute">Account</p>
+                <ul className="mt-3 space-y-1">
+                  <li>
+                    {isAuthenticated ? (
+                      <Link
+                        to="/account"
+                        onClick={() => setMobile(false)}
+                        className="block py-2 text-base font-semibold text-ink"
+                      >
+                        My Profile ({user?.email})
+                      </Link>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setMobile(false);
+                          setAuthModalOpen(true);
+                        }}
+                        className="block w-full text-left py-2 text-base font-semibold text-ink"
+                      >
+                        Sign In / Sign Up
+                      </button>
+                    )}
+                  </li>
                 </ul>
                 <p className="mt-8 text-[11px] uppercase tracking-[0.22em] text-mute">Categories</p>
                 <ul className="mt-3 space-y-1">

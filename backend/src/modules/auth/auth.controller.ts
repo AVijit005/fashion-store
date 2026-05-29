@@ -7,6 +7,8 @@ import {
   UnauthorizedException,
   HttpCode,
   HttpStatus,
+  Get,
+  UseGuards,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -14,6 +16,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { SignUpDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
+import { AuthGuard } from '../../common/guards/auth.guard';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -28,6 +31,13 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'User successfully registered' })
   async signUp(@Body() signUpDto: SignUpDto) {
     return this.authService.signUp(signUpDto);
+  }
+
+  @Get('me')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get current logged in user details' })
+  async getMe(@Req() req: any) {
+    return this.authService.getMe(req.user.id);
   }
 
   @Post('login')

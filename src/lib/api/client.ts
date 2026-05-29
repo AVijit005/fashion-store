@@ -66,6 +66,39 @@ export const apiClient = {
     }
 
     if (!response.ok) {
+      if (response.status === 401 && path !== "/auth/refresh" && path !== "/auth/login") {
+        if (typeof window !== "undefined") {
+          const refreshToken = localStorage.getItem("ink_refresh_token");
+          if (refreshToken) {
+            try {
+              const refreshUrl = new URL(`${BASE_URL}/auth/refresh`);
+              const refreshRes = await fetch(refreshUrl.toString(), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refreshToken }),
+              });
+
+              if (refreshRes.ok) {
+                const tokens = await refreshRes.json();
+                localStorage.setItem("ink_access_token", tokens.accessToken);
+                localStorage.setItem("ink_refresh_token", tokens.refreshToken);
+
+                headers.set("Authorization", `Bearer ${tokens.accessToken}`);
+                const retryResponse = await fetch(url.toString(), { ...config, headers });
+                if (retryResponse.ok) {
+                  if (retryResponse.status === 204) {
+                    return null as unknown as T;
+                  }
+                  return (await retryResponse.json()) as T;
+                }
+              }
+            } catch (err) {
+              console.error("Token rotation failed inside interceptor:", err);
+            }
+          }
+        }
+      }
+
       let errorData: unknown;
       try {
         errorData = await response.json();
@@ -76,11 +109,11 @@ export const apiClient = {
           errorData = null;
         }
       }
-      throw new APIError(
-        errorData?.message || `API request failed with status ${response.status}`,
-        response.status,
-        errorData,
-      );
+      let errorMessage = `API request failed with status ${response.status}`;
+      if (errorData && typeof errorData === "object" && "message" in errorData) {
+        errorMessage = String((errorData as Record<string, unknown>).message);
+      }
+      throw new APIError(errorMessage, response.status, errorData);
     }
 
     if (response.status === 204) {
