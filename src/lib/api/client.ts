@@ -1,7 +1,7 @@
 // Typed HTTP API Client wrapper around native fetch.
 // Communicates with NestJS API running on http://localhost:3000.
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3000";
+const BASE_URL = (import.meta.env.VITE_API_URL as string) || (import.meta.env.PROD ? "https://fashion-store-duva.onrender.com" : "http://localhost:3000");
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
