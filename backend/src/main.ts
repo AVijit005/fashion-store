@@ -25,13 +25,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseTransformInterceptor());
 
   app.enableCors({
-    origin:
-      configService.get<string>('NODE_ENV') === 'production'
-        ? [
-            'https://aurastreetwear.com',
-            /\\.vercel\\.app$/,
-          ]
-        : true,
+    origin: true,
     credentials: true,
   });
 
