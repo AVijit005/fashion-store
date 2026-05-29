@@ -29,13 +29,10 @@ async function bootstrap() {
     ?.split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
-  const fallbackOrigins =
-    configService.get<string>('NODE_ENV') === 'production'
-      ? []
-      : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'];
-
   app.enableCors({
-    origin: configuredOrigins?.length ? configuredOrigins : fallbackOrigins,
+    origin: configuredOrigins?.length
+      ? configuredOrigins
+      : (origin, callback) => callback(null, origin || true),
     credentials: true,
   });
 

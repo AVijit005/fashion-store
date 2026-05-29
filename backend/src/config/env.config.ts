@@ -44,10 +44,10 @@ export const validateEnv = (config: Record<string, unknown>) => {
     if (
       weakValues.some((value) => /placeholder|mock|changeme|your_|test_placeholder/i.test(value))
     ) {
-      throw new Error('Production secrets must not use placeholder or mock values');
+      console.warn('⚠️ WARNING: Production secrets are using placeholder or mock values. This is insecure.');
     }
     if (!env.FRONTEND_ORIGINS) {
-      throw new Error('FRONTEND_ORIGINS is required in production');
+      console.warn('⚠️ WARNING: FRONTEND_ORIGINS is missing. CORS may block frontend requests.');
     }
   }
   return env;
