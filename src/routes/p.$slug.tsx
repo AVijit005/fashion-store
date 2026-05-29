@@ -149,9 +149,7 @@ function ProductPage() {
     const rect = addBtnRef.current?.getBoundingClientRect();
     if (rect) launch(product.images[0], rect);
     // Find the matching variant to get its backend UUID for cart sync
-    const selectedVariant = product.variants?.find(
-      (v) => v.size === size && v.color === color,
-    );
+    const selectedVariant = product.variants?.find((v) => v.size === size && v.color === color);
     add({
       id: product.id,
       variantId: selectedVariant?.id,

@@ -186,7 +186,7 @@ export class OrdersService {
     return {
       orderId: createdOrder.id,
       razorpayOrderId,
-      amount: Number(totalAmount),
+      amount: totalAmount.toNumber(),
       currency: 'INR',
       guestToken,
     };
@@ -408,52 +408,57 @@ export class OrdersService {
     reason?: string,
     tx?: Prisma.TransactionClient,
   ) {
-    const client = tx || this.prisma;
-
-    // Fetch order with write lock
-    const orders = await client.$queryRawUnsafe<Order[]>(
-      `SELECT * FROM orders WHERE id = $1 FOR UPDATE`,
-      orderId,
-    );
-    const order = orders[0];
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    const currentStatus = order.status;
-    if (currentStatus === newStatus) {
-      return order;
-    }
-
-    const allowed = ALLOWED_TRANSITIONS[currentStatus];
-    if (!allowed || !allowed.includes(newStatus)) {
-      throw new BadRequestException(
-        `Invalid order status transition from ${currentStatus} to ${newStatus}`,
+    const execute = async (client: Prisma.TransactionClient) => {
+      // Fetch order with write lock
+      const orders = await client.$queryRawUnsafe<Order[]>(
+        `SELECT * FROM orders WHERE id = $1 FOR UPDATE`,
+        orderId,
       );
-    }
+      const order = orders[0];
 
-    // If order transitions to FAILED or CANCELLED, return stock to inventory
-    if (newStatus === OrderStatus.FAILED || newStatus === OrderStatus.CANCELLED) {
-      await this.inventoryService.restoreInventory(orderId, client);
-    }
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
 
-    // Update status and append to history
-    const updatedOrder = await client.order.update({
-      where: { id: orderId },
-      data: {
-        status: newStatus,
-        statusHistory: {
-          create: {
-            oldStatus: currentStatus,
-            newStatus,
-            changedBy,
-            reason: reason || `Transitioned status to ${newStatus}`,
+      const currentStatus = order.status;
+      if (currentStatus === newStatus) {
+        return order;
+      }
+
+      const allowed = ALLOWED_TRANSITIONS[currentStatus];
+      if (!allowed || !allowed.includes(newStatus)) {
+        throw new BadRequestException(
+          `Invalid order status transition from ${currentStatus} to ${newStatus}`,
+        );
+      }
+
+      // If order transitions to FAILED or CANCELLED, return stock to inventory
+      if (newStatus === OrderStatus.FAILED || newStatus === OrderStatus.CANCELLED) {
+        await this.inventoryService.restoreInventory(orderId, client);
+      }
+
+      // Update status and append to history
+      const updatedOrder = await client.order.update({
+        where: { id: orderId },
+        data: {
+          status: newStatus,
+          statusHistory: {
+            create: {
+              oldStatus: currentStatus,
+              newStatus,
+              changedBy,
+              reason: reason || `Transitioned status to ${newStatus}`,
+            },
           },
         },
-      },
-    });
+      });
 
-    return updatedOrder;
+      return updatedOrder;
+    };
+
+    if (tx) {
+      return execute(tx);
+    }
+    return this.prisma.$transaction(execute);
   }
 }

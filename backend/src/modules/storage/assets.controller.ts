@@ -92,14 +92,18 @@ export class AssetsController {
       throw new ForbiddenException('You do not have permission to access this asset');
     }
 
-    if (asset.status !== 'PENDING') {
-      throw new BadRequestException(`Asset status is already ${asset.status}`);
-    }
-
-    return this.prisma.asset.update({
-      where: { id },
+    const result = await this.prisma.asset.updateMany({
+      where: { id, status: 'PENDING' },
       data: { status: 'UPLOADED' },
     });
+
+    if (result.count === 0) {
+      // Re-fetch to give an accurate error message (someone else already confirmed it)
+      const currentAsset = await this.prisma.asset.findUnique({ where: { id } });
+      throw new BadRequestException(`Asset status is already ${currentAsset?.status}`);
+    }
+
+    return this.prisma.asset.findUnique({ where: { id } });
   }
 
   @Get(':id')

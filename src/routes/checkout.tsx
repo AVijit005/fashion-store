@@ -1,7 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useId, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ChevronRight, Lock, Smartphone, CreditCard, Banknote, AlertCircle, Loader2 } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  Lock,
+  Smartphone,
+  CreditCard,
+  Banknote,
+  AlertCircle,
+  Loader2,
+} from "lucide-react";
 import { z } from "zod";
 import { useCart } from "@/lib/store/cart";
 import { apiClient } from "@/lib/api/client";
@@ -243,8 +252,7 @@ function CheckoutPage() {
       rzp.open();
       // Don't reset isPlacing here — ondismiss handles it above
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Checkout failed. Please try again.";
+      const message = err instanceof Error ? err.message : "Checkout failed. Please try again.";
       setOrderError(message);
       setIsPlacing(false);
     }

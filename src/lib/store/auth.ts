@@ -27,8 +27,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  accessToken:
-    typeof window !== "undefined" ? localStorage.getItem("ink_access_token") : null,
+  accessToken: typeof window !== "undefined" ? localStorage.getItem("ink_access_token") : null,
   isAuthenticated: false,
   isLoading: true,
   authModalOpen: false,
@@ -61,9 +60,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Merge guest cart into authenticated user cart after login
       const guestSessionId = getOrCreateCartSessionId();
       if (guestSessionId) {
-        cartApi.mergeCart(guestSessionId).catch((err) =>
-          console.error("[auth] Cart merge after login failed:", err),
-        );
+        cartApi
+          .mergeCart(guestSessionId)
+          .catch((err) => console.error("[auth] Cart merge after login failed:", err));
       }
     } catch (error) {
       get().logout();
@@ -104,8 +103,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   initialize: async () => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("ink_access_token") : null;
+    const token = typeof window !== "undefined" ? localStorage.getItem("ink_access_token") : null;
     if (!token) {
       set({ isLoading: false, isAuthenticated: false, user: null });
       return;

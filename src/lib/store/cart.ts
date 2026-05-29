@@ -36,39 +36,36 @@ type CartState = {
   count: () => number;
 };
 
-const keyFor = (i: { id: string; size: string; color: string }) =>
-  `${i.id}-${i.size}-${i.color}`;
+const keyFor = (i: { id: string; size: string; color: string }) => `${i.id}-${i.size}-${i.color}`;
 
 // Fire-and-forget backend sync — never blocks the UI.
 // Errors are logged but do not affect the local cart state.
 function syncAdd(variantId: string, quantity: number) {
-  cartApi.addItem(variantId, quantity).catch((err) =>
-    console.error("[cart] Backend sync addItem failed:", err),
-  );
+  cartApi
+    .addItem(variantId, quantity)
+    .catch((err) => console.error("[cart] Backend sync addItem failed:", err));
 }
 
 function syncUpdate(variantId: string, qty: number) {
   if (qty <= 0) {
-    cartApi.removeItem(variantId).catch((err) =>
-      console.error("[cart] Backend sync removeItem failed:", err),
-    );
+    cartApi
+      .removeItem(variantId)
+      .catch((err) => console.error("[cart] Backend sync removeItem failed:", err));
   } else {
-    cartApi.updateItem(variantId, qty).catch((err) =>
-      console.error("[cart] Backend sync updateItem failed:", err),
-    );
+    cartApi
+      .updateItem(variantId, qty)
+      .catch((err) => console.error("[cart] Backend sync updateItem failed:", err));
   }
 }
 
 function syncRemove(variantId: string) {
-  cartApi.removeItem(variantId).catch((err) =>
-    console.error("[cart] Backend sync removeItem failed:", err),
-  );
+  cartApi
+    .removeItem(variantId)
+    .catch((err) => console.error("[cart] Backend sync removeItem failed:", err));
 }
 
 function syncClear() {
-  cartApi.clearCart().catch((err) =>
-    console.error("[cart] Backend sync clearCart failed:", err),
-  );
+  cartApi.clearCart().catch((err) => console.error("[cart] Backend sync clearCart failed:", err));
 }
 
 export const useCart = create<CartState>()(
@@ -85,9 +82,7 @@ export const useCart = create<CartState>()(
 
         if (existing) {
           set({
-            items: get().items.map((it) =>
-              keyFor(it) === k ? { ...it, qty: it.qty + qty } : it,
-            ),
+            items: get().items.map((it) => (keyFor(it) === k ? { ...it, qty: it.qty + qty } : it)),
             open: true,
           });
         } else {
@@ -128,8 +123,7 @@ export const useCart = create<CartState>()(
       },
 
       subtotal: () => get().items.reduce((s, i) => s + i.price * i.qty, 0),
-      savings: () =>
-        get().items.reduce((s, i) => s + (i.mrp - i.price) * i.qty, 0),
+      savings: () => get().items.reduce((s, i) => s + (i.mrp - i.price) * i.qty, 0),
       count: () => get().items.reduce((s, i) => s + i.qty, 0),
     }),
     {

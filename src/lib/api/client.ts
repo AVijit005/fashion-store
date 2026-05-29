@@ -19,6 +19,8 @@ export class APIError extends Error {
   }
 }
 
+let refreshPromise: Promise<void> | null = null;
+
 export const apiClient = {
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const url = new URL(`${BASE_URL}${path.startsWith("/") ? path : `/${path}`}`);
@@ -70,20 +72,35 @@ export const apiClient = {
         if (typeof window !== "undefined") {
           const refreshToken = localStorage.getItem("ink_refresh_token");
           if (refreshToken) {
-            try {
-              const refreshUrl = new URL(`${BASE_URL}/auth/refresh`);
-              const refreshRes = await fetch(refreshUrl.toString(), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ refreshToken }),
+            if (!refreshPromise) {
+              refreshPromise = (async () => {
+                const refreshUrl = new URL(`${BASE_URL}/auth/refresh`);
+                const refreshRes = await fetch(refreshUrl.toString(), {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ refreshToken }),
+                });
+
+                if (refreshRes.ok) {
+                  const tokens = await refreshRes.json();
+                  localStorage.setItem("ink_access_token", tokens.accessToken);
+                  localStorage.setItem("ink_refresh_token", tokens.refreshToken);
+                } else {
+                  // If refresh fails, clear tokens to force login
+                  localStorage.removeItem("ink_access_token");
+                  localStorage.removeItem("ink_refresh_token");
+                  throw new Error("Refresh failed");
+                }
+              })().finally(() => {
+                refreshPromise = null;
               });
+            }
 
-              if (refreshRes.ok) {
-                const tokens = await refreshRes.json();
-                localStorage.setItem("ink_access_token", tokens.accessToken);
-                localStorage.setItem("ink_refresh_token", tokens.refreshToken);
-
-                headers.set("Authorization", `Bearer ${tokens.accessToken}`);
+            try {
+              await refreshPromise;
+              const newAccessToken = localStorage.getItem("ink_access_token");
+              if (newAccessToken) {
+                headers.set("Authorization", `Bearer ${newAccessToken}`);
                 const retryResponse = await fetch(url.toString(), { ...config, headers });
                 if (retryResponse.ok) {
                   if (retryResponse.status === 204) {

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { Product } from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service';
 import { SearchService } from './search.service';
@@ -16,6 +16,10 @@ export class PostgresSearchService extends SearchService {
     const limit = options?.limit || 20;
     const offset = options?.offset || 0;
     const { categoryId, collectionId } = options || {};
+
+    if (query && query.length > 200) {
+      throw new BadRequestException('Search query is too long (maximum 200 characters)');
+    }
 
     const cleanQuery = query.replace(/[^\w\s]/g, ' ').trim();
     if (!cleanQuery) {

@@ -244,7 +244,7 @@ describe('OrdersModule (e2e)', () => {
         .send(testAddress);
 
       const razorpayOrderId = checkoutRes.body.data.razorpayOrderId;
-      const webhookSecret = 'mock_razorpay_secret';
+      const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || 'mock_razorpay_webhook_secret_dev';
       const eventId = 'evt_test123';
 
       const webhookBodyObj = {
@@ -273,8 +273,13 @@ describe('OrdersModule (e2e)', () => {
         .post('/orders/webhook')
         .set('x-razorpay-signature', signature)
         .set('Content-Type', 'application/json')
-        .send(rawBody)
-        .expect(HttpStatus.CREATED);
+        .send(rawBody);
+
+      if (firstWebhookRes.status === 400) {
+        console.error('WEBHOOK ERROR:', firstWebhookRes.body);
+      }
+
+      expect(firstWebhookRes.status).toBe(HttpStatus.CREATED);
 
       expect(firstWebhookRes.body.data.status).toBe('processed');
 
@@ -392,7 +397,7 @@ describe('OrdersModule (e2e)', () => {
         .send(testAddress);
 
       const razorpayOrderId = checkoutRes.body.data.razorpayOrderId;
-      const webhookSecret = 'mock_razorpay_secret';
+      const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || 'mock_razorpay_webhook_secret_dev';
       const eventId = `evt_race_${crypto.randomUUID()}`;
 
       const webhookBodyObj = {

@@ -229,6 +229,7 @@ model Order {
 
   @@index([userId])
   @@index([guestToken])
+  @@index([status, createdAt])
   @@map("orders")
 }
 

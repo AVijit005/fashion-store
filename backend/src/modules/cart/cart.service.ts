@@ -1,7 +1,7 @@
 import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import Redis from 'ioredis';
 import { PrismaService } from '../../config/prisma.service';
-import { ProductStatus } from '@prisma/client';
+import { ProductStatus, Prisma } from '@prisma/client';
 
 interface CachedCartItem {
   variantId: string;
@@ -103,7 +103,7 @@ export class CartService {
     });
 
     const variantMap = new Map(variants.map((v) => [v.id, v]));
-    let totalAmount = 0;
+    let totalAmount = new Prisma.Decimal(0);
 
     const hydratedItems = items
       .map((item) => {
@@ -113,10 +113,11 @@ export class CartService {
         }
 
         const price = variant.priceOverride
-          ? Number(variant.priceOverride)
-          : Number(variant.product.basePrice);
-        const itemTotal = price * item.quantity;
-        totalAmount += itemTotal;
+          ? new Prisma.Decimal(variant.priceOverride.toString())
+          : new Prisma.Decimal(variant.product.basePrice.toString());
+
+        const itemTotal = price.mul(item.quantity);
+        totalAmount = totalAmount.add(itemTotal);
 
         return {
           variantId: variant.id,
@@ -124,8 +125,8 @@ export class CartService {
           size: variant.size,
           color: variant.color,
           quantity: item.quantity,
-          unitPrice: price,
-          totalPrice: itemTotal,
+          unitPrice: price.toNumber(),
+          totalPrice: itemTotal.toNumber(),
           productTitle: variant.product.title,
           productSlug: variant.product.slug,
           thumbnailUrl: variant.thumbnailUrl || variant.mediaUrls[0] || null,
@@ -137,7 +138,7 @@ export class CartService {
 
     return {
       items: hydratedItems,
-      totalAmount,
+      totalAmount: totalAmount.toNumber(),
     };
   }
 
