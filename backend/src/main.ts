@@ -27,7 +27,10 @@ async function bootstrap() {
   app.enableCors({
     origin:
       configService.get<string>('NODE_ENV') === 'production'
-        ? ['https://aurastreetwear.com']
+        ? [
+            'https://aurastreetwear.com',
+            /\\.vercel\\.app$/,
+          ]
         : true,
     credentials: true,
   });
