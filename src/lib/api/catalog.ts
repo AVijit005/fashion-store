@@ -149,7 +149,7 @@ export const catalogApi = {
     limit?: number;
     offset?: number;
   }) {
-    const res = await apiClient.get<{ products: BackendProduct[]; total: number }>(
+    const res = await apiClient.get<any>(
       "/catalog/products",
       {
         category: params?.category,
@@ -159,9 +159,14 @@ export const catalogApi = {
         offset: params?.offset,
       },
     );
+    
+    // Bulletproof parsing in case backend returns unexpected shape
+    const rawProducts = Array.isArray(res) ? res : Array.isArray(res?.products) ? res.products : [];
+    const total = typeof res?.total === 'number' ? res.total : rawProducts.length;
+
     return {
-      products: res.products.map(mapBackendProduct),
-      total: res.total,
+      products: rawProducts.map(mapBackendProduct),
+      total,
     };
   },
 
@@ -171,7 +176,7 @@ export const catalogApi = {
   },
 
   async search(query: string, params?: { limit?: number; offset?: number }) {
-    const res = await apiClient.get<BackendProduct[] | { products: BackendProduct[] }>(
+    const res = await apiClient.get<any>(
       "/catalog/search",
       {
         q: query,
@@ -179,8 +184,8 @@ export const catalogApi = {
         offset: params?.offset,
       },
     );
-    // Typo-tolerant search endpoint returns array of products
-    const rawProducts = Array.isArray(res) ? res : res.products || [];
+    // Bulletproof parsing for search endpoints
+    const rawProducts = Array.isArray(res) ? res : Array.isArray(res?.products) ? res.products : [];
     return rawProducts.map(mapBackendProduct);
   },
 
