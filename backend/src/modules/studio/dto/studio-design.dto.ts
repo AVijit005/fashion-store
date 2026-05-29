@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsObject, ValidateNested } from 'class-validator';
+import { IsString, IsOptional, IsObject } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateStudioDesignDto {

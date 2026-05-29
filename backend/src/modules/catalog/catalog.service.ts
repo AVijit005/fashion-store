@@ -26,8 +26,8 @@ export class CatalogService {
     limit?: number;
     offset?: number;
   }) {
-    const limit = filters.limit || 20;
-    const offset = filters.offset || 0;
+    const limit = Math.min(Math.max(filters.limit || 20, 1), 100);
+    const offset = Math.min(Math.max(filters.offset || 0, 0), 10000);
     const now = new Date();
 
     // Visibility boundary: must be PUBLISHED, and if linked to a drop, the drop must be released/active
@@ -129,7 +129,11 @@ export class CatalogService {
   }
 
   async getActiveDrops() {
+    const now = new Date();
     return this.prisma.drop.findMany({
+      where: {
+        OR: [{ releaseDate: { lte: now } }, { isActive: true }],
+      },
       orderBy: { releaseDate: 'asc' },
     });
   }

@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
-import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { validateEnv } from './config/env.config';
 import { PrismaModule } from './config/prisma.module';
 import { RedisModule } from './config/redis.module';
@@ -11,8 +10,6 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { CartModule } from './modules/cart/cart.module';
 import { OrdersModule } from './modules/orders/orders.module';
-import { AllExceptionsFilter } from './common/filters/global-exception.filter';
-import { ResponseTransformInterceptor } from './common/interceptors/response.interceptor';
 import { ScheduleModule } from '@nestjs/schedule';
 import { StorageModule } from './modules/storage/storage.module';
 import { StudioModule } from './modules/studio/studio.module';
@@ -54,15 +51,6 @@ import { StudioModule } from './modules/studio/studio.module';
     StorageModule,
     StudioModule,
   ],
-  providers: [
-    {
-      provide: APP_FILTER,
-      useClass: AllExceptionsFilter,
-    },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: ResponseTransformInterceptor,
-    },
-  ],
+  providers: [],
 })
 export class AppModule {}

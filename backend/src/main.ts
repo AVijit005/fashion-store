@@ -24,8 +24,18 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new ResponseTransformInterceptor());
 
+  const configuredOrigins = configService
+    .get<string>('FRONTEND_ORIGINS')
+    ?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const fallbackOrigins =
+    configService.get<string>('NODE_ENV') === 'production'
+      ? []
+      : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'];
+
   app.enableCors({
-    origin: true,
+    origin: configuredOrigins?.length ? configuredOrigins : fallbackOrigins,
     credentials: true,
   });
 

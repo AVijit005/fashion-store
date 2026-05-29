@@ -22,7 +22,7 @@ interface AuthState {
   signup: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   initialize: () => Promise<void>;
-  setTokens: (accessToken: string, refreshToken: string) => void;
+  setTokens: (accessToken: string) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -36,10 +36,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setAuthModalOpen: (open) => set({ authModalOpen: open }),
   setAuthModalView: (view) => set({ authModalView: view }),
 
-  setTokens: (accessToken, refreshToken) => {
+  setTokens: (accessToken) => {
     if (typeof window !== "undefined") {
       localStorage.setItem("ink_access_token", accessToken);
-      localStorage.setItem("ink_refresh_token", refreshToken);
     }
     set({ accessToken, isAuthenticated: true });
   },
@@ -47,11 +46,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email, password) => {
     set({ isLoading: true });
     try {
-      const res = await apiClient.post<{ accessToken: string; refreshToken: string }>(
-        "/auth/login",
-        { email, password },
-      );
-      get().setTokens(res.accessToken, res.refreshToken);
+      const res = await apiClient.post<{ accessToken: string }>("/auth/login", { email, password });
+      get().setTokens(res.accessToken);
 
       // Fetch profile
       const user = await apiClient.get<UserProfile>("/auth/me");
@@ -85,21 +81,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     // Clear local state FIRST so the UI reflects logged-out state immediately,
     // even if the network request to revoke the session is slow or fails.
-    const refreshToken =
-      typeof window !== "undefined" ? localStorage.getItem("ink_refresh_token") : null;
-
     if (typeof window !== "undefined") {
       localStorage.removeItem("ink_access_token");
-      localStorage.removeItem("ink_refresh_token");
     }
     set({ user: null, accessToken: null, isAuthenticated: false });
 
-    // Revoke server session in the background (best-effort)
-    if (refreshToken) {
-      apiClient
-        .post("/auth/logout", { refreshToken })
-        .catch((err) => console.error("[auth] Logout request failed:", err));
-    }
+    apiClient
+      .post("/auth/logout")
+      .catch((err) => console.error("[auth] Logout request failed:", err));
   },
 
   initialize: async () => {
@@ -114,21 +103,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       console.error("Failed to restore auth session:", error);
       // If token is invalid/expired, try rotating
-      const refresh =
-        typeof window !== "undefined" ? localStorage.getItem("ink_refresh_token") : null;
-      if (refresh) {
-        try {
-          const res = await apiClient.post<{ accessToken: string; refreshToken: string }>(
-            "/auth/refresh",
-            { refreshToken: refresh },
-          );
-          get().setTokens(res.accessToken, res.refreshToken);
-          const user = await apiClient.get<UserProfile>("/auth/me");
-          set({ user, isAuthenticated: true });
-        } catch {
-          await get().logout();
-        }
-      } else {
+      try {
+        const res = await apiClient.post<{ accessToken: string }>("/auth/refresh");
+        get().setTokens(res.accessToken);
+        const user = await apiClient.get<UserProfile>("/auth/me");
+        set({ user, isAuthenticated: true });
+      } catch {
         await get().logout();
       }
     } finally {

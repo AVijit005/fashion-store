@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../../config/prisma.service';
 import { CreateCreatorTemplateDto, UpdateCreatorTemplateDto } from './dto/creator-template.dto';
 import { designJsonSchema } from './dto/design-json.schema';
-import { TemplateStatus, DesignStatus } from '@prisma/client';
+import { TemplateStatus, DesignStatus, Role, Prisma } from '@prisma/client';
 
 @Injectable()
 export class CreatorTemplateService {
@@ -58,24 +58,45 @@ export class CreatorTemplateService {
     });
   }
 
-  async findAll(status?: TemplateStatus) {
-    // Customers usually only see PUBLISHED templates, admins/creators can see all depending on endpoint
+  async findAll(userId: string, userRole: Role, status?: TemplateStatus) {
+    const where: Prisma.CreatorTemplateWhereInput =
+      userRole === Role.ADMIN
+        ? status
+          ? { status }
+          : {}
+        : userRole === Role.CREATOR
+          ? {
+              AND: [
+                status ? { status } : {},
+                { OR: [{ userId }, { status: TemplateStatus.PUBLISHED }] },
+              ],
+            }
+          : { status: TemplateStatus.PUBLISHED };
+
     return this.prisma.creatorTemplate.findMany({
-      where: status ? { status } : undefined,
+      where,
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string, userRole?: Role | string) {
     const template = await this.prisma.creatorTemplate.findUnique({
       where: { id },
     });
     if (!template) throw new NotFoundException('Template not found');
+
+    const canRead =
+      template.status === TemplateStatus.PUBLISHED ||
+      userRole === Role.ADMIN ||
+      (userRole === Role.CREATOR && template.userId === userId);
+    if (!canRead) {
+      throw new NotFoundException('Template not found');
+    }
     return template;
   }
 
   async update(userId: string, userRole: string, id: string, dto: UpdateCreatorTemplateDto) {
-    const template = await this.findOne(id);
+    const template = await this.findOne(id, userId, userRole);
 
     // Only owner or admin can update
     if (template.userId !== userId && userRole !== 'ADMIN') {

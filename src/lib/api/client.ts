@@ -5,6 +5,7 @@ const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
+  validate?: (data: unknown) => boolean;
 }
 
 export class APIError extends Error {
@@ -21,11 +22,15 @@ export class APIError extends Error {
 
 let refreshPromise: Promise<void> | null = null;
 
-function unwrapApiData<T>(parsed: unknown): T {
+function unwrapApiData<T>(parsed: unknown, validate?: (data: unknown) => boolean): T {
+  let data = parsed;
   if (parsed && typeof parsed === "object" && "success" in parsed && "data" in parsed) {
-    return (parsed as Record<string, unknown>).data as T;
+    data = (parsed as Record<string, unknown>).data;
   }
-  return parsed as T;
+  if (validate && !validate(data)) {
+    throw new TypeError("API response payload failed runtime type validation");
+  }
+  return data as T;
 }
 
 export const apiClient = {
@@ -90,7 +95,10 @@ export const apiClient = {
                 });
 
                 if (refreshRes.ok) {
-                  const tokens = unwrapApiData<{ accessToken: string }>(await refreshRes.json());
+                  const tokens = unwrapApiData<{ accessToken: string }>(
+                    await refreshRes.json(),
+                    (d) => !!d && typeof d === "object" && "accessToken" in d && typeof (d as any).accessToken === "string"
+                  );
                   localStorage.setItem("ink_access_token", tokens.accessToken);
                 } else {
                   // If refresh fails, clear tokens to force login
@@ -116,7 +124,7 @@ export const apiClient = {
                   if (retryResponse.status === 204) {
                     return null as unknown as T;
                   }
-                  return unwrapApiData<T>(await retryResponse.json());
+                  return unwrapApiData<T>(await retryResponse.json(), options.validate);
                 }
               }
             } catch (err) {
@@ -148,8 +156,11 @@ export const apiClient = {
     }
 
     try {
-      return unwrapApiData<T>(await response.json());
-    } catch {
+      return unwrapApiData<T>(await response.json(), options.validate);
+    } catch (err) {
+      if (err instanceof TypeError || err instanceof APIError) {
+        throw err;
+      }
       return null as unknown as T;
     }
   },

@@ -1,4 +1,4 @@
-import { IsUUID, IsInt, Min, IsString, IsNotEmpty } from 'class-validator';
+import { IsUUID, IsInt, Min, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AddCartItemDto {

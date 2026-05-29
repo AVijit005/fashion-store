@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { catalogApi } from "@/lib/api/catalog";
 import { type Product } from "@/lib/data/products";
 import { LoadingState } from "@/components/state/loading";
+import { pct } from "@/lib/format";
 
 export const Route = createFileRoute("/sale")({
   head: () => ({

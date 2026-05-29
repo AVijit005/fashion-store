@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight, Heart, Plus, Share2, Gift, Flame, Star } from "lucide-react";
 import { toast } from "sonner";
-import { getProduct, products } from "@/lib/data/products";
+import type { Product } from "@/lib/data/products";
 import { inr, pct } from "@/lib/format";
 import { useCart } from "@/lib/store/cart";
 import { useWishlist } from "@/lib/store/wishlist";
@@ -150,9 +150,13 @@ function ProductPage() {
     if (rect) launch(product.images[0], rect);
     // Find the matching variant to get its backend UUID for cart sync
     const selectedVariant = product.variants?.find((v) => v.size === size && v.color === color);
+    if (!selectedVariant) {
+      toast("This variant is unavailable");
+      return;
+    }
     add({
       id: product.id,
-      variantId: selectedVariant?.id,
+      variantId: selectedVariant.id,
       slug: product.slug,
       name: product.name,
       image: product.images[0],

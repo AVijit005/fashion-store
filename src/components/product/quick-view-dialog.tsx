@@ -29,6 +29,7 @@ export function QuickViewDialog({
 
   useEffect(() => {
     if (product) {
+      setSize(product.sizes.includes("M") ? "M" : product.sizes[0]);
       setColor(product.colors[0].name);
       setImgIdx(0);
     }
@@ -46,10 +47,16 @@ export function QuickViewDialog({
   const wished = has(product.id);
 
   const handleAdd = () => {
+    const selectedVariant = product.variants?.find((v) => v.size === size && v.color === color);
+    if (!selectedVariant) {
+      toast("This variant is unavailable");
+      return;
+    }
     const rect = addRef.current?.getBoundingClientRect();
     if (rect) launch(product.images[0], rect);
     add({
       id: product.id,
+      variantId: selectedVariant.id,
       slug: product.slug,
       name: product.name,
       image: product.images[0],

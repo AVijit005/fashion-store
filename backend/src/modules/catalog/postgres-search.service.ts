@@ -13,8 +13,8 @@ export class PostgresSearchService extends SearchService {
     query: string,
     options?: { limit?: number; offset?: number; categoryId?: string; collectionId?: string },
   ): Promise<{ products: Product[]; total: number }> {
-    const limit = options?.limit || 20;
-    const offset = options?.offset || 0;
+    const limit = Math.min(Math.max(options?.limit || 20, 1), 50);
+    const offset = Math.min(Math.max(options?.offset || 0, 0), 10000);
     const { categoryId, collectionId } = options || {};
 
     if (query && query.length > 200) {

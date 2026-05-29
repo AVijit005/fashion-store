@@ -56,7 +56,11 @@ export class CartService {
     const cached = await this.redis.get(cacheKey);
 
     if (cached) {
-      return JSON.parse(cached) as CachedCartItem[];
+      try {
+        return JSON.parse(cached) as CachedCartItem[];
+      } catch {
+        await this.redis.del(cacheKey);
+      }
     }
 
     // Cache miss, load from DB
@@ -160,39 +164,45 @@ export class CartService {
     if (variant.stockQuantity <= 0) {
       throw new BadRequestException('Product variant is out of stock');
     }
-
-    // 2. Find or create Cart in DB
-    let cart = await this.prisma.cart.findFirst({
-      where: userId ? { userId } : { sessionId },
-    });
-
-    if (!cart) {
-      cart = await this.prisma.cart.create({
-        data: {
-          userId: userId || null,
-          sessionId: sessionId || null,
-        },
-      });
+    if (quantity > variant.stockQuantity) {
+      throw new BadRequestException(
+        `Requested quantity exceeds available stock (${variant.stockQuantity})`,
+      );
     }
 
-    // 3. Upsert CartItem
-    await this.prisma.cartItem.upsert({
-      where: {
-        cartId_productVariantId: {
+    await this.prisma.$transaction(async (tx) => {
+      const cart = await this.getOrCreateCart(tx, userId, sessionId);
+      const existing = await tx.cartItem.findUnique({
+        where: {
+          cartId_productVariantId: {
+            cartId: cart.id,
+            productVariantId: variantId,
+          },
+        },
+      });
+      const nextQuantity = (existing?.quantity || 0) + quantity;
+      if (nextQuantity > variant.stockQuantity) {
+        throw new BadRequestException(
+          `Requested quantity exceeds available stock (${variant.stockQuantity})`,
+        );
+      }
+
+      await tx.cartItem.upsert({
+        where: {
+          cartId_productVariantId: {
+            cartId: cart.id,
+            productVariantId: variantId,
+          },
+        },
+        create: {
           cartId: cart.id,
           productVariantId: variantId,
+          quantity,
         },
-      },
-      create: {
-        cartId: cart.id,
-        productVariantId: variantId,
-        quantity,
-      },
-      update: {
-        quantity: {
-          increment: quantity,
+        update: {
+          quantity: nextQuantity,
         },
-      },
+      });
     });
 
     // 4. Invalidate cache
@@ -214,8 +224,8 @@ export class CartService {
     }
 
     // Check if variant has sufficient stock
-    const variant = await this.prisma.productVariant.findUnique({
-      where: { id: variantId },
+    const variant = await this.prisma.productVariant.findFirst({
+      where: { id: variantId, product: { status: ProductStatus.PUBLISHED } },
     });
 
     if (!variant) {
@@ -293,19 +303,31 @@ export class CartService {
       return this.getCart(userId);
     }
 
-    let userCart = await this.prisma.cart.findUnique({
-      where: { userId },
-    });
-
-    if (!userCart) {
-      userCart = await this.prisma.cart.create({
-        data: { userId },
-      });
-    }
-
     // Merge items transactionally
     await this.prisma.$transaction(async (tx) => {
+      const userCart = await this.getOrCreateCart(tx, userId);
+      const variants = await tx.productVariant.findMany({
+        where: { id: { in: guestCart.items.map((item) => item.productVariantId) } },
+        select: { id: true, stockQuantity: true },
+      });
+      const stockByVariant = new Map(
+        variants.map((variant) => [variant.id, variant.stockQuantity]),
+      );
+
       for (const guestItem of guestCart.items) {
+        const existing = await tx.cartItem.findUnique({
+          where: {
+            cartId_productVariantId: {
+              cartId: userCart.id,
+              productVariantId: guestItem.productVariantId,
+            },
+          },
+        });
+        const stock = stockByVariant.get(guestItem.productVariantId) ?? 0;
+        const mergedQuantity = Math.min(stock, (existing?.quantity || 0) + guestItem.quantity);
+        if (mergedQuantity <= 0) {
+          continue;
+        }
         await tx.cartItem.upsert({
           where: {
             cartId_productVariantId: {
@@ -316,12 +338,10 @@ export class CartService {
           create: {
             cartId: userCart.id,
             productVariantId: guestItem.productVariantId,
-            quantity: guestItem.quantity,
+            quantity: mergedQuantity,
           },
           update: {
-            quantity: {
-              increment: guestItem.quantity,
-            },
+            quantity: mergedQuantity,
           },
         });
       }
@@ -347,5 +367,29 @@ export class CartService {
   private async invalidateCache(userId?: string, sessionId?: string) {
     const cacheKey = this.getCacheKey(userId, sessionId);
     await this.redis.del(cacheKey);
+  }
+
+  private async getOrCreateCart(tx: Prisma.TransactionClient, userId?: string, sessionId?: string) {
+    const where = userId ? { userId } : { sessionId };
+    const existing = await tx.cart.findFirst({ where });
+    if (existing) {
+      return existing;
+    }
+    try {
+      return await tx.cart.create({
+        data: {
+          userId: userId || null,
+          sessionId: sessionId || null,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const cart = await tx.cart.findFirst({ where });
+        if (cart) {
+          return cart;
+        }
+      }
+      throw error;
+    }
   }
 }

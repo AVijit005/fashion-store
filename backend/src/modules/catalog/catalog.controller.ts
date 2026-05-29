@@ -1,13 +1,5 @@
-import {
-  Controller,
-  Get,
-  Query,
-  Param,
-  ParseIntPipe,
-  ParseBoolPipe,
-  Query as QueryDecorator,
-} from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Query, Param, BadRequestException } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { CatalogService } from './catalog.service';
 import { SearchService } from './search.service';
 
@@ -47,8 +39,8 @@ export class CatalogController {
   ) {
     const isFeatured =
       isFeaturedStr === 'true' ? true : isFeaturedStr === 'false' ? false : undefined;
-    const limit = limitStr ? parseInt(limitStr, 10) : 20;
-    const offset = offsetStr ? parseInt(offsetStr, 10) : 0;
+    const limit = this.parsePaginationValue(limitStr, 20, 1, 100, 'limit');
+    const offset = this.parsePaginationValue(offsetStr, 0, 0, 10000, 'offset');
 
     return this.catalogService.getProducts({
       categorySlug,
@@ -79,8 +71,11 @@ export class CatalogController {
     @Query('limit') limitStr?: string,
     @Query('offset') offsetStr?: string,
   ) {
-    const limit = limitStr ? parseInt(limitStr, 10) : 20;
-    const offset = offsetStr ? parseInt(offsetStr, 10) : 0;
+    if (!query || !query.trim()) {
+      throw new BadRequestException('Search query is required');
+    }
+    const limit = this.parsePaginationValue(limitStr, 20, 1, 50, 'limit');
+    const offset = this.parsePaginationValue(offsetStr, 0, 0, 10000, 'offset');
 
     return this.searchService.search(query, {
       limit,
@@ -94,5 +89,22 @@ export class CatalogController {
   @ApiOperation({ summary: 'Get drops schedule' })
   async getActiveDrops() {
     return this.catalogService.getActiveDrops();
+  }
+
+  private parsePaginationValue(
+    raw: string | undefined,
+    fallback: number,
+    min: number,
+    max: number,
+    name: string,
+  ) {
+    if (raw === undefined) {
+      return fallback;
+    }
+    const value = Number(raw);
+    if (!Number.isInteger(value) || value < min || value > max) {
+      throw new BadRequestException(`${name} must be an integer between ${min} and ${max}`);
+    }
+    return value;
   }
 }

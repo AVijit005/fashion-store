@@ -30,14 +30,14 @@ export class CreatorTemplateController {
   findAll(@Req() req: any, @Query('status') status?: TemplateStatus) {
     // Customers can only see published templates
     const finalStatus = req.user.role === Role.CUSTOMER ? TemplateStatus.PUBLISHED : status;
-    return this.templateService.findAll(finalStatus);
+    return this.templateService.findAll(req.user.id, req.user.role, finalStatus);
   }
 
   @UseGuards(AuthGuard)
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific template' })
-  findOne(@Param('id') id: string) {
-    return this.templateService.findOne(id);
+  findOne(@Req() req: any, @Param('id') id: string) {
+    return this.templateService.findOne(id, req.user.id, req.user.role);
   }
 
   @UseGuards(AuthGuard, RolesGuard)

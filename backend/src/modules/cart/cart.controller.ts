@@ -10,7 +10,7 @@ import {
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiHeader, ApiBody, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiHeader } from '@nestjs/swagger';
 import { CartService } from './cart.service';
 import { AddCartItemDto, UpdateCartItemDto, MergeCartDto } from './dto/cart.dto';
 import { OptionalAuthGuard } from '../../common/guards/optional-auth.guard';

@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Eye, Heart } from "lucide-react";
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useWishlist } from "@/lib/store/wishlist";
 import { useCart } from "@/lib/store/cart";
@@ -28,7 +28,7 @@ function stockHint(id: string): "low" | "trending" | null {
   return null;
 }
 
-export function ProductCard({
+export const ProductCard = memo(function ProductCard({
   product,
   priority = false,
 }: {
@@ -46,17 +46,24 @@ export function ProductCard({
   const hint = stockHint(product.id);
 
   const quickAdd = (size: string) => {
+    const color = product.colors[0].name;
+    const selectedVariant = product.variants?.find((v) => v.size === size && v.color === color);
+    if (!selectedVariant) {
+      toast("This variant is unavailable");
+      return;
+    }
     const rect = cardRef.current?.getBoundingClientRect();
     if (rect) launch(product.images[0], rect);
     add({
       id: product.id,
+      variantId: selectedVariant.id,
       slug: product.slug,
       name: product.name,
       image: product.images[0],
       price: product.price,
       mrp: product.mrp,
       size,
-      color: product.colors[0].name,
+      color,
     });
   };
 
@@ -217,4 +224,4 @@ export function ProductCard({
       />
     </>
   );
-}
+});

@@ -2,7 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { OrdersService } from './orders.service';
 import { OrderStatus } from '@prisma/client';
-import { Logger, OnModuleDestroy } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException, OnModuleDestroy } from '@nestjs/common';
 
 @Processor('order-expiry')
 export class OrderExpiryProcessor extends WorkerHost implements OnModuleDestroy {
@@ -34,7 +34,9 @@ export class OrderExpiryProcessor extends WorkerHost implements OnModuleDestroy 
       );
       this.logger.log(`Successfully expired order: ${orderId} and returned stock to inventory.`);
     } catch (err) {
-      // Log the exception for audit visibility but complete worker execution successfully
+      if (!(err instanceof BadRequestException || err instanceof NotFoundException)) {
+        throw err;
+      }
       this.logger.debug(
         `Order ${orderId} was not expired (likely already paid or cancelled): ${(err as Error).message}`,
       );

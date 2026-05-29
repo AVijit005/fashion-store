@@ -11,7 +11,7 @@ import {
   UnauthorizedException,
   Query,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiHeader, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Request } from 'express';
 import { OrdersService } from './orders.service';
 import { CheckoutDto, VerifyPaymentDto } from './dto/orders.dto';

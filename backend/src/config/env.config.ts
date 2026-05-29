@@ -14,8 +14,9 @@ export const envSchema = z.object({
     .string()
     .transform((val) => parseInt(val, 10))
     .default('7'),
-  RAZORPAY_KEY_ID: z.string(),
-  RAZORPAY_KEY_SECRET: z.string(),
+  FRONTEND_ORIGINS: z.string().optional(),
+  RAZORPAY_KEY_ID: z.string().min(8),
+  RAZORPAY_KEY_SECRET: z.string().min(8),
   RAZORPAY_WEBHOOK_SECRET: z.string().min(8),
   AWS_ACCESS_KEY_ID: z.string(),
   AWS_SECRET_ACCESS_KEY: z.string(),
@@ -32,5 +33,22 @@ export const validateEnv = (config: Record<string, unknown>) => {
     console.error('❌ Invalid environment variables configuration:', result.error.format());
     throw new Error('Invalid environment variables');
   }
-  return result.data;
+  const env = result.data;
+  if (env.NODE_ENV === 'production') {
+    const weakValues = [
+      env.JWT_SECRET,
+      env.RAZORPAY_KEY_ID,
+      env.RAZORPAY_KEY_SECRET,
+      env.RAZORPAY_WEBHOOK_SECRET,
+    ];
+    if (
+      weakValues.some((value) => /placeholder|mock|changeme|your_|test_placeholder/i.test(value))
+    ) {
+      throw new Error('Production secrets must not use placeholder or mock values');
+    }
+    if (!env.FRONTEND_ORIGINS) {
+      throw new Error('FRONTEND_ORIGINS is required in production');
+    }
+  }
+  return env;
 };

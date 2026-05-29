@@ -125,8 +125,9 @@ function CheckoutPage() {
   const [orderError, setOrderError] = useState<string | null>(null);
 
   const sub = subtotal();
-  const ship = sub > 999 || sub === 0 ? 0 : shipping === "express" ? 149 : 0;
-  const total = sub + ship;
+  const ship = sub === 0 ? 0 : 100;
+  const tax = Math.round(sub * 0.18);
+  const total = sub + ship + tax;
 
   const setField = (k: keyof Address) => (v: string) => {
     setAddr((a) => ({ ...a, [k]: v }));
@@ -159,6 +160,17 @@ function CheckoutPage() {
     setOrderError(null);
 
     try {
+      if (items.some((item) => !item.variantId)) {
+        throw new Error(
+          "One or more bag items are unavailable for checkout. Please re-add them from the product page.",
+        );
+      }
+
+      const razorpayKeyId = (import.meta.env.VITE_RAZORPAY_KEY_ID as string) ?? "";
+      if (!/^rzp_(test|live)_/.test(razorpayKeyId) || razorpayKeyId.includes("placeholder")) {
+        throw new Error("Payment is not configured for this deployment.");
+      }
+
       const guestSessionId = getOrCreateCartSessionId() || undefined;
 
       // 1. Create order on backend (reserves inventory, creates Razorpay order)
@@ -177,24 +189,6 @@ function CheckoutPage() {
       // Persist guest token so order confirmation page can look up the order
       if (checkoutRes.guestToken && typeof window !== "undefined") {
         sessionStorage.setItem("ink_order_guest_token", checkoutRes.guestToken);
-      }
-
-      const razorpayKeyId = (import.meta.env.VITE_RAZORPAY_KEY_ID as string) ?? "";
-      const isMockKey =
-        !razorpayKeyId ||
-        razorpayKeyId.startsWith("rzp_test_placeholder") ||
-        razorpayKeyId.includes("placeholder");
-
-      // -----------------------------------------------------------------------
-      // Dev / mock flow — skip Razorpay when key is a placeholder
-      // -----------------------------------------------------------------------
-      if (isMockKey) {
-        clear(); // clear local + backend cart
-        await navigate({
-          to: "/checkout/success",
-          search: { orderId: checkoutRes.orderId },
-        });
-        return;
       }
 
       // -----------------------------------------------------------------------
@@ -417,11 +411,7 @@ function CheckoutPage() {
                 role="radiogroup"
                 aria-label="Shipping method"
               >
-                {[
-                  { id: "standard", t: "Standard", d: "3–5 business days", p: 0 },
-                  { id: "express", t: "Express", d: "1–2 business days", p: 149 },
-                  { id: "pickup", t: "Store pickup", d: "Bandra studio, today", p: 0 },
-                ].map((o) => (
+                {[{ id: "standard", t: "Standard", d: "3–5 business days", p: 100 }].map((o) => (
                   <label
                     key={o.id}
                     className={`flex cursor-pointer items-center justify-between gap-4 border p-5 transition ${shipping === o.id ? "border-ink" : "border-line hover:border-graphite"}`}
@@ -592,6 +582,10 @@ function CheckoutPage() {
             <div className="flex justify-between">
               <dt className="text-mute">Shipping</dt>
               <dd className="tabular-nums">{ship === 0 ? "Free" : inr(ship)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-mute">GST</dt>
+              <dd className="tabular-nums">{inr(tax)}</dd>
             </div>
             <div className="mt-3 flex items-baseline justify-between border-t border-line pt-3">
               <dt className="text-[11px] uppercase tracking-[0.22em] text-mute">Total</dt>

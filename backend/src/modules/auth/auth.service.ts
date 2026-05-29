@@ -7,6 +7,7 @@ import { SignUpDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import { hashPassword, verifyPassword } from './password.utils';
 import * as crypto from 'crypto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -20,15 +21,24 @@ export class AuthService {
   ) {}
 
   async signUp(signUpDto: SignUpDto) {
-    const existingUser = await this.usersService.findByEmail(signUpDto.email);
+    const email = signUpDto.email.trim().toLowerCase();
+    const existingUser = await this.usersService.findByEmail(email);
     if (existingUser) {
       throw new BadRequestException('Email already registered');
     }
 
     const hashedPassword = await hashPassword(signUpDto.password);
-    const user = await this.usersService.create(signUpDto.email, hashedPassword);
+    let user;
+    try {
+      user = await this.usersService.create(email, hashedPassword);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new BadRequestException('Email already registered');
+      }
+      throw error;
+    }
 
-    this.logger.log(`Audit: User registered successfully. email=${user.email} userId=${user.id}`);
+    this.logger.log(`Audit: User registered successfully. userId=${user.id}`);
 
     return {
       userId: user.id,
@@ -79,36 +89,6 @@ export class AuthService {
   async refresh(refreshToken: string, ipAddress?: string, userAgent?: string) {
     const tokenHash = this.hashToken(refreshToken);
 
-    const session = await this.prisma.session.findUnique({
-      where: { tokenHash },
-      include: { user: true },
-    });
-
-    if (!session) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-
-    // Token Reuse Detection (Security Breach Alert)
-    if (session.isRevoked) {
-      this.logger.warn(
-        `Audit WARNING: Refresh token reuse detected! Revoking all sessions for userId=${session.userId}. ip=${ipAddress}`,
-      );
-      await this.invalidateAllUserSessions(session.userId);
-      throw new UnauthorizedException('Security breach detected. All sessions revoked.');
-    }
-
-    if (session.expiresAt < new Date()) {
-      await this.prisma.session.delete({ where: { id: session.id } });
-      throw new UnauthorizedException('Refresh token expired');
-    }
-
-    // Revoke current session
-    await this.prisma.session.update({
-      where: { id: session.id },
-      data: { isRevoked: true },
-    });
-
-    // Generate new token pair
     const newRefreshToken = this.generateRandomToken();
     const newTokenHash = this.hashToken(newRefreshToken);
 
@@ -116,15 +96,55 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expiryDays);
 
-    // Create new session first so its ID can be embedded in the new access token.
-    const newSession = await this.prisma.session.create({
-      data: {
-        userId: session.userId,
-        tokenHash: newTokenHash,
-        ipAddress,
-        userAgent,
-        expiresAt,
-      },
+    const { session, newSession } = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.session.findUnique({
+        where: { tokenHash },
+        include: { user: true },
+      });
+
+      if (!current) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      if (current.isRevoked) {
+        await tx.session.updateMany({
+          where: { userId: current.userId, isRevoked: false },
+          data: { isRevoked: true },
+        });
+        throw new UnauthorizedException('Security breach detected. All sessions revoked.');
+      }
+
+      if (current.expiresAt < new Date()) {
+        await tx.session.update({
+          where: { id: current.id },
+          data: { isRevoked: true },
+        });
+        throw new UnauthorizedException('Refresh token expired');
+      }
+
+      const revoked = await tx.session.updateMany({
+        where: { id: current.id, isRevoked: false },
+        data: { isRevoked: true },
+      });
+      if (revoked.count !== 1) {
+        await tx.session.updateMany({
+          where: { userId: current.userId, isRevoked: false },
+          data: { isRevoked: true },
+        });
+        throw new UnauthorizedException('Refresh token was already used');
+      }
+
+      const created = await tx.session.create({
+        data: {
+          userId: current.userId,
+          tokenHash: newTokenHash,
+          ipAddress,
+          userAgent,
+          expiresAt,
+        },
+      });
+
+      return { session: current, newSession: created };
     });
 
     const accessToken = this.generateAccessToken(session.userId, session.user.role, newSession.id);
@@ -142,14 +162,15 @@ export class AuthService {
     const session = await this.prisma.session.findUnique({ where: { tokenHash } });
 
     if (session) {
-      await this.prisma.session.delete({ where: { id: session.id } });
+      await this.prisma.session.update({ where: { id: session.id }, data: { isRevoked: true } });
       this.logger.log(`Audit: User logged out. userId=${session.userId}`);
     }
   }
 
   async invalidateAllUserSessions(userId: string) {
-    await this.prisma.session.deleteMany({
-      where: { userId },
+    await this.prisma.session.updateMany({
+      where: { userId, isRevoked: false },
+      data: { isRevoked: true },
     });
     this.logger.log(`Audit: All sessions invalidated for userId=${userId}`);
   }

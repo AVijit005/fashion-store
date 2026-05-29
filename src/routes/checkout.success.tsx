@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
-import { useEffect } from "react";
-import { useCart } from "@/lib/store/cart";
 
 export const Route = createFileRoute("/checkout/success")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    orderId: typeof search.orderId === "string" ? search.orderId : "",
+  }),
   head: () => ({
     meta: [{ title: "Order placed — Ink Studio" }],
   }),
@@ -12,11 +13,7 @@ export const Route = createFileRoute("/checkout/success")({
 });
 
 function Success() {
-  const clear = useCart((s) => s.clear);
-  useEffect(() => {
-    const id = setTimeout(() => clear(), 600);
-    return () => clearTimeout(id);
-  }, [clear]);
+  const { orderId } = Route.useSearch();
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-6 py-20 text-center">
@@ -34,7 +31,7 @@ function Success() {
         transition={{ delay: 0.2 }}
         className="mt-6 text-[11px] uppercase tracking-[0.28em] text-mute"
       >
-        Order #INK-{Math.floor(Math.random() * 90000) + 10000}
+        Order {orderId ? `#${orderId.slice(0, 8).toUpperCase()}` : "confirmed"}
       </motion.p>
       <motion.h1
         initial={{ opacity: 0, y: 10 }}

@@ -13,6 +13,7 @@ ALTER TYPE "DesignStatus" ADD VALUE 'UNDER_REVIEW';
 -- AlterEnum
 BEGIN;
 CREATE TYPE "OrderStatus_new" AS ENUM ('PENDING', 'PAYMENT_PENDING', 'PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED', 'FAILED');
+UPDATE "orders" SET "status" = 'DELIVERED' WHERE "status"::text = 'COMPLETED';
 ALTER TABLE "public"."orders" ALTER COLUMN "status" DROP DEFAULT;
 ALTER TABLE "orders" ALTER COLUMN "status" TYPE "OrderStatus_new" USING ("status"::text::"OrderStatus_new");
 
@@ -26,22 +27,22 @@ COMMIT;
 ALTER TABLE "orders" DROP CONSTRAINT "orders_user_id_fkey";
 
 -- AlterTable
-ALTER TABLE "orders" DROP COLUMN "payment_id",
+ALTER TABLE "orders" RENAME COLUMN "payment_id" TO "razorpay_payment_id";
+ALTER TABLE "orders"
 ADD COLUMN     "guest_token" TEXT,
 ADD COLUMN     "payment_provider" TEXT NOT NULL DEFAULT 'RAZORPAY',
 ADD COLUMN     "payment_status" TEXT NOT NULL DEFAULT 'PENDING',
 ADD COLUMN     "razorpay_order_id" TEXT,
-ADD COLUMN     "razorpay_payment_id" TEXT,
 ADD COLUMN     "razorpay_signature" TEXT,
-ADD COLUMN     "shipping_city" TEXT NOT NULL,
-ADD COLUMN     "shipping_country" TEXT NOT NULL,
-ADD COLUMN     "shipping_email" TEXT NOT NULL,
+ADD COLUMN     "shipping_city" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "shipping_country" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "shipping_email" TEXT NOT NULL DEFAULT '',
 ADD COLUMN     "shipping_fee" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-ADD COLUMN     "shipping_name" TEXT NOT NULL,
-ADD COLUMN     "shipping_phone" TEXT NOT NULL,
-ADD COLUMN     "shipping_postal_code" TEXT NOT NULL,
-ADD COLUMN     "shipping_state" TEXT NOT NULL,
-ADD COLUMN     "shipping_street" TEXT NOT NULL,
+ADD COLUMN     "shipping_name" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "shipping_phone" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "shipping_postal_code" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "shipping_state" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "shipping_street" TEXT NOT NULL DEFAULT '',
 ADD COLUMN     "tax" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
 ALTER COLUMN "user_id" DROP NOT NULL;
 
@@ -49,7 +50,7 @@ ALTER COLUMN "user_id" DROP NOT NULL;
 ALTER TABLE "studio_designs" DROP COLUMN "design_data",
 ADD COLUMN     "deleted_at" TIMESTAMP(3),
 ADD COLUMN     "description" TEXT,
-ADD COLUMN     "title" TEXT NOT NULL;
+ADD COLUMN     "title" TEXT NOT NULL DEFAULT 'Untitled design';
 
 -- CreateTable
 CREATE TABLE "assets" (
@@ -321,4 +322,3 @@ ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_cart_id_fkey" FOREIGN KEY ("
 
 -- AddForeignKey
 ALTER TABLE "cart_items" ADD CONSTRAINT "cart_items_product_variant_id_fkey" FOREIGN KEY ("product_variant_id") REFERENCES "product_variants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
