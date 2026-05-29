@@ -1,0 +1,124 @@
+// Typed HTTP API Client wrapper around native fetch.
+// Communicates with NestJS API running on http://localhost:3000.
+
+const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3000";
+
+export interface RequestOptions extends RequestInit {
+  params?: Record<string, string | number | boolean | undefined>;
+}
+
+export class APIError extends Error {
+  status: number;
+  data: unknown;
+
+  constructor(message: string, status: number, data: unknown) {
+    super(message);
+    this.name = "APIError";
+    this.status = status;
+    this.data = data;
+  }
+}
+
+export const apiClient = {
+  async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    const url = new URL(`${BASE_URL}${path.startsWith("/") ? path : `/${path}`}`);
+
+    if (options.params) {
+      Object.entries(options.params).forEach(([key, val]) => {
+        if (val !== undefined && val !== null) {
+          url.searchParams.append(key, String(val));
+        }
+      });
+    }
+
+    const headers = new Headers(options.headers);
+
+    // Auto set content-type for JSON payloads
+    if (options.body && !headers.has("Content-Type") && !(options.body instanceof FormData)) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    // Attach JWT Access Token if user is logged in
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("ink_access_token");
+      if (token) {
+        headers.set("Authorization", `Bearer ${token}`);
+      }
+
+      // Attach Guest Session ID for Cart identification
+      const guestSessionId = localStorage.getItem("ink_cart_session_id");
+      if (guestSessionId) {
+        headers.set("x-cart-session-id", guestSessionId);
+      }
+    }
+
+    const config: RequestInit = {
+      ...options,
+      headers,
+    };
+
+    let response: Response;
+    try {
+      response = await fetch(url.toString(), config);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Network connection failure";
+      throw new APIError(msg, 500, err);
+    }
+
+    if (!response.ok) {
+      let errorData: unknown;
+      try {
+        errorData = await response.json();
+      } catch {
+        try {
+          errorData = await response.text();
+        } catch {
+          errorData = null;
+        }
+      }
+      throw new APIError(
+        errorData?.message || `API request failed with status ${response.status}`,
+        response.status,
+        errorData,
+      );
+    }
+
+    if (response.status === 204) {
+      return null as unknown as T;
+    }
+
+    try {
+      return (await response.json()) as T;
+    } catch {
+      return null as unknown as T;
+    }
+  },
+
+  get<T>(
+    path: string,
+    params?: Record<string, string | number | boolean | undefined>,
+    options?: RequestOptions,
+  ): Promise<T> {
+    return this.request<T>(path, { ...options, method: "GET", params });
+  },
+
+  post<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
+    return this.request<T>(path, {
+      ...options,
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  },
+
+  patch<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
+    return this.request<T>(path, {
+      ...options,
+      method: "PATCH",
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  },
+
+  delete<T>(path: string, options?: RequestOptions): Promise<T> {
+    return this.request<T>(path, { ...options, method: "DELETE" });
+  },
+};

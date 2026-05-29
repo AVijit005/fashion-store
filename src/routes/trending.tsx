@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { breadcrumbJsonLd, collectionJsonLd } from "@/lib/seo";
 import { ProductGridShell } from "@/components/plp/product-grid-shell";
-import { products } from "@/lib/data/products";
+import { useState, useEffect } from "react";
+import { catalogApi } from "@/lib/api/catalog";
+import { type Product } from "@/lib/data/products";
+import { LoadingState } from "@/components/state/loading";
 
 export const Route = createFileRoute("/trending")({
   head: () => ({
@@ -24,14 +27,40 @@ export const Route = createFileRoute("/trending")({
       }),
     ],
   }),
-  component: () => (
+  component: TrendingPage,
+});
+
+function TrendingPage() {
+  const [list, setList] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    catalogApi
+      .getProducts({ limit: 100 })
+      .then((res) => {
+        setList(
+          res.products.filter(
+            (p) => p.badges.includes("trending") || p.badges.includes("bestseller"),
+          ),
+        );
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) {
+    return <LoadingState label="Loading trending items" />;
+  }
+
+  return (
     <ProductGridShell
       eyebrow="Most loved this week"
       title="Trending now."
       description="Ranked by what's in carts, on creators, and out the door."
-      base={products.filter(
-        (p) => p.badges.includes("trending") || p.badges.includes("bestseller"),
-      )}
+      base={list}
     />
-  ),
-});
+  );
+}

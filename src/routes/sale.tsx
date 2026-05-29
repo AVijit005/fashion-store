@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { breadcrumbJsonLd, collectionJsonLd } from "@/lib/seo";
 import { ProductGridShell } from "@/components/plp/product-grid-shell";
-import { products } from "@/lib/data/products";
-import { pct } from "@/lib/format";
+import { useState, useEffect } from "react";
+import { catalogApi } from "@/lib/api/catalog";
+import { type Product } from "@/lib/data/products";
+import { LoadingState } from "@/components/state/loading";
 
 export const Route = createFileRoute("/sale")({
   head: () => ({
@@ -28,12 +30,36 @@ export const Route = createFileRoute("/sale")({
       }),
     ],
   }),
-  component: () => (
+  component: SalePage,
+});
+
+function SalePage() {
+  const [list, setList] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    catalogApi
+      .getProducts({ limit: 100 })
+      .then((res) => {
+        setList(res.products.filter((p) => pct(p.price, p.mrp) >= 25));
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) {
+    return <LoadingState label="Loading sale items" />;
+  }
+
+  return (
     <ProductGridShell
       eyebrow="Up to 40% off"
       title="Sale."
       description="A curated cut of the studio, marked down. Limited stock, no codes needed."
-      base={products.filter((p) => pct(p.price, p.mrp) >= 25)}
+      base={list}
     />
-  ),
-});
+  );
+}

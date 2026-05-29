@@ -1,11 +1,32 @@
+import { useState, useEffect } from "react";
 import { Reveal } from "@/components/ui/reveal";
 import { ProductCard } from "@/components/product/product-card";
-import { products } from "@/lib/data/products";
+import { type Product } from "@/lib/data/products";
+import { catalogApi } from "@/lib/api/catalog";
 
 export function BestSellers() {
-  const items = products
-    .filter((p) => p.badges.includes("bestseller") || p.badges.includes("trending"))
-    .slice(0, 8);
+  const [items, setItems] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    catalogApi
+      .getProducts({ limit: 12 })
+      .then((res) => {
+        setItems(
+          res.products
+            .filter((p) => p.badges.includes("bestseller") || p.badges.includes("trending"))
+            .slice(0, 8),
+        );
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return null;
+
   return (
     <section className="mx-auto max-w-[1480px] px-5 py-20 lg:px-10 lg:py-28">
       <Reveal>

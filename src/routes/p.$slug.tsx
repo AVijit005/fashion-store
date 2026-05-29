@@ -18,12 +18,21 @@ import { PdpTrustRow } from "@/components/pdp/trust-row";
 import { CompleteTheLook } from "@/components/pdp/complete-the-look";
 import { ReviewsBlock } from "@/components/pdp/reviews-block";
 import { EASE } from "@/lib/motion";
+import { catalogApi } from "@/lib/api/catalog";
 
 export const Route = createFileRoute("/p/$slug")({
-  head: ({ params }) => {
-    const p = getProduct(params.slug);
+  loader: async ({ params }) => {
+    try {
+      const product = await catalogApi.getProductBySlug(params.slug);
+      return { product };
+    } catch (err) {
+      throw notFound();
+    }
+  },
+  head: ({ loaderData }) => {
+    const p = loaderData?.product;
     if (!p) return { meta: [{ title: "Product — Ink Studio" }] };
-    const url = `/p/${params.slug}`;
+    const url = `/p/${p.slug}`;
     return {
       meta: [
         { title: `${p.name} — Ink Studio` },
@@ -88,8 +97,7 @@ function lowStockFor(id: string): number | null {
 }
 
 function ProductPage() {
-  const { slug } = Route.useParams();
-  const product = getProduct(slug);
+  const { product } = Route.useLoaderData();
   const pushRecent = useRecentlyViewed((s) => s.push);
 
   useEffect(() => {
@@ -108,10 +116,25 @@ function ProductPage() {
   const addBtnRef = useRef<HTMLButtonElement>(null);
   const wished = has(product.id);
 
-  const related = products
-    .filter((p) => p.id !== product.id && p.category === product.category)
-    .slice(0, 4);
-  const look = products.filter((p) => p.id !== product.id).slice(0, 3);
+  const [related, setRelated] = useState<Product[]>([]);
+  const [look, setLook] = useState<Product[]>([]);
+
+  useEffect(() => {
+    catalogApi
+      .getProducts({ category: product.category, limit: 5 })
+      .then((res) => {
+        setRelated(res.products.filter((p) => p.id !== product.id).slice(0, 4));
+      })
+      .catch((err) => console.error(err));
+
+    catalogApi
+      .getProducts({ limit: 4 })
+      .then((res) => {
+        setLook(res.products.filter((p) => p.id !== product.id).slice(0, 3));
+      })
+      .catch((err) => console.error(err));
+  }, [product]);
+
   const discount = pct(product.price, product.mrp);
   const lowStock = lowStockFor(product.id);
 

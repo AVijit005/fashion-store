@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Search, ArrowRight, Clock, Flame, X } from "lucide-react";
 import {
@@ -12,9 +12,10 @@ import {
 } from "@/components/ui/command";
 import { useCommandPalette } from "@/lib/store/command-palette";
 import { useRecentSearches } from "@/lib/store/recent-searches";
-import { products } from "@/lib/data/products";
+import { type Product } from "@/lib/data/products";
 import { categories } from "@/lib/data/categories";
 import { inr } from "@/lib/format";
+import { catalogApi } from "@/lib/api/catalog";
 
 const trending = [
   "Anime drops",
@@ -48,6 +49,9 @@ export function CommandPalette() {
   const pushRecent = useRecentSearches((s) => s.push);
   const clearRecents = useRecentSearches((s) => s.clear);
 
+  const [results, setResults] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(false);
+
   // Global hotkey
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -60,14 +64,33 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, setOpen]);
 
-  const productMatches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return products.slice(0, 5);
-    return products
-      .filter((p) =>
-        [p.name, p.tagline, p.category, ...p.badges].some((s) => s.toLowerCase().includes(q)),
-      )
-      .slice(0, 6);
+  // Query Backend Search API
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      // Default to 5 featured products when search is empty
+      catalogApi
+        .getProducts({ featured: true, limit: 5 })
+        .then((res) => setResults(res.products))
+        .catch((err) => console.error(err));
+      return;
+    }
+
+    setLoading(true);
+    const timer = setTimeout(() => {
+      catalogApi
+        .search(q, { limit: 6 })
+        .then((res) => {
+          setResults(res);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error(err);
+          setLoading(false);
+        });
+    }, 250); // Debounce
+
+    return () => clearTimeout(timer);
   }, [query]);
 
   const go = (to: string, label?: string) => {
@@ -126,9 +149,9 @@ export function CommandPalette() {
           </>
         )}
 
-        {productMatches.length > 0 && (
+        {results.length > 0 && (
           <CommandGroup heading="Products">
-            {productMatches.map((p) => (
+            {results.map((p) => (
               <CommandItem
                 key={p.id}
                 value={`${p.name} ${p.tagline} ${p.category}`}

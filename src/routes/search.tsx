@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { useCommandPalette } from "@/lib/store/command-palette";
-import { products } from "@/lib/data/products";
+import { type Product } from "@/lib/data/products";
 import { ProductCard } from "@/components/product/product-card";
+import { catalogApi } from "@/lib/api/catalog";
+import { LoadingState } from "@/components/state/loading";
 
 export const Route = createFileRoute("/search")({
   head: () => ({
@@ -20,13 +22,26 @@ export const Route = createFileRoute("/search")({
 
 function SearchPage() {
   const openPalette = useCommandPalette((s) => s.setOpen);
+  const [list, setList] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Auto-open the canonical command palette when arriving on this route.
   useEffect(() => {
     openPalette(true);
   }, [openPalette]);
 
-  const list = products.slice(0, 8);
+  useEffect(() => {
+    catalogApi
+      .getProducts({ featured: true, limit: 8 })
+      .then((res) => {
+        setList(res.products);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, []);
 
   return (
     <div className="mx-auto max-w-[1480px] px-5 py-12 lg:px-10 lg:py-16">
@@ -44,11 +59,16 @@ function SearchPage() {
         </span>
       </button>
       <p className="mt-4 text-[12px] text-mute">Featured pieces</p>
-      <div className="mt-10 grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 lg:gap-x-6 xl:grid-cols-4">
-        {list.map((p) => (
-          <ProductCard key={p.id} product={p} />
-        ))}
-      </div>
+
+      {loading ? (
+        <LoadingState label="Loading featured pieces" />
+      ) : (
+        <div className="mt-10 grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 lg:gap-x-6 xl:grid-cols-4">
+          {list.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

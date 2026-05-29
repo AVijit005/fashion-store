@@ -1,13 +1,33 @@
 import { Link } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import { Reveal } from "@/components/ui/reveal";
 import { TrendingUp, Flame } from "lucide-react";
-import { products } from "@/lib/data/products";
+import { type Product } from "@/lib/data/products";
 import { inr } from "@/lib/format";
+import { catalogApi } from "@/lib/api/catalog";
 
 export function TrendingNow() {
-  const items = products
-    .filter((p) => p.badges.includes("trending") || p.badges.includes("new"))
-    .slice(0, 8);
+  const [items, setItems] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    catalogApi
+      .getProducts({ limit: 12 })
+      .then((res) => {
+        setItems(
+          res.products
+            .filter((p) => p.badges.includes("trending") || p.badges.includes("new"))
+            .slice(0, 8),
+        );
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return null;
 
   return (
     <section className="border-y border-line bg-paper">

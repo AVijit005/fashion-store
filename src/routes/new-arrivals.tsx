@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { breadcrumbJsonLd, collectionJsonLd } from "@/lib/seo";
 import { ProductGridShell } from "@/components/plp/product-grid-shell";
-import { products } from "@/lib/data/products";
+import { useState, useEffect } from "react";
+import { catalogApi } from "@/lib/api/catalog";
+import { type Product } from "@/lib/data/products";
+import { LoadingState } from "@/components/state/loading";
 
 export const Route = createFileRoute("/new-arrivals")({
   head: () => ({
@@ -24,12 +27,36 @@ export const Route = createFileRoute("/new-arrivals")({
       }),
     ],
   }),
-  component: () => (
+  component: NewArrivalsPage,
+});
+
+function NewArrivalsPage() {
+  const [list, setList] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    catalogApi
+      .getProducts({ limit: 100 })
+      .then((res) => {
+        setList(res.products.filter((p) => p.badges.includes("new")));
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) {
+    return <LoadingState label="Loading new arrivals" />;
+  }
+
+  return (
     <ProductGridShell
       eyebrow="Just landed"
       title="New arrivals."
       description="Fresh from the studio. Heavyweight cotton, new collabs, and limited editions."
-      base={products.filter((p) => p.badges.includes("new"))}
+      base={list}
     />
-  ),
-});
+  );
+}

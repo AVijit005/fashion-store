@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { breadcrumbJsonLd, collectionJsonLd } from "@/lib/seo";
 import { ProductGridShell } from "@/components/plp/product-grid-shell";
-import { products } from "@/lib/data/products";
+import { useState, useEffect } from "react";
+import { catalogApi } from "@/lib/api/catalog";
+import { type Product } from "@/lib/data/products";
+import { LoadingState } from "@/components/state/loading";
 
 export const Route = createFileRoute("/shop")({
   head: () => ({
@@ -31,12 +34,32 @@ export const Route = createFileRoute("/shop")({
 });
 
 function ShopPage() {
+  const [list, setList] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    catalogApi
+      .getProducts({ limit: 100 })
+      .then((res) => {
+        setList(res.products);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) {
+    return <LoadingState label="Loading products" />;
+  }
+
   return (
     <ProductGridShell
       eyebrow="All collections"
       title="Shop everything."
       description="Every drop, every collab, every staple. Filter your way in."
-      base={products}
+      base={list}
     />
   );
 }
