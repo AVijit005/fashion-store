@@ -32,7 +32,7 @@ async function bootstrap() {
   app.enableCors({
     origin: configuredOrigins?.length
       ? configuredOrigins
-      : (origin, callback) => callback(null, origin || true),
+      : (origin: string | undefined, callback: (err: Error | null, origin?: any) => void) => callback(null, origin || true),
     credentials: true,
   });
 
