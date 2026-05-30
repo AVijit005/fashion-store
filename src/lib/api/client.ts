@@ -22,6 +22,11 @@ export class APIError extends Error {
 }
 
 let refreshPromise: Promise<void> | null = null;
+let memoryAccessToken: string | null = null;
+
+export function setMemoryAccessToken(token: string | null) {
+  memoryAccessToken = token;
+}
 
 function unwrapApiData<T>(parsed: unknown, validate?: (data: unknown) => boolean): T {
   let data = parsed;
@@ -54,12 +59,11 @@ export const apiClient = {
     }
 
     // Attach JWT Access Token if user is logged in
-    if (typeof window !== "undefined") {
-      const token = localStorage.getItem("ink_access_token");
-      if (token) {
-        headers.set("Authorization", `Bearer ${token}`);
-      }
+    if (memoryAccessToken) {
+      headers.set("Authorization", `Bearer ${memoryAccessToken}`);
+    }
 
+    if (typeof window !== "undefined") {
       // Attach Guest Session ID for Cart identification
       const guestSessionId = localStorage.getItem("ink_cart_session_id");
       if (guestSessionId) {
@@ -83,11 +87,9 @@ export const apiClient = {
 
     if (!response.ok) {
       if (response.status === 401 && path !== "/auth/refresh" && path !== "/auth/login") {
-        if (typeof window !== "undefined") {
-          const token = localStorage.getItem("ink_access_token");
-          if (token) {
-            if (!refreshPromise) {
-              refreshPromise = (async () => {
+        if (memoryAccessToken || (typeof window !== "undefined" && localStorage.getItem("ink_logged_in") === "true")) {
+          if (!refreshPromise) {
+            refreshPromise = (async () => {
                 const refreshUrl = new URL(`${BASE_URL}/auth/refresh`);
                 const refreshRes = await fetch(refreshUrl.toString(), {
                   method: "POST",
@@ -100,10 +102,13 @@ export const apiClient = {
                     await refreshRes.json(),
                     (d) => !!d && typeof d === "object" && "accessToken" in d && typeof (d as any).accessToken === "string"
                   );
-                  localStorage.setItem("ink_access_token", tokens.accessToken);
+                  setMemoryAccessToken(tokens.accessToken);
                 } else {
                   // If refresh fails, clear tokens to force login
-                  localStorage.removeItem("ink_access_token");
+                  setMemoryAccessToken(null);
+                  if (typeof window !== "undefined") {
+                    localStorage.removeItem("ink_logged_in");
+                  }
                   throw new Error("Refresh failed");
                 }
               })()
@@ -117,9 +122,8 @@ export const apiClient = {
 
             try {
               await refreshPromise;
-              const newAccessToken = localStorage.getItem("ink_access_token");
-              if (newAccessToken) {
-                headers.set("Authorization", `Bearer ${newAccessToken}`);
+              if (memoryAccessToken) {
+                headers.set("Authorization", `Bearer ${memoryAccessToken}`);
                 const retryResponse = await fetch(url.toString(), { ...config, headers });
                 if (retryResponse.ok) {
                   if (retryResponse.status === 204) {
@@ -133,7 +137,7 @@ export const apiClient = {
             }
           }
         }
-      }
+
 
       let errorData: unknown;
       try {

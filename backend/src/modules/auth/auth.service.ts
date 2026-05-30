@@ -107,31 +107,28 @@ export class AuthService {
       }
 
       if (current.isRevoked) {
-        await tx.session.updateMany({
-          where: { userId: current.userId, isRevoked: false },
+        const timeSinceRevoked = Date.now() - current.updatedAt.getTime();
+        if (timeSinceRevoked >= 30000) {
+          await tx.session.updateMany({
+            where: { userId: current.userId, isRevoked: false },
+            data: { isRevoked: true },
+          });
+          throw new UnauthorizedException('Security breach detected. All sessions revoked.');
+        }
+        // If < 30000ms, fall through to grace period (allow creating new session for this tab)
+      } else {
+        const revoked = await tx.session.updateMany({
+          where: { id: current.id, isRevoked: false },
           data: { isRevoked: true },
         });
-        throw new UnauthorizedException('Security breach detected. All sessions revoked.');
+        if (revoked.count !== 1) {
+          // It was revoked by another concurrent transaction just now.
+          // Fall through to grace period.
+        }
       }
 
       if (current.expiresAt < new Date()) {
-        await tx.session.update({
-          where: { id: current.id },
-          data: { isRevoked: true },
-        });
         throw new UnauthorizedException('Refresh token expired');
-      }
-
-      const revoked = await tx.session.updateMany({
-        where: { id: current.id, isRevoked: false },
-        data: { isRevoked: true },
-      });
-      if (revoked.count !== 1) {
-        await tx.session.updateMany({
-          where: { userId: current.userId, isRevoked: false },
-          data: { isRevoked: true },
-        });
-        throw new UnauthorizedException('Refresh token was already used');
       }
 
       const created = await tx.session.create({

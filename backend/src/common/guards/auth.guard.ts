@@ -34,18 +34,20 @@ export class AuthGuard implements CanActivate {
 
       const sessionId = payload.sessionId;
 
-      if (sessionId) {
-        const session = await this.prisma.session.findUnique({
-          where: { id: sessionId },
-          select: { isRevoked: true, expiresAt: true, user: { select: { id: true, role: true } } },
-        });
+      if (!sessionId) {
+        throw new UnauthorizedException('Invalid token format: missing sessionId');
+      }
 
-        if (!session || session.isRevoked || session.expiresAt < new Date()) {
-          throw new UnauthorizedException('Session has been revoked');
-        }
-        if (!session.user) {
-          throw new UnauthorizedException('User no longer exists');
-        }
+      const session = await this.prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { isRevoked: true, expiresAt: true, user: { select: { id: true, role: true } } },
+      });
+
+      if (!session || session.isRevoked || session.expiresAt < new Date()) {
+        throw new UnauthorizedException('Session has been revoked');
+      }
+      if (!session.user) {
+        throw new UnauthorizedException('User no longer exists');
       }
 
       request.user = {

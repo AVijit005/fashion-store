@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { apiClient } from "../api/client";
+import { apiClient, setMemoryAccessToken } from "../api/client";
 import { cartApi, getOrCreateCartSessionId } from "../api/cart";
 
 export interface UserProfile {
@@ -27,7 +27,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  accessToken: typeof window !== "undefined" ? localStorage.getItem("ink_access_token") : null,
+  accessToken: null,
   isAuthenticated: false,
   isLoading: true,
   authModalOpen: false,
@@ -37,9 +37,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setAuthModalView: (view) => set({ authModalView: view }),
 
   setTokens: (accessToken) => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("ink_access_token", accessToken);
-    }
+    setMemoryAccessToken(accessToken);
     set({ accessToken, isAuthenticated: true });
   },
 
@@ -51,6 +49,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Fetch profile
       const user = await apiClient.get<UserProfile>("/auth/me");
+      if (typeof window !== "undefined") {
+        localStorage.setItem("ink_logged_in", "true");
+      }
       set({ user, isAuthenticated: true, authModalOpen: false });
 
       // Merge guest cart into authenticated user cart after login
@@ -79,21 +80,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
-    // Clear local state FIRST so the UI reflects logged-out state immediately,
-    // even if the network request to revoke the session is slow or fails.
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("ink_access_token");
+    try {
+      await apiClient.post("/auth/logout");
+    } catch (err) {
+      console.error("[auth] Logout request failed:", err);
+      // Let the error bubble up if network fails so UI can show it,
+      // but if we wanted to force local logout we could ignore it.
+      // We will throw to ensure user knows it failed.
+      throw err;
+    } finally {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("ink_logged_in");
+      }
+      setMemoryAccessToken(null);
+      set({ user: null, accessToken: null, isAuthenticated: false });
     }
-    set({ user: null, accessToken: null, isAuthenticated: false });
-
-    apiClient
-      .post("/auth/logout")
-      .catch((err) => console.error("[auth] Logout request failed:", err));
   },
 
   initialize: async () => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("ink_access_token") : null;
-    if (!token) {
+    const isLoggedIn = typeof window !== "undefined" ? localStorage.getItem("ink_logged_in") === "true" : false;
+    if (!isLoggedIn) {
       set({ isLoading: false, isAuthenticated: false, user: null });
       return;
     }
