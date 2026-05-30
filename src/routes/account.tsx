@@ -117,6 +117,21 @@ function Account() {
         Registered email: {user?.email} · Account type: {user?.role}
       </p>
 
+      {user?.role === "ADMIN" && (
+        <div className="mt-8 border border-line bg-fog/40 p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <p className="font-display text-2xl">Admin Dashboard</p>
+            <p className="text-sm text-mute mt-1">Manage products, orders, customers, and site settings.</p>
+          </div>
+          <Link
+            to="/admin"
+            className="shrink-0 bg-ink px-6 py-3 text-[12px] uppercase tracking-[0.22em] text-paper hover:bg-ink/90 transition-colors"
+          >
+            Open Dashboard →
+          </Link>
+        </div>
+      )}
+
       <Tabs defaultValue="orders" className="mt-10">
         <TabsList className="flex flex-wrap justify-start gap-1 bg-transparent p-0">
           {[
