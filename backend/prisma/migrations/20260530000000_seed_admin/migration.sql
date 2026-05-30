@@ -1,4 +1,4 @@
-INSERT INTO "User" ("id", "email", "passwordHash", "role", "createdAt", "updatedAt")
+INSERT INTO "users" ("id", "email", "password_hash", "role", "created_at", "updated_at")
 VALUES (
   'admin-uuid-0001',
   'admin@example.com',
