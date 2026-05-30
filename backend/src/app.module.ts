@@ -13,6 +13,8 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { StorageModule } from './modules/storage/storage.module';
 import { StudioModule } from './modules/studio/studio.module';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
@@ -20,6 +22,10 @@ import { StudioModule } from './modules/studio/studio.module';
       isGlobal: true,
       validate: validateEnv,
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 10,
+    }]),
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
@@ -51,6 +57,11 @@ import { StudioModule } from './modules/studio/studio.module';
     StorageModule,
     StudioModule,
   ],
-  providers: [],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}
