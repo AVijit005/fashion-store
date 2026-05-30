@@ -81,6 +81,33 @@ export class OrdersService {
         }));
         
       if (inventoryItems.length > 0) {
+        // Fix Inventory DoS: Cancel any existing PAYMENT_PENDING orders for this user/guest
+        // to prevent them from locking up all inventory by spamming checkout.
+        const existingPendingOrders = await tx.order.findMany({
+          where: {
+            status: OrderStatus.PAYMENT_PENDING,
+            ...(activeUserId ? { userId: activeUserId } : { shippingEmail: dto.shippingEmail }),
+          },
+        });
+
+        for (const pendingOrder of existingPendingOrders) {
+          await this.transitionStatus(
+            pendingOrder.id,
+            OrderStatus.CANCELLED,
+            'SYSTEM',
+            'Auto-cancelled due to new checkout initiation',
+            tx,
+          );
+          // The transitionStatus handles inventory restoration via orderStatusHistory trigger
+          // Wait, transitionStatus does NOT automatically restore inventory.
+          // We must manually restore inventory here.
+          const itemsToRestore = await tx.orderItem.findMany({
+            where: { orderId: pendingOrder.id },
+          });
+          await this.inventoryService.restoreInventory(itemsToRestore, tx);
+        }
+
+        // 1. Reserve inventory
         await this.inventoryService.reserveInventory(inventoryItems, tx);
       }
 
