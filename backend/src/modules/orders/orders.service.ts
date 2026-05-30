@@ -101,10 +101,7 @@ export class OrdersService {
           // The transitionStatus handles inventory restoration via orderStatusHistory trigger
           // Wait, transitionStatus does NOT automatically restore inventory.
           // We must manually restore inventory here.
-          const itemsToRestore = await tx.orderItem.findMany({
-            where: { orderId: pendingOrder.id },
-          });
-          await this.inventoryService.restoreInventory(itemsToRestore, tx);
+          await this.inventoryService.restoreInventory(pendingOrder.id, tx);
         }
 
         // 1. Reserve inventory
