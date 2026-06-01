@@ -138,11 +138,9 @@ function RootComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isAdmin = pathname.startsWith("/admin");
   const initializeAuth = useAuthStore((state) => state.initialize);
-  const { user, isAuthenticated, isLoading } = useAuthStore((state) => ({
-    user: state.user,
-    isAuthenticated: state.isAuthenticated,
-    isLoading: state.isLoading,
-  }));
+  const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isLoading = useAuthStore((state) => state.isLoading);
 
   useEffect(() => {
     initializeAuth();
