@@ -48,8 +48,8 @@ export const ProductCard = memo(function ProductCard({
   const quickAdd = (size: string) => {
     const color = product.colors[0].name;
     const selectedVariant = product.variants?.find((v) => v.size === size && v.color === color);
-    if (!selectedVariant) {
-      toast("This variant is unavailable");
+    if (!selectedVariant || selectedVariant.stockQuantity <= 0) {
+      toast.error("This size/color combination is out of stock");
       return;
     }
     const rect = cardRef.current?.getBoundingClientRect();

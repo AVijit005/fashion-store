@@ -14,8 +14,10 @@ import {
 import { SectionHeader, Panel } from "@/components/admin/section-header";
 import { StatusChip } from "@/components/admin/status-chip";
 import { AdminDrawer } from "@/components/admin/drawer";
-import { products as ALL, type Product } from "@/lib/admin/data";
+import type { Product } from "@/lib/admin/data";
 import { compactInr, inr } from "@/lib/admin/format";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
 
 export const Route = createFileRoute("/admin/products")({
   head: () => ({
@@ -38,6 +40,15 @@ function ProductsPage() {
   const [q, setQ] = useState("");
   const [view, setView] = useState<"table" | "grid">("table");
   const [active, setActive] = useState<Product | null>(null);
+
+  const queryClient = useQueryClient();
+  const { data: ALL = [], isLoading } = useQuery<Product[]>({
+    queryKey: ["admin-products"],
+    queryFn: async () => {
+      const res = await apiClient.get<Product[]>("/admin/catalog/products");
+      return res;
+    },
+  });
 
   const list = useMemo(
     () =>
@@ -246,10 +257,26 @@ function ProductsPage() {
               Archive
             </button>
             <div className="flex gap-2">
-              <button className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink">
+              <button 
+                onClick={() => {
+                  apiClient.put(`/admin/catalog/products/${active?.id}`, { status: 'draft' }).then(() => {
+                    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+                    setActive(null);
+                  });
+                }}
+                className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
+              >
                 Save draft
               </button>
-              <button className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper">
+              <button 
+                onClick={() => {
+                  apiClient.put(`/admin/catalog/products/${active?.id}`, { status: 'active' }).then(() => {
+                    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+                    setActive(null);
+                  });
+                }}
+                className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
+              >
                 Save changes
               </button>
             </div>

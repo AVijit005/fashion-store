@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/lib/store/auth";
+import { syncWishlistOnLogin } from "@/lib/store/wishlist";
 import { toast } from "sonner";
 
 export function AuthModal() {
@@ -53,6 +54,7 @@ export function AuthModal() {
     try {
       if (authModalView === "login") {
         await login(email, password);
+        await syncWishlistOnLogin();
         toast.success("Successfully logged in.");
       } else if (authModalView === "signup") {
         if (password.length < 8) {
@@ -64,6 +66,7 @@ export function AuthModal() {
           return;
         }
         await signup(email, password);
+        await syncWishlistOnLogin();
         toast.success("Account created successfully.");
       } else if (authModalView === "forgot-password") {
         // Simulated premium forgot password response since backend is mocked for recovery

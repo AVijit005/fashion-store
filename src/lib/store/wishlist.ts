@@ -1,22 +1,69 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { apiClient } from "../api/client";
 
 type WishlistState = {
   ids: string[];
+  setIds: (ids: string[]) => void;
   toggle: (id: string) => void;
   has: (id: string) => boolean;
 };
+
+let isSyncing = false;
+let syncQueue: (() => Promise<void>)[] = [];
+
+async function processQueue() {
+  if (isSyncing || syncQueue.length === 0) return;
+  isSyncing = true;
+  while (syncQueue.length > 0) {
+    const task = syncQueue.shift();
+    if (task) {
+      try {
+        await task();
+      } catch (err) {
+        console.error("[wishlist] sync failed", err);
+      }
+    }
+  }
+  isSyncing = false;
+}
 
 export const useWishlist = create<WishlistState>()(
   persist(
     (set, get) => ({
       ids: [],
-      toggle: (id) =>
+      setIds: (ids) => set({ ids }),
+      toggle: (id) => {
+        const hasIt = get().ids.includes(id);
         set({
-          ids: get().ids.includes(id) ? get().ids.filter((x) => x !== id) : [...get().ids, id],
-        }),
+          ids: hasIt ? get().ids.filter((x) => x !== id) : [...get().ids, id],
+        });
+        
+        syncQueue.push(async () => {
+          try {
+            await apiClient.post(`/wishlist/${id}/toggle`);
+          } catch (e) {}
+        });
+        processQueue();
+      },
       has: (id) => get().ids.includes(id),
     }),
     { name: "ink-wishlist" },
   ),
 );
+
+export async function syncWishlistOnLogin() {
+  try {
+    const localIds = useWishlist.getState().ids;
+    const initialCount = localIds.length;
+    const data = await apiClient.post<string[]>("/wishlist/sync", { productIds: localIds });
+    if (Array.isArray(data)) {
+      useWishlist.getState().setIds(data);
+      if (data.length > initialCount) {
+        import("sonner").then(({ toast }) => toast.info("Guest wishlist items synced to account."));
+      }
+    }
+  } catch (err) {
+    console.error("Failed to sync wishlist on login", err);
+  }
+}

@@ -46,6 +46,13 @@ export class OrdersController {
     return this.ordersService.checkout(dto, user?.id);
   }
 
+  @Post(':id/retry-payment')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Retry payment for a failed or pending order' })
+  async retryPayment(@Param('id') id: string, @Req() req: any) {
+    return this.ordersService.retryPayment(id, req.user.id);
+  }
+
   @Post('verify-payment')
   @ApiOperation({ summary: 'Verify payment signature after gateway response' })
   async verifyPayment(@Body() dto: VerifyPaymentDto) {
@@ -67,7 +74,7 @@ export class OrdersController {
     return this.ordersService.handleWebhook(rawBody, signature);
   }
 
-  @Get('my-orders')
+  @Get('me')
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Get order history for authenticated user' })
   async getMyOrders(@CurrentUser() user: RequestUser) {

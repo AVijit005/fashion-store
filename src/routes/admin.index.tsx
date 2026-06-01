@@ -5,15 +5,17 @@ import { Panel, SectionHeader } from "@/components/admin/section-header";
 import { AreaChart, BarRow } from "@/components/admin/charts";
 import { StatusChip, orderTone } from "@/components/admin/status-chip";
 import {
-  kpis,
-  liveActivity,
+  kpis as mockKpis,
+  liveActivity as mockActivity,
   orders,
-  products,
+  products as mockProducts,
   revenueSeries,
   topCategories,
   trafficSources,
 } from "@/lib/admin/data";
 import { compactInr, relTime } from "@/lib/admin/format";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({
@@ -26,9 +28,23 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function OverviewPage() {
+  const { data: kpisData } = useQuery<any>({
+    queryKey: ["admin-kpis"],
+    queryFn: () => apiClient.get("/admin/dashboard/kpis"),
+  });
+  const { data: activityData = [] } = useQuery<any[]>({
+    queryKey: ["admin-activity"],
+    queryFn: () => apiClient.get("/admin/dashboard/activity"),
+  });
+  const { data: products = [] } = useQuery<any[]>({
+    queryKey: ["admin-products"],
+    queryFn: () => apiClient.get("/admin/catalog/products"),
+  });
+
   const recent = orders.slice(0, 6);
-  const lowStock = products.filter((p) => p.stock > 0 && p.stock <= p.lowStockAt).slice(0, 5);
-  const trending = [...products].sort((a, b) => b.views7d - a.views7d).slice(0, 5);
+  const lowStock = (products.length > 0 ? products : mockProducts).filter((p: any) => p.stock > 0 && p.stock <= p.lowStockAt).slice(0, 5);
+  const trending = [...(products.length > 0 ? products : mockProducts)].sort((a: any, b: any) => (b.views7d || 0) - (a.views7d || 0)).slice(0, 5);
+  const liveActivity = activityData.length > 0 ? activityData : mockActivity;
 
   return (
     <div className="space-y-6">
@@ -50,7 +66,7 @@ function OverviewPage() {
 
       {/* KPI grid */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {kpis.map((k) => (
+        {mockKpis.map((k) => (
           <KpiCard key={k.label} {...k} />
         ))}
       </div>

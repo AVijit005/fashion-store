@@ -79,6 +79,21 @@ export class PostgresSearchService extends SearchService {
 
     const products = await this.prisma.$queryRawUnsafe<Product[]>(searchSql, ...params);
 
+    // Fix High Severity: Fetch missing variants to prevent stale UI in search results
+    const productIds = products.map((p) => p.id);
+    if (productIds.length > 0) {
+      const variants = await this.prisma.productVariant.findMany({
+        where: { productId: { in: productIds } },
+      });
+      const variantsMap = new Map();
+      for (const v of variants) {
+        if (!variantsMap.has(v.productId)) variantsMap.set(v.productId, []);
+        variantsMap.get(v.productId).push(v);
+      }
+      for (const p of products) {
+        (p as any).variants = variantsMap.get(p.id) || [];
+      }
+    }
     const countSql = `
       SELECT COUNT(*)::int as count
       FROM products p

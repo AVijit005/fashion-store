@@ -10,9 +10,11 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { CartModule } from './modules/cart/cart.module';
 import { OrdersModule } from './modules/orders/orders.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { StorageModule } from './modules/storage/storage.module';
 import { StudioModule } from './modules/studio/studio.module';
+import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
@@ -56,6 +58,8 @@ import { APP_GUARD } from '@nestjs/core';
     OrdersModule,
     StorageModule,
     StudioModule,
+    WishlistModule,
+    AdminModule,
   ],
   providers: [
     {

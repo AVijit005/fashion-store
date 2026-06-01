@@ -121,7 +121,7 @@ function CheckoutPage() {
   const [pay, setPay] = useState("upi");
   const [addr, setAddr] = useState<Address>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});
-  const [isPlacing, setIsPlacing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
 
   const sub = subtotal();
@@ -155,8 +155,8 @@ function CheckoutPage() {
   // Place Order — calls backend, then opens Razorpay modal
   // -------------------------------------------------------------------------
   const handlePlaceOrder = async () => {
-    if (isPlacing) return;
-    setIsPlacing(true);
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     setOrderError(null);
 
     try {
@@ -180,11 +180,21 @@ function CheckoutPage() {
         shippingPostalCode: addr.pin,
         shippingCountry: "IN",
         guestSessionId,
+        paymentMethod: pay,
       });
 
       // Persist guest token so order confirmation page can look up the order
       if (checkoutRes.guestToken && typeof window !== "undefined") {
-        sessionStorage.setItem("ink_order_guest_token", checkoutRes.guestToken);
+        localStorage.setItem("ink_order_guest_token", checkoutRes.guestToken);
+      }
+
+      if (pay === "cod") {
+        clear();
+        await navigate({
+          to: "/checkout/success",
+          search: { orderId: checkoutRes.orderId, cod: true },
+        });
+        return;
       }
 
       // -----------------------------------------------------------------------
@@ -229,15 +239,13 @@ function CheckoutPage() {
               search: { orderId: checkoutRes.orderId },
             });
           } catch (err) {
-            const message = err instanceof Error ? err.message : "Payment verification failed. Please contact support.";
-            setOrderError(message);
-            setIsPlacing(false);
+            toast.error("Payment failed. Please try a different card, UPI app, or select Cash on Delivery.");
+            setIsSubmitting(false);
           }
         },
         modal: {
           ondismiss: () => {
-            // User closed the modal — order remains PAYMENT_PENDING until expiry
-            setIsPlacing(false);
+            setIsSubmitting(false);
             setOrderError(
               "Payment was cancelled. Your cart is saved — complete payment when ready.",
             );
@@ -246,11 +254,9 @@ function CheckoutPage() {
       });
 
       rzp.open();
-      // Don't reset isPlacing here — ondismiss handles it above
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Checkout failed. Please try again.";
-      setOrderError(message);
-      setIsPlacing(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to initiate payment");
+      setIsSubmitting(false);
     }
   };
 
@@ -283,7 +289,7 @@ function CheckoutPage() {
         <h1 className="mt-2 font-display text-5xl">Almost yours.</h1>
 
         {/* Stepper */}
-        <ol className="mt-8 flex items-center gap-4" aria-label="Checkout steps">
+        <ol className="mt-8 flex flex-wrap items-center justify-center sm:justify-start gap-4" aria-label="Checkout steps">
           {STEPS.map((s, i) => {
             const done = i < step;
             const current = i === step;
@@ -338,7 +344,9 @@ function CheckoutPage() {
                   <Field
                     label="Phone"
                     type="tel"
-                    autoComplete="tel"
+                    required
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={addr.phone}
                     onChange={setField("phone")}
                     error={errors.phone}
@@ -390,7 +398,9 @@ function CheckoutPage() {
                   <Field
                     label="PIN code"
                     autoComplete="postal-code"
+                    required
                     inputMode="numeric"
+                    pattern="[0-9]*"
                     value={addr.pin}
                     onChange={setField("pin")}
                     error={errors.pin}
@@ -506,32 +516,34 @@ function CheckoutPage() {
         )}
 
         {/* Navigation */}
-        <div className="mt-10 flex items-center justify-between">
-          <button
-            onClick={() => setStep(Math.max(0, step - 1))}
-            disabled={step === 0 || isPlacing}
-            className="press text-[12px] uppercase tracking-[0.22em] text-mute disabled:opacity-30"
-          >
-            ← Back
-          </button>
+        <div className="mt-10">
           {step < 2 ? (
-            <button
-              onClick={advance}
-              className="press bg-ink px-8 py-4 text-[12px] uppercase tracking-[0.22em] text-paper"
-            >
-              Continue →
-            </button>
+             <div className="flex items-center justify-between">
+              <button
+                onClick={() => setStep(Math.max(0, step - 1))}
+                disabled={step === 0 || isSubmitting}
+                className="press text-[12px] uppercase tracking-[0.22em] text-mute disabled:opacity-30"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={advance}
+                className="press bg-ink px-8 py-4 text-[12px] uppercase tracking-[0.22em] text-paper"
+              >
+                Continue →
+              </button>
+             </div>
           ) : (
             <button
               id="place-order-btn"
               onClick={handlePlaceOrder}
-              disabled={isPlacing}
-              className="press flex items-center gap-2 bg-ink px-8 py-4 text-[12px] uppercase tracking-[0.22em] text-paper disabled:opacity-70"
+              disabled={isSubmitting}
+              className="mt-6 w-full bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-paper transition-all hover:bg-graphite disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {isPlacing ? (
+              {isSubmitting ? (
                 <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                  Processing…
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-paper border-t-transparent" />
+                  {pay === "cod" ? "Processing..." : "Opening secure payment..."}
                 </>
               ) : (
                 <>Place order · {inr(total)}</>
@@ -612,6 +624,8 @@ type FieldProps = {
   type?: string;
   autoComplete?: string;
   inputMode?: "text" | "numeric" | "tel" | "email" | "url" | "search" | "decimal";
+  pattern?: string;
+  required?: boolean;
 };
 
 function Field({
@@ -623,6 +637,8 @@ function Field({
   type = "text",
   autoComplete,
   inputMode,
+  pattern,
+  required,
 }: FieldProps) {
   const id = useId();
   const errorId = `${id}-err`;
@@ -637,6 +653,8 @@ function Field({
         placeholder={placeholder}
         autoComplete={autoComplete}
         inputMode={inputMode}
+        pattern={pattern}
+        required={required}
         aria-invalid={!!error}
         aria-describedby={error ? errorId : undefined}
         className={`mt-1 w-full border-b bg-transparent py-2 outline-none transition focus:border-ink ${error ? "border-ink" : "border-line"}`}

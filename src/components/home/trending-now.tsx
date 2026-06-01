@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Reveal } from "@/components/ui/reveal";
 import { TrendingUp, Flame } from "lucide-react";
+import { ProductCardSkeleton } from "@/components/product/product-skeleton";
 import { type Product } from "@/lib/data/products";
 import { inr } from "@/lib/format";
 import { catalogApi } from "@/lib/api/catalog";
@@ -16,7 +17,7 @@ export function TrendingNow() {
       .then((res) => {
         setItems(
           res.products
-            .filter((p) => p.badges.includes("trending") || p.badges.includes("new"))
+            .filter((p: Product) => p.badges.includes("trending") || p.badges.includes("new"))
             .slice(0, 8),
         );
         setLoading(false);
@@ -26,8 +27,6 @@ export function TrendingNow() {
         setLoading(false);
       });
   }, []);
-
-  if (loading) return null;
 
   return (
     <section className="border-y border-line bg-paper">
@@ -52,29 +51,35 @@ export function TrendingNow() {
         </Reveal>
 
         <div className="flex gap-4 overflow-x-auto pb-2 hide-scrollbar lg:gap-6">
-          {items.map((p, i) => (
-            <Reveal key={p.id} delay={i * 0.04} className="w-[200px] shrink-0 lg:w-[260px]">
-              <Link to="/p/$slug" params={{ slug: p.slug }} className="group block">
-                <div className="relative aspect-[3/4] overflow-hidden bg-fog">
-                  <img
-                    src={p.images[0]}
-                    alt={p.name}
-                    loading="lazy"
-                    className="h-full w-full object-cover transition duration-[1100ms] group-hover:scale-105"
-                  />
-                  <div className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center bg-paper/95 font-display text-base tabular-nums">
-                    {String(i + 1).padStart(2, "0")}
-                  </div>
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/60 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
-                  <p className="absolute bottom-3 left-3 right-3 text-[11px] uppercase tracking-[0.18em] text-paper opacity-0 transition group-hover:opacity-100">
-                    {p.reviews} reviews · ★ {p.rating.toFixed(1)}
-                  </p>
+          {loading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="w-[200px] shrink-0 lg:w-[260px]">
+                  <ProductCardSkeleton />
                 </div>
-                <p className="mt-3 truncate text-[14px]">{p.name}</p>
-                <p className="text-[12px] tabular-nums text-mute">{inr(p.price)}</p>
-              </Link>
-            </Reveal>
-          ))}
+              ))
+            : items.map((p, i) => (
+                <Reveal key={p.id} delay={i * 0.04} className="w-[200px] shrink-0 lg:w-[260px]">
+                  <Link to="/p/$slug" params={{ slug: p.slug }} className="group block">
+                    <div className="relative aspect-[3/4] overflow-hidden bg-fog">
+                      <img
+                        src={p.images[0]}
+                        alt={p.name}
+                        loading="lazy"
+                        className="h-full w-full object-cover transition duration-[1100ms] group-hover:scale-105"
+                      />
+                      <div className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center bg-paper/95 font-display text-base tabular-nums">
+                        {String(i + 1).padStart(2, "0")}
+                      </div>
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/60 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
+                      <p className="absolute bottom-3 left-3 right-3 text-[11px] uppercase tracking-[0.18em] text-paper opacity-0 transition group-hover:opacity-100">
+                        {p.reviews} reviews · ★ {p.rating.toFixed(1)}
+                      </p>
+                    </div>
+                    <p className="mt-3 truncate text-[14px]">{p.name}</p>
+                    <p className="text-[12px] tabular-nums text-mute">{inr(p.price)}</p>
+                  </Link>
+                </Reveal>
+              ))}
         </div>
       </div>
     </section>

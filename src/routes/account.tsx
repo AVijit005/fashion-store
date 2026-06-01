@@ -14,6 +14,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useAuthStore } from "@/lib/store/auth";
 import { toast } from "sonner";
+import { apiClient } from "@/lib/api/client";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -25,40 +26,7 @@ export const Route = createFileRoute("/account")({
   component: Account,
 });
 
-const orders = [
-  {
-    id: "INK-48201",
-    date: "12 Nov 2025",
-    total: "₹3,498",
-    status: "Delivered",
-    items: 2,
-    eta: "Delivered Nov 14",
-  },
-  {
-    id: "INK-47812",
-    date: "28 Oct 2025",
-    total: "₹1,299",
-    status: "Delivered",
-    items: 1,
-    eta: "Delivered Oct 30",
-  },
-  {
-    id: "INK-46930",
-    date: "03 Oct 2025",
-    total: "₹2,798",
-    status: "Delivered",
-    items: 2,
-    eta: "Delivered Oct 06",
-  },
-  {
-    id: "INK-49120",
-    date: "26 Nov 2025",
-    total: "₹1,499",
-    status: "In transit",
-    items: 1,
-    eta: "Arriving Nov 28",
-  },
-];
+// Fetch real orders now
 
 const trackingSteps = [
   "Order placed",
@@ -71,13 +39,71 @@ const trackingSteps = [
 
 function Account() {
   const [openOrder, setOpenOrder] = useState<string | null>(null);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [isRetrying, setIsRetrying] = useState<string | null>(null);
   const { isAuthenticated, user, logout, setAuthModalOpen, isLoading } = useAuthStore();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       setAuthModalOpen(true);
+    } else if (isAuthenticated) {
+      fetchOrders();
     }
   }, [isLoading, isAuthenticated, setAuthModalOpen]);
+
+  const fetchOrders = async () => {
+    try {
+      const data = await apiClient.get<any[]>("/orders/me");
+      setOrders(data);
+    } catch (err) {
+      console.error("Failed to load orders", err);
+    }
+  };
+
+  const handleRetryPayment = async (orderId: string) => {
+    if (isRetrying) return;
+    setIsRetrying(orderId);
+    try {
+      const razorpayKeyId = (import.meta.env.VITE_RAZORPAY_KEY_ID as string) ?? "";
+      const res = await apiClient.post<any>(`/orders/${orderId}/retry-payment`, {});
+      
+      if (!window.Razorpay) throw new Error("Payment SDK failed to load");
+
+      const rzp = new window.Razorpay({
+        key: razorpayKeyId,
+        amount: Math.round(res.amount * 100),
+        currency: res.currency,
+        order_id: res.razorpayOrderId,
+        name: "Ink Studio",
+        description: `Order ${res.orderId}`,
+        prefill: { email: user?.email },
+        theme: { color: "#0d0d0d" },
+        handler: async (response: any) => {
+          try {
+            await apiClient.post("/orders/verify-payment", {
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            });
+            toast.success("Payment successful!");
+            fetchOrders();
+          } catch (err) {
+            toast.error("Payment verification failed");
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setIsRetrying(null);
+            toast.info("Payment retry cancelled.");
+          }
+        }
+      });
+      rzp.open();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to retry payment");
+      setIsRetrying(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -164,28 +190,39 @@ function Account() {
                   className="flex w-full flex-wrap items-center justify-between gap-3 text-left"
                 >
                   <div>
-                    <p className="text-[14px]">{o.id}</p>
+                    <p className="text-[14px]">INK-{o.id.substring(0, 8).toUpperCase()}</p>
                     <p className="text-[12px] text-mute">
-                      {o.date} · {o.items} item{o.items > 1 ? "s" : ""}
+                      {new Date(o.createdAt).toLocaleDateString()} · {o.items?.length || 0} item{(o.items?.length || 0) > 1 ? "s" : ""}
                     </p>
                   </div>
                   <p
-                    className={`text-[12px] uppercase tracking-[0.18em] ${o.status === "Delivered" ? "text-mute" : "text-accent"}`}
+                    className={`text-[12px] uppercase tracking-[0.18em] ${o.status === "DELIVERED" ? "text-mute" : o.status === "FAILED" ? "text-red-500" : "text-accent"}`}
                   >
-                    {o.status}
+                    {o.status.replace("_", " ")}
                   </p>
-                  <p className="tabular-nums">{o.total}</p>
+                  <p className="tabular-nums">₹{o.totalAmount}</p>
                   <span className="text-[12px] uppercase tracking-[0.18em] underline-offset-4 hover:underline">
                     {openOrder === o.id ? "Close" : "View →"}
                   </span>
                 </button>
                 {openOrder === o.id && (
                   <div className="mt-6 border border-line bg-fog/40 p-6">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Tracking</p>
-                    <p className="mt-1 font-display text-2xl">{o.eta}</p>
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Status details</p>
+                    <p className="mt-1 font-display text-2xl">{o.status.replace("_", " ")}</p>
+                    {(o.status === "FAILED" || o.status === "PAYMENT_PENDING") && o.paymentProvider === "RAZORPAY" && (
+                      <button 
+                        onClick={() => handleRetryPayment(o.id)}
+                        disabled={isRetrying === o.id}
+                        className="mt-4 bg-ink text-paper px-6 py-3 text-[12px] uppercase tracking-[0.22em] hover:bg-ink/90 disabled:opacity-50"
+                      >
+                        {isRetrying === o.id ? "Processing..." : "Retry Payment"}
+                      </button>
+                    )}
                     <ol className="mt-6 space-y-3">
                       {trackingSteps.map((s, i) => {
-                        const reachedIdx = o.status === "Delivered" ? trackingSteps.length - 1 : 3;
+                        const reachedIdx = o.status === "DELIVERED" ? trackingSteps.length - 1 : 
+                                         (o.status === "SHIPPED" ? 3 : 
+                                         (o.status === "PROCESSING" ? 2 : 1));
                         const done = i <= reachedIdx;
                         return (
                           <li key={s} className="flex items-center gap-3">

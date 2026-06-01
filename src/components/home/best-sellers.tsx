@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Reveal } from "@/components/ui/reveal";
 import { ProductCard } from "@/components/product/product-card";
+import { ProductCardSkeleton } from "@/components/product/product-skeleton";
 import { type Product } from "@/lib/data/products";
 import { catalogApi } from "@/lib/api/catalog";
 
@@ -14,7 +15,7 @@ export function BestSellers() {
       .then((res) => {
         setItems(
           res.products
-            .filter((p) => p.badges.includes("bestseller") || p.badges.includes("trending"))
+            .filter((p: Product) => p.badges.includes("bestseller") || p.badges.includes("trending"))
             .slice(0, 8),
         );
         setLoading(false);
@@ -25,7 +26,7 @@ export function BestSellers() {
       });
   }, []);
 
-  if (loading) return null;
+  // Remove return null;
 
   return (
     <section className="mx-auto max-w-[1480px] px-5 py-20 lg:px-10 lg:py-28">
@@ -38,11 +39,13 @@ export function BestSellers() {
         </div>
       </Reveal>
       <div className="grid grid-cols-2 gap-x-4 gap-y-10 lg:grid-cols-4 lg:gap-x-6">
-        {items.map((p, i) => (
-          <Reveal key={p.id} delay={i * 0.05}>
-            <ProductCard product={p} />
-          </Reveal>
-        ))}
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => <ProductCardSkeleton key={i} />)
+          : items.map((p, i) => (
+              <Reveal key={p.id} delay={i * 0.05}>
+                <ProductCard product={p} />
+              </Reveal>
+            ))}
       </div>
     </section>
   );

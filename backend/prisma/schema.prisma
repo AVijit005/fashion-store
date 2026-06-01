@@ -75,6 +75,7 @@ model User {
   auditLogs            AuditLog[]
   sessions             Session[]
   cart                 Cart?
+  wishlist             Wishlist?
 
   @@map("users")
 }
@@ -174,6 +175,7 @@ model Product {
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
   variants        ProductVariant[]
+  wishlistItems   WishlistItem[]
 
     @@index([categoryId])
   @@index([dropId])
@@ -454,4 +456,30 @@ model IdempotencyKey {
   expiresAt DateTime @map("expires_at")
 
   @@map("idempotency_keys")
+}
+
+model Wishlist {
+  id        String         @id @default(uuid())
+  userId    String         @unique @map("user_id")
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     WishlistItem[]
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("wishlists")
+}
+
+model WishlistItem {
+  id         String   @id @default(uuid())
+  wishlistId String   @map("wishlist_id")
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId  String   @map("product_id")
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([wishlistId, productId])
+  @@index([wishlistId])
+  @@index([productId])
+  @@map("wishlist_items")
 }

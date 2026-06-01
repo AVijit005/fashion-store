@@ -123,14 +123,14 @@ function ProductPage() {
     catalogApi
       .getProducts({ category: product.category, limit: 5 })
       .then((res) => {
-        setRelated(res.products.filter((p) => p.id !== product.id).slice(0, 4));
+        setRelated(res.products.filter((p: Product) => p.id !== product.id).slice(0, 4));
       })
       .catch((err) => console.error(err));
 
     catalogApi
       .getProducts({ limit: 4 })
       .then((res) => {
-        setLook(res.products.filter((p) => p.id !== product.id).slice(0, 3));
+        setLook(res.products.filter((p: Product) => p.id !== product.id).slice(0, 3));
       })
       .catch((err) => console.error(err));
   }, [product]);
@@ -150,8 +150,8 @@ function ProductPage() {
     if (rect) launch(product.images[0], rect);
     // Find the matching variant to get its backend UUID for cart sync
     const selectedVariant = product.variants?.find((v) => v.size === size && v.color === color);
-    if (!selectedVariant) {
-      toast("This variant is unavailable");
+    if (!selectedVariant || selectedVariant.stockQuantity <= 0) {
+      toast.error("This size/color combination is out of stock");
       return;
     }
     add({
@@ -311,7 +311,8 @@ function ProductPage() {
               ref={addBtnRef}
               whileTap={{ scale: 0.98 }}
               onClick={handleAdd}
-              className="flex min-h-[56px] items-center justify-center gap-3 bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-paper transition hover:bg-graphite"
+              disabled={!product.variants?.find((v) => v.size === size && v.color === color) || (product.variants?.find((v) => v.size === size && v.color === color)?.stockQuantity || 0) <= 0}
+              className="flex min-h-[56px] items-center justify-center gap-3 bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-paper transition hover:bg-graphite disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="h-4 w-4" /> Add to bag — {inr(product.price)}
             </motion.button>

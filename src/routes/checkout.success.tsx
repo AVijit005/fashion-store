@@ -5,6 +5,7 @@ import { Check } from "lucide-react";
 export const Route = createFileRoute("/checkout/success")({
   validateSearch: (search: Record<string, unknown>) => ({
     orderId: typeof search.orderId === "string" ? search.orderId : "",
+    cod: search.cod === "true",
   }),
   head: () => ({
     meta: [{ title: "Order placed — Ink Studio" }],
@@ -12,8 +13,11 @@ export const Route = createFileRoute("/checkout/success")({
   component: Success,
 });
 
+import { useAuthStore } from "@/lib/store/auth";
+
 function Success() {
-  const { orderId } = Route.useSearch();
+  const { orderId, cod } = Route.useSearch();
+  const { isAuthenticated, setAuthModalOpen } = useAuthStore();
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-6 py-20 text-center">
@@ -51,6 +55,36 @@ function Success() {
       >
         We'll email you a tracking link the moment it ships. Most orders move within 24 hours.
       </motion.p>
+      
+      {cod && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="mt-6 border border-ink/20 bg-ink/5 px-6 py-4 text-[13px] text-ink"
+        >
+          <p className="font-semibold uppercase tracking-widest text-[11px] mb-1">Cash on Delivery</p>
+          <p>Please have exact cash ready at delivery.</p>
+        </motion.div>
+      )}
+
+      {!isAuthenticated && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.65 }}
+          className="mt-6 border border-line p-6"
+        >
+          <p className="font-medium">Create an account to easily track this order.</p>
+          <button 
+            onClick={() => setAuthModalOpen(true)}
+            className="mt-3 text-[12px] uppercase tracking-[0.22em] text-ink hover:underline underline-offset-4"
+          >
+            Sign up now →
+          </button>
+        </motion.div>
+      )}
+
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}

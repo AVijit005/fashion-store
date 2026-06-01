@@ -46,6 +46,11 @@ export class CheckoutDto {
   @IsUUID()
   @IsOptional()
   guestSessionId?: string;
+
+  @ApiProperty({ description: 'Payment method selected by the user', required: false })
+  @IsString()
+  @IsOptional()
+  paymentMethod?: string;
 }
 
 export class VerifyPaymentDto {

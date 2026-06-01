@@ -42,7 +42,7 @@ function SalePage() {
     catalogApi
       .getProducts({ limit: 100 })
       .then((res) => {
-        setList(res.products.filter((p) => pct(p.price, p.mrp) >= 25));
+        setList(res.products.filter((p: Product) => pct(p.price, p.mrp) >= 25));
         setLoading(false);
       })
       .catch((err) => {

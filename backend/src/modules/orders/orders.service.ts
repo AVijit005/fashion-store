@@ -22,9 +22,9 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.REFUNDED],
   [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
   [OrderStatus.DELIVERED]: [OrderStatus.REFUNDED],
-  [OrderStatus.CANCELLED]: [OrderStatus.PAID],
+  [OrderStatus.CANCELLED]: [OrderStatus.PAID, OrderStatus.PAYMENT_PENDING],
   [OrderStatus.REFUNDED]: [],
-  [OrderStatus.FAILED]: [OrderStatus.PAID],
+  [OrderStatus.FAILED]: [OrderStatus.PAID, OrderStatus.PAYMENT_PENDING],
 };
 
 @Injectable()
@@ -66,7 +66,7 @@ export class OrdersService {
     const tax = totalAmountBase.mul(new Prisma.Decimal(0.18));
     const totalAmount = totalAmountBase.add(shippingFee).add(tax);
 
-    const guestToken = activeUserId ? null : crypto.randomBytes(16).toString('hex');
+    const guestToken = activeUserId ? null : (guestSessionId || crypto.randomBytes(16).toString('hex'));
 
     // 2. Perform DB Transaction for inventory locking and order creation
     const createdOrder = await this.prisma.$transaction(async (tx) => {
@@ -98,10 +98,6 @@ export class OrdersService {
             'Auto-cancelled due to new checkout initiation',
             tx,
           );
-          // The transitionStatus handles inventory restoration via orderStatusHistory trigger
-          // Wait, transitionStatus does NOT automatically restore inventory.
-          // We must manually restore inventory here.
-          await this.inventoryService.restoreInventory(pendingOrder.id, tx);
         }
 
         // 1. Reserve inventory
@@ -113,7 +109,7 @@ export class OrdersService {
         data: {
           userId: activeUserId || null,
           guestToken,
-          status: OrderStatus.PAYMENT_PENDING,
+          status: dto.paymentMethod === 'cod' ? OrderStatus.PROCESSING : OrderStatus.PAYMENT_PENDING,
           totalAmount,
           shippingFee,
           tax,
@@ -125,8 +121,8 @@ export class OrdersService {
           shippingState: dto.shippingState,
           shippingPostalCode: dto.shippingPostalCode,
           shippingCountry: dto.shippingCountry,
-          paymentProvider: 'RAZORPAY',
-          paymentStatus: 'PENDING',
+          paymentProvider: dto.paymentMethod === 'cod' ? 'COD' : 'RAZORPAY',
+          paymentStatus: dto.paymentMethod === 'cod' ? 'COD' : 'PENDING',
           items: {
             create: cart.items.map((item) => ({
               productVariantId: item.variantId || undefined,
@@ -137,9 +133,9 @@ export class OrdersService {
           },
           statusHistory: {
             create: {
-              newStatus: OrderStatus.PAYMENT_PENDING,
+              newStatus: dto.paymentMethod === 'cod' ? OrderStatus.PROCESSING : OrderStatus.PAYMENT_PENDING,
               changedBy: activeUserId ? 'USER' : 'GUEST',
-              reason: 'Checkout started, stock reserved.',
+              reason: dto.paymentMethod === 'cod' ? 'COD checkout completed.' : 'Checkout started, stock reserved.',
             },
           },
         },
@@ -147,27 +143,41 @@ export class OrdersService {
     });
 
     // Schedule expiry job BEFORE making the Razorpay API call (Fix Deadlock)
-    try {
-      await this.orderExpiryQueue.add(
-        'expire',
-        { orderId: createdOrder.id },
-        {
-          delay: 900000,
-          jobId: createdOrder.id,
-          attempts: 5,
-          backoff: { type: 'exponential', delay: 30000 },
-          removeOnComplete: true,
-          removeOnFail: false,
-        },
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to schedule expiry job for orderId=${createdOrder.id}`,
-        error instanceof Error ? error.stack : String(error),
-      );
+    // Schedule expiry job ONLY if not COD
+    if (dto.paymentMethod !== 'cod') {
+      try {
+        await this.orderExpiryQueue.add(
+          'expire',
+          { orderId: createdOrder.id },
+          {
+            delay: 900000,
+            jobId: createdOrder.id,
+            attempts: 5,
+            backoff: { type: 'exponential', delay: 30000 },
+            removeOnComplete: true,
+            removeOnFail: false,
+          },
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to schedule expiry job for orderId=${createdOrder.id}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
     }
 
     // 3. Create Razorpay order (mocked if keys are local mock values)
+    if (dto.paymentMethod === 'cod') {
+      await this.cartService.clearCart(activeUserId, activeSessionId);
+      return {
+        orderId: createdOrder.id,
+        razorpayOrderId: '',
+        amount: totalAmount.toNumber(),
+        currency: 'INR',
+        guestToken,
+      };
+    }
+
     const keyId = this.configService.get<string>('RAZORPAY_KEY_ID') || '';
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
     let razorpayOrderId = `rzp_mock_${crypto.randomUUID().replace(/-/g, '')}`;
@@ -251,6 +261,46 @@ export class OrdersService {
     };
   }
 
+  // Retry Payment
+  async retryPayment(orderId: string, userId?: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (order.userId && order.userId !== userId) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (order.status !== OrderStatus.FAILED && order.status !== OrderStatus.PAYMENT_PENDING) {
+      throw new BadRequestException('Order cannot be retried from its current status');
+    }
+
+    if (!order.razorpayOrderId) {
+      throw new BadRequestException('Cannot retry this order because it has no Razorpay order ID');
+    }
+
+    // Attempt to transition to PAYMENT_PENDING if it was FAILED
+    if (order.status === OrderStatus.FAILED) {
+      await this.transitionStatus(
+        order.id,
+        OrderStatus.PAYMENT_PENDING,
+        'USER',
+        'User initiated payment retry.',
+      );
+    }
+
+    return {
+      orderId: order.id,
+      razorpayOrderId: order.razorpayOrderId,
+      amount: order.totalAmount.toNumber(),
+      currency: 'INR',
+    };
+  }
+
   // Verify payment via direct API submit
   async verifyPayment(dto: VerifyPaymentDto) {
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
@@ -312,6 +362,9 @@ export class OrdersService {
           paymentStatus: 'PAID',
         },
       });
+
+      // Clear the cart securely after payment confirmation
+      await this.cartService.clearCart(order.userId || undefined, order.guestToken || undefined);
 
       return { success: true, orderId: order.id, status: OrderStatus.PAID };
     });
@@ -401,6 +454,9 @@ export class OrdersService {
                   paymentStatus: 'PAID',
                 },
               });
+
+              // Clear the cart securely after payment capture via webhook
+              await this.cartService.clearCart(order.userId || undefined, order.guestToken || undefined);
             }
           }
         } else {
@@ -525,6 +581,24 @@ export class OrdersService {
       // If order transitions to FAILED or CANCELLED, return stock to inventory
       if (newStatus === OrderStatus.FAILED || newStatus === OrderStatus.CANCELLED) {
         await this.inventoryService.restoreInventory(orderId, client);
+      }
+
+      if ((newStatus === OrderStatus.PAID || newStatus === OrderStatus.PAYMENT_PENDING) && (currentStatus === OrderStatus.FAILED || currentStatus === OrderStatus.CANCELLED)) {
+        const items = await client.orderItem.findMany({
+          where: { orderId: orderId, productVariantId: { not: null } }
+        });
+        if (items.length > 0) {
+          const inventoryItems = items.map(item => ({
+            variantId: item.productVariantId as string,
+            quantity: item.quantity,
+          }));
+          const allowNegativeStock = newStatus === OrderStatus.PAID;
+          try {
+            await this.inventoryService.reserveInventory(inventoryItems, client, allowNegativeStock);
+          } catch (error) {
+             throw new BadRequestException('Cannot retry payment: one or more items have sold out.');
+          }
+        }
       }
 
       // Update status and append to history

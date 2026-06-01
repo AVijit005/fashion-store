@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { apiClient, setMemoryAccessToken } from "../api/client";
 import { cartApi, getOrCreateCartSessionId } from "../api/cart";
+import { syncWishlistOnLogin } from "./wishlist";
 
 export interface UserProfile {
   id: string;
@@ -57,10 +58,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Merge guest cart into authenticated user cart after login
       const guestSessionId = getOrCreateCartSessionId();
       if (guestSessionId) {
+        const { useCart } = await import("./cart");
+        const preMergeCount = useCart.getState().items.length;
         cartApi
           .mergeCart(guestSessionId)
+          .then((cart) => {
+            useCart.getState().setItems(cart.items.map(item => ({
+               id: item.variantId || item.sku,
+               sku: item.sku,
+               name: item.productTitle,
+               price: item.unitPrice,
+               image: item.thumbnailUrl || "",
+               color: item.color,
+               size: item.size,
+               qty: item.quantity,
+               slug: item.productSlug
+            })));
+            if (cart.items.length > preMergeCount) {
+               import("sonner").then(({ toast }) => toast.info("We've restored items previously left in your cart."));
+            }
+          })
           .catch((err) => console.error("[auth] Cart merge after login failed:", err));
       }
+
+      // Sync wishlist
+      await syncWishlistOnLogin();
     } catch (error) {
       get().logout();
       throw error;
@@ -72,7 +94,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signup: async (email, password) => {
     set({ isLoading: true });
     try {
-      await apiClient.post("/auth/signup", { email, password });
+      const guestToken = typeof window !== "undefined" ? localStorage.getItem("ink_order_guest_token") || undefined : undefined;
+      await apiClient.post("/auth/signup", { email, password, guestToken });
       await get().login(email, password);
     } finally {
       set({ isLoading: false });
@@ -94,6 +117,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       setMemoryAccessToken(null);
       set({ user: null, accessToken: null, isAuthenticated: false });
+
+      // Clear private data from local storage
+      import("./cart").then(({ useCart }) => useCart.getState().clear());
+      import("./wishlist").then(({ useWishlist }) => useWishlist.getState().setIds([]));
     }
   },
 
@@ -106,6 +133,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const user = await apiClient.get<UserProfile>("/auth/me");
       set({ user, isAuthenticated: true });
+      await syncWishlistOnLogin();
     } catch (error) {
       console.error("Failed to restore auth session:", error);
       // If token is invalid/expired, try rotating
@@ -114,6 +142,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         get().setTokens(res.accessToken);
         const user = await apiClient.get<UserProfile>("/auth/me");
         set({ user, isAuthenticated: true });
+        await syncWishlistOnLogin();
       } catch {
         await get().logout();
       }

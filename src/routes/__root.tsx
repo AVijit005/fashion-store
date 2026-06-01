@@ -138,12 +138,28 @@ function RootComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isAdmin = pathname.startsWith("/admin");
   const initializeAuth = useAuthStore((state) => state.initialize);
+  const { user, isAuthenticated, isLoading } = useAuthStore((state) => ({
+    user: state.user,
+    isAuthenticated: state.isAuthenticated,
+    isLoading: state.isLoading,
+  }));
 
   useEffect(() => {
     initializeAuth();
   }, [initializeAuth]);
 
   if (isAdmin) {
+    if (isLoading) {
+      return <div className="flex h-screen items-center justify-center">Loading...</div>;
+    }
+    
+    if (!isAuthenticated || user?.role !== "ADMIN") {
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      }
+      return null;
+    }
+
     return (
       <QueryClientProvider client={queryClient}>
         <Outlet />

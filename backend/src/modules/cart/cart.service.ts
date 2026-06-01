@@ -113,19 +113,35 @@ export class CartService {
     });
 
     const variantMap = new Map(variants.map((v) => [v.id, v]));
+
+    const customProductIds = items
+      .filter((i) => !i.variantId && i.customData?.productId)
+      .map((i) => i.customData.productId as string);
+
+    let customProductsMap = new Map();
+    if (customProductIds.length > 0) {
+      const customProducts = await this.prisma.product.findMany({
+        where: { id: { in: customProductIds }, status: ProductStatus.PUBLISHED },
+      });
+      customProductsMap = new Map(customProducts.map(p => [p.id, p]));
+    }
+
     let totalAmount = new Prisma.Decimal(0);
 
     const hydratedItems = items
       .map((item) => {
         if (!item.variantId && item.customData) {
           // Custom studio item
-          const price = new Prisma.Decimal(item.customData.price || 0); // Need to get price from custom data, wait, customData doesn't have price. Let's use 1499 default if not found.
-          // In studio.tsx we don't pass price in customData. We passed productId, color, hex, layers.
-          // Wait, studio.tsx addToCart adds price: product.price + 200.
-          // To be safe, let's assume price is 1499 for custom.
-          const fallbackPrice = new Prisma.Decimal(item.customData.price || 1499);
-          const itemTotal = fallbackPrice.mul(item.quantity);
+          const productId = item.customData.productId;
+          const baseProduct = customProductsMap.get(productId);
+          if (!baseProduct) return null; // Product deleted or draft-gated
+
+          // Strictly compute price on backend: base price + 200 markup
+          const basePrice = new Prisma.Decimal(baseProduct.basePrice.toString());
+          const customPrice = basePrice.add(new Prisma.Decimal(200));
+          const itemTotal = customPrice.mul(item.quantity);
           totalAmount = totalAmount.add(itemTotal);
+          
           return {
             id: item.id,
             variantId: null,
@@ -133,11 +149,11 @@ export class CartService {
             size: item.customData.size || 'M',
             color: item.customData.color || '#000000',
             quantity: item.quantity,
-            unitPrice: fallbackPrice.toNumber(),
+            unitPrice: customPrice.toNumber(),
             totalPrice: itemTotal.toNumber(),
-            productTitle: 'Custom Studio Piece',
-            productSlug: null,
-            thumbnailUrl: null,
+            productTitle: `Custom ${baseProduct.title}`,
+            productSlug: baseProduct.slug,
+            thumbnailUrl: baseProduct.mediaUrls?.[0] || null,
             stockQuantity: null,
             isAvailable: true,
             customData: item.customData,

@@ -40,6 +40,14 @@ export class AuthService {
 
     this.logger.log(`Audit: User registered successfully. userId=${user.id}`);
 
+    if (signUpDto.guestToken) {
+      await this.prisma.order.updateMany({
+        where: { guestToken: signUpDto.guestToken, userId: null },
+        data: { userId: user.id },
+      });
+      this.logger.log(`Audit: Linked guest orders to userId=${user.id}`);
+    }
+
     return {
       userId: user.id,
       email: user.email,

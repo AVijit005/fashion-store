@@ -8,8 +8,9 @@ export class InventoryService {
 
   // Locks and reserves inventory for checkout
   async reserveInventory(
-    items: { variantId: string; quantity: number; sku: string }[],
+    items: { variantId: string; quantity: number; sku?: string }[],
     tx: Prisma.TransactionClient,
+    force: boolean = false
   ) {
     const variantIds = items.map((item) => item.variantId);
     // Sort variant IDs to prevent deadlocks
@@ -29,9 +30,12 @@ export class InventoryService {
 
     for (const item of items) {
       const variant = dbVariantMap.get(item.variantId);
-      if (!variant || variant.stockQuantity < item.quantity) {
+      if (!variant) {
+        throw new BadRequestException(`Variant ${item.variantId} not found`);
+      }
+      if (!force && variant.stockQuantity < item.quantity) {
         throw new BadRequestException(
-          `Insufficient stock for SKU ${item.sku}. Available: ${variant?.stockQuantity || 0}, requested: ${item.quantity}`,
+          `Insufficient stock for SKU ${item.sku || item.variantId}. Available: ${variant.stockQuantity}, requested: ${item.quantity}`,
         );
       }
     }

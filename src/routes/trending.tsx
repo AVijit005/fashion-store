@@ -40,7 +40,7 @@ function TrendingPage() {
       .then((res) => {
         setList(
           res.products.filter(
-            (p) => p.badges.includes("trending") || p.badges.includes("bestseller"),
+            (p: Product) => p.badges.includes("trending") || p.badges.includes("bestseller"),
           ),
         );
         setLoading(false);

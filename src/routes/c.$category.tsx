@@ -35,7 +35,7 @@ function CategoryPage() {
         .getProducts({ limit: 100 })
         .then((res) => {
           setList(
-            res.products.filter((p) => p.badges.includes("new") || p.badges.includes("limited")),
+            res.products.filter((p: Product) => p.badges.includes("new") || p.badges.includes("limited")),
           );
           setLoading(false);
         })
@@ -47,7 +47,7 @@ function CategoryPage() {
       catalogApi
         .getProducts({ limit: 100 })
         .then((res) => {
-          setList(res.products.filter((p) => p.mrp - p.price >= 400));
+          setList(res.products.filter((p: Product) => p.mrp - p.price >= 400));
           setLoading(false);
         })
         .catch((err) => {

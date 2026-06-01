@@ -50,13 +50,13 @@ export function StatusChip({
 }
 
 const ORDER_TONE: Record<string, Tone> = {
-  pending: "warn",
-  paid: "info",
-  fulfilled: "info",
-  shipped: "info",
-  delivered: "positive",
-  refunded: "negative",
-  cancelled: "muted",
+  PAYMENT_PENDING: "warn",
+  PROCESSING: "info",
+  SHIPPED: "info",
+  DELIVERED: "positive",
+  FAILED: "negative",
+  CANCELLED: "muted",
+  REFUNDED: "negative",
 };
 export const orderTone = (s: string): Tone => ORDER_TONE[s] ?? "neutral";
 

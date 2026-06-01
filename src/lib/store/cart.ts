@@ -6,6 +6,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { toast } from "sonner";
 import { cartApi } from "../api/cart";
 
 export type CartItem = {
@@ -28,6 +29,7 @@ type CartState = {
   items: CartItem[];
   open: boolean;
   setOpen: (v: boolean) => void;
+  setItems: (items: CartItem[]) => void;
   add: (item: Omit<CartItem, "qty"> & { qty?: number }) => void;
   remove: (key: string) => void;
   setQty: (key: string, qty: number) => void;
@@ -53,6 +55,8 @@ async function processQueue() {
         await task();
       } catch (err) {
         console.error("[cart] Backend sync failed:", err);
+        const msg = err instanceof Error ? err.message : "Failed to update cart";
+        toast.error(msg);
       }
     }
   }
@@ -90,6 +94,7 @@ export const useCart = create<CartState>()(
       items: [],
       open: false,
       setOpen: (v) => set({ open: v }),
+      setItems: (items) => set({ items }),
 
       add: (i) => {
         const qty = i.qty ?? 1;
