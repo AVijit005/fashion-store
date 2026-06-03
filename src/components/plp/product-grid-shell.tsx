@@ -117,6 +117,7 @@ export function ProductGridShell({
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value as SortKey)}
+                aria-label="Sort by"
                 className="appearance-none border border-line bg-paper py-2 pl-3 pr-9 text-[12px] uppercase tracking-[0.18em] outline-none"
               >
                 {SORTS.map((s) => (
@@ -152,7 +153,7 @@ export function ProductGridShell({
             <div className="grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 lg:gap-x-6 xl:grid-cols-4">
               {list.map((p, i) => (
                 <Reveal key={p.id} delay={(i % 4) * 0.05}>
-                  <ProductCard product={p} />
+                  <ProductCard product={p} priority={i < 4} />
                 </Reveal>
               ))}
             </div>
@@ -284,6 +285,7 @@ function FilterPanel({
           step={100}
           value={maxPrice}
           onChange={(e) => setMaxPrice(Number(e.target.value))}
+          aria-label="Maximum price"
           className="w-full accent-ink"
         />
       </div>

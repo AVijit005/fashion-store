@@ -1,5 +1,6 @@
 // SEO JSON-LD helpers — keep small, type-light, plug straight into route head().
 
+export const SITE_URL = "https://inkstudio.vercel.app";
 export function breadcrumbJsonLd(items: { name: string; path: string }[]) {
   return {
     type: "application/ld+json" as const,

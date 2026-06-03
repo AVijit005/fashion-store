@@ -59,7 +59,7 @@ const make = (
   reviews: 120 + i * 37,
   colors: COLORS.slice(0, 4 + (i % 3)),
   sizes: SIZES,
-  images: imgIds.map((id) => u(id, 1200)),
+  images: imgIds.map((id) => u(id, 600)),
   badges,
   story,
 });

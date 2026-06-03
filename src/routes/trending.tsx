@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { breadcrumbJsonLd, collectionJsonLd } from "@/lib/seo";
+import { breadcrumbJsonLd, collectionJsonLd, SITE_URL } from "@/lib/seo";
 import { ProductGridShell } from "@/components/plp/product-grid-shell";
 import { useState, useEffect } from "react";
 import { catalogApi } from "@/lib/api/catalog";
@@ -12,9 +12,8 @@ export const Route = createFileRoute("/trending")({
       { title: "Trending now — Ink Studio" },
       { name: "description", content: "What everyone's wearing this week, ranked." },
       { property: "og:title", content: "Trending now — Ink Studio" },
-      { property: "og:url", content: "/trending" },
     ],
-    links: [{ rel: "canonical", href: "/trending" }],
+    links: [{ rel: "canonical", href: `${SITE_URL}/trending` }],
     scripts: [
       breadcrumbJsonLd([
         { name: "Home", path: "/" },

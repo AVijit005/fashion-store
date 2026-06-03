@@ -73,7 +73,7 @@
   --fog: oklch(0.925 0.01 80); /* #e8e4dd */
   --ink: oklch(0.16 0 0); /* #0d0d0d */
   --graphite: oklch(0.32 0.005 0); /* #2d2d2d */
-  --mute: oklch(0.55 0.005 0);
+  --mute: oklch(0.45 0.005 0);
   --line: oklch(0.85 0.008 80);
   --accent: oklch(0.62 0.21 28); /* sale ember */
   --accent-foreground: oklch(0.98 0 0);
