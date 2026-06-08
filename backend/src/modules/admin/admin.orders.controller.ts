@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Post, Param, Body, UseGuards, Query } from '@nestjs/common';
 import { AdminOrdersService } from './admin.orders.service';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -12,8 +12,20 @@ export class AdminOrdersController {
   constructor(private readonly ordersService: AdminOrdersService) {}
 
   @Get()
-  async getOrders() {
-    return this.ordersService.getOrders();
+  async getOrders(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('q') q?: string,
+    @Query('status') status?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+    return this.ordersService.getOrders(pageNum, limitNum, q, status);
+  }
+
+  @Post()
+  async createOrder(@Body() body: any) {
+    return this.ordersService.createOrder(body);
   }
 
   @Put(':id/status')

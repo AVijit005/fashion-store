@@ -33,10 +33,11 @@ function OverviewPage() {
     queryKey: ["admin-products"],
     queryFn: () => apiClient.get("/admin/catalog/products"),
   });
-  const { data: apiOrders = [] } = useQuery<any[]>({
+  const { data: apiOrdersRes } = useQuery<any>({
     queryKey: ["admin-orders"],
-    queryFn: () => apiClient.get("/admin/orders"),
+    queryFn: () => apiClient.get("/admin/orders?limit=50"),
   });
+  const apiOrders = apiOrdersRes?.data || [];
 
   const recent = apiOrders.slice(0, 6);
   const lowStock = products.filter((p: any) => p.stock > 0 && p.stock <= p.lowStockAt).slice(0, 5);
@@ -47,25 +48,11 @@ function OverviewPage() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-  // Dynamic calculations from real orders
-  const validOrders = apiOrders;
-  const realRevenue = validOrders.reduce((s, o) => s + (o.total || 0), 0);
-  const realOrders = validOrders.length;
+  // Dynamic calculations from backend KPIs
+  const realRevenue = kpisData?.totalRevenue || 0;
+  const realOrders = kpisData?.totalOrders || 0;
   const realAov = realOrders > 0 ? Math.round(realRevenue / realOrders) : 0;
-
-  // Build a basic dynamic revenue series from real orders for the chart
-  const dynamicSeries = validOrders.reduce((acc: any[], order) => {
-    const date = new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const existing = acc.find(a => a.date === date);
-    if (existing) {
-      existing.revenue += (order.total || 0);
-      existing.orders += 1;
-    } else {
-      acc.push({ date, revenue: (order.total || 0), orders: 1 });
-    }
-    return acc;
-  }, []);
-  const chartSeries = dynamicSeries;
+  const chartSeries = kpisData?.series || [];
 
   return (
     <div className="space-y-6">

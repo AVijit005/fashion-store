@@ -70,10 +70,10 @@ function OrdersPage() {
   const pageSize = 15;
 
   const queryClient = useQueryClient();
-  const { data: ALL_ORDERS = [], isLoading } = useQuery<Order[]>({
-    queryKey: ["admin-orders"],
+  const { data: apiOrdersRes, isLoading } = useQuery<any>({
+    queryKey: ["admin-orders", page, q, status],
     queryFn: async () => {
-      const res = await apiClient.get<Order[]>("/admin/orders");
+      const res = await apiClient.get<any>(`/admin/orders?page=${page}&limit=${pageSize}&q=${encodeURIComponent(q)}&status=${status}`);
       return res;
     },
   });
@@ -82,25 +82,11 @@ function OrdersPage() {
     setPage(1);
   }, [status, q]);
 
-  const list = useMemo(
-    () => {
-      return ALL_ORDERS.filter((o) => {
-        if (status !== "all" && o.status !== status) return false;
-        if (q) {
-          const s = q.toLowerCase();
-          if (!(o.number || "").toLowerCase().includes(s) && !(o.customer?.name || "").toLowerCase().includes(s) && !(o.customer?.email || "").toLowerCase().includes(s)) {
-            return false;
-          }
-        }
-        return true;
-      });
-    }, [ALL_ORDERS, status, q]);
+  const list = apiOrdersRes?.data || [];
+  const meta = apiOrdersRes?.meta || { total: 0, totalPages: 1 };
 
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { all: ALL_ORDERS.length };
-    for (const s of STATUSES.slice(1)) c[s] = ALL_ORDERS.filter((o) => o.status === s).length;
-    return c;
-  }, [ALL_ORDERS]);
+  const counts: Record<string, number> = { all: meta.total };
+  // Note: Tab counts for specific statuses are hidden in paginated mode unless the backend sends them
 
   const toggle = (id: string) =>
     setSelected((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
@@ -121,7 +107,7 @@ function OrdersPage() {
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow={`${ALL_ORDERS.length} orders · Last 30 days`}
+        eyebrow={`${meta.total} orders matched`}
         title="Orders"
         description="Fulfillment, payments, refunds and returns in one view."
         actions={
@@ -151,7 +137,7 @@ function OrdersPage() {
             className={`flex items-center gap-2 px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] transition ${status === s ? "bg-ink text-paper" : "text-mute hover:text-ink"}`}
           >
             <span>{s}</span>
-            <span className="font-mono tabular-nums opacity-70">{counts[s] ?? 0}</span>
+            {counts[s] !== undefined && <span className="font-mono tabular-nums opacity-70">{counts[s]}</span>}
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2 pr-1">
@@ -228,12 +214,12 @@ function OrdersPage() {
             </tr>
           </thead>
           <tbody>
-            {list.slice((page - 1) * pageSize, page * pageSize).map((o) => (
-              <tr
-                key={o.id}
-                onClick={() => setActive(o)}
-                className="cursor-pointer border-b border-line/60 transition hover:bg-fog/40"
-              >
+              {list.map((o: any) => (
+                <tr
+                  key={o.id}
+                  onClick={() => setActive(o)}
+                  className={`border-b border-line/60 transition hover:bg-fog/30 ${selected.includes(o.id) ? "bg-fog/30" : ""}`}
+                >
                 <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={selected.includes(o.id)}
@@ -274,10 +260,10 @@ function OrdersPage() {
         </table>
         </div>
         )}
-        {list.length > pageSize && (
+        {meta.totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-line bg-fog/20 px-4 py-3 text-[12px]">
             <p className="text-mute">
-              Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, list.length)} of {list.length} orders
+              Showing page {page} of {meta.totalPages} ({meta.total} orders total)
             </p>
             <div className="flex gap-2">
               <button
@@ -288,7 +274,7 @@ function OrdersPage() {
                 Previous
               </button>
               <button
-                disabled={page * pageSize >= list.length}
+                disabled={page >= meta.totalPages}
                 onClick={() => setPage(p => p + 1)}
                 className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
               >

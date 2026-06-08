@@ -38,6 +38,18 @@ export class AssetsController {
     private readonly prisma: PrismaService,
   ) {}
 
+  private getPublicUrl(storageKey: string): string {
+    const bucket = process.env.AWS_S3_BUCKET || 'aura-studio';
+    const endpoint = process.env.AWS_S3_ENDPOINT;
+    if (endpoint) {
+      // Local MinIO
+      return `${endpoint}/${bucket}/${storageKey}`;
+    }
+    // AWS S3
+    const region = process.env.AWS_REGION || 'us-east-1';
+    return `https://${bucket}.s3.${region}.amazonaws.com/${storageKey}`;
+  }
+
   @Post('upload-url')
   @ApiOperation({ summary: 'Generate a presigned URL to upload a new asset directly to S3' })
   @ApiResponse({
@@ -86,6 +98,7 @@ export class AssetsController {
     return {
       asset,
       uploadUrl,
+      publicUrl: this.getPublicUrl(storageKey),
     };
   }
 
@@ -125,7 +138,8 @@ export class AssetsController {
       throw new BadRequestException(`Asset status is already ${currentAsset?.status}`);
     }
 
-    return this.prisma.asset.findUnique({ where: { id } });
+    const updatedAsset = await this.prisma.asset.findUnique({ where: { id } });
+    return { ...updatedAsset, publicUrl: this.getPublicUrl(asset.storageKey) };
   }
 
   @Get(':id')

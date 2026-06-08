@@ -415,6 +415,36 @@ function ProductsPage() {
 
 function ProductDetail({ product, edits, onChange }: { product: Product, edits: Partial<Product>, onChange: (key: string, value: any) => void }) {
   const [tab, setTab] = useState<"general" | "media" | "variants" | "seo" | "schedule">("general");
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleUpload = async (file: File) => {
+    try {
+      setIsUploading(true);
+      const { uploadUrl, asset, publicUrl } = await apiClient.post("/assets/upload-url", {
+        filename: file.name,
+        mimeType: file.type,
+        size: file.size,
+      });
+
+      await fetch(uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+
+      await apiClient.patch(`/assets/${asset.id}/confirm`);
+
+      const newImages = [...((edits as any).images || [product.image].filter(Boolean)), publicUrl];
+      onChange("images", newImages);
+      if (!product.image && !(edits as any).image) onChange("image", publicUrl);
+    } catch (err) {
+      console.error("Upload failed", err);
+      alert("Failed to upload image. Check console for details.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-3 gap-2">
@@ -483,14 +513,12 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
                </button>
              </div>
           ))}
-          <label className="flex aspect-[4/5] cursor-pointer items-center justify-center border border-dashed border-line text-mute transition hover:border-ink hover:text-ink">
-            <Plus className="h-5 w-5" />
-            <input type="file" className="hidden" accept="image/*" onChange={(e) => {
+          <label className={`flex aspect-[4/5] cursor-pointer items-center justify-center border border-dashed border-line text-mute transition hover:border-ink hover:text-ink ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            {isUploading ? <div className="h-5 w-5 animate-spin rounded-full border-2 border-mute border-t-ink" /> : <Plus className="h-5 w-5" />}
+            <input type="file" className="hidden" accept="image/*" disabled={isUploading} onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) {
-                 const url = URL.createObjectURL(file);
-                 onChange("images", [...((edits as any).images || [product.image].filter(Boolean)), url]);
-                 if (!product.image && !(edits as any).image) onChange("image", url);
+                 handleUpload(file);
               }
             }} />
           </label>

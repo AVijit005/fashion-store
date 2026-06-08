@@ -18,13 +18,21 @@ export class AdminCatalogService {
   }
 
   async createProduct(data: any) {
-    const { categoryId, collectionId, variants, ...productData } = data;
+    const { categoryId, collectionId, variantsData, images, image, ...productData } = data;
     return this.prisma.product.create({
       data: {
         ...productData,
         categoryId,
         collectionId,
-        variants: variants ? { create: variants } : undefined,
+        mediaUrls: images || [],
+        variants: variantsData ? {
+          create: variantsData.map((v: any) => ({
+            sku: v.sku,
+            size: v.size,
+            color: v.color,
+            stockQuantity: v.stock || 0,
+          }))
+        } : undefined,
       },
       include: { variants: true },
     });
@@ -36,12 +44,35 @@ export class AdminCatalogService {
       throw new NotFoundException('Product not found');
     }
 
-    const { variants, ...productData } = data;
+    const { variantsData, images, image, categoryId, collectionId, dropId, ...productData } = data;
     
-    // Simplistic variant update: just update product for now
+    if (variantsData) {
+      await this.prisma.productVariant.deleteMany({
+        where: {
+          productId: id,
+          id: { notIn: variantsData.map((v: any) => v.id).filter(Boolean) },
+        },
+      });
+      for (const v of variantsData) {
+        if (v.id) {
+          await this.prisma.productVariant.update({
+            where: { id: v.id },
+            data: { sku: v.sku, size: v.size, color: v.color, stockQuantity: v.stock || 0 },
+          });
+        } else {
+          await this.prisma.productVariant.create({
+            data: { productId: id, sku: v.sku, size: v.size, color: v.color, stockQuantity: v.stock || 0 },
+          });
+        }
+      }
+    }
+
     return this.prisma.product.update({
       where: { id },
-      data: productData,
+      data: {
+        ...productData,
+        mediaUrls: images ? images : undefined,
+      },
     });
   }
 
