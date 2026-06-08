@@ -239,12 +239,12 @@ function OrdersPage() {
                   />
                 </td>
                 <td className="px-3 py-3">
-                  <p className="font-mono text-[12px] text-ink">{o.number}</p>
+                  <p className="font-mono text-[12px] text-ink">{o.id.substring(0, 8).toUpperCase()}</p>
                   <p className="text-[11px] text-mute">{relTime(o.createdAt)}</p>
                 </td>
                 <td className="px-3 py-3">
-                  <p className="text-ink">{o.customer.name}</p>
-                  <p className="text-[11px] text-mute">{o.city}</p>
+                  <p className="text-ink">{o.user?.name || o.shippingName}</p>
+                  <p className="text-[11px] text-mute">{o.shippingCity}</p>
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex flex-col items-start gap-1">
@@ -285,11 +285,11 @@ function OrdersPage() {
                     <Checkbox
                       checked={selected.includes(o.id)}
                       onChange={() => toggle(o.id)}
-                      aria-label={`Select ${o.number}`}
+                      aria-label={`Select ${o.id}`}
                     />
                   </div>
                   <div>
-                    <p className="font-mono text-[12px] text-ink">{o.number}</p>
+                    <p className="font-mono text-[12px] text-ink">{o.id.substring(0, 8).toUpperCase()}</p>
                     <p className="text-[11px] text-mute">{relTime(o.createdAt)}</p>
                   </div>
                 </div>
@@ -300,8 +300,8 @@ function OrdersPage() {
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[12px] text-ink">{o.customer.name}</p>
-                  <p className="text-[11px] text-mute">{o.city}</p>
+                  <p className="text-[12px] text-ink">{o.user?.name || o.shippingName}</p>
+                  <p className="text-[11px] text-mute">{o.shippingCity}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <StatusChip label={o.status} tone={orderTone(o.status)} />
@@ -342,7 +342,7 @@ function OrdersPage() {
         open={!!active}
         onClose={() => setActive(null)}
         eyebrow={active ? `${longDate(active.createdAt)}` : ""}
-        title={active ? `Order ${active.number}` : ""}
+        title={active ? `Order ${active.id.substring(0, 8).toUpperCase()}` : ""}
         footer={
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-col gap-1">
@@ -520,10 +520,12 @@ function OrderDetail({ order }: { order: Order }) {
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="border border-line p-4">
           <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-mute">Customer</p>
-          <p className="mt-2 text-[14px] text-ink">{order.customer?.name}</p>
-          <p className="text-[12px] text-mute">{order.customer?.email}</p>
+          <div>
+            <p className="mt-2 text-[14px] text-ink">{order.user?.name || order.shippingName}</p>
+            <p className="text-[12px] text-mute">{order.user?.email || order.shippingEmail}</p>
+          </div>
           <p className="mt-3 text-[12px] text-mute">
-            Ships to <span className="text-ink">{order.city}, IN</span>
+            Ships to <span className="text-ink">{order.shippingCity}, IN</span>
           </p>
         </div>
         <div className="border border-line p-4">

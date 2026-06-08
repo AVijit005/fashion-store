@@ -175,12 +175,12 @@ function OverviewPage() {
               {recent.map((o) => (
                 <tr key={o.id} className="border-b border-line/60 transition hover:bg-fog/30">
                   <td className="px-4 py-3">
-                    <p className="font-mono text-[12px] text-ink">{o.number}</p>
+                    <p className="font-mono text-[12px] text-ink">{o.id.substring(0, 8).toUpperCase()}</p>
                     <p className="text-[11px] text-mute">{relTime(o.createdAt)}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="truncate text-ink">{o.customer?.name}</p>
-                    <p className="truncate text-[11px] text-mute">{o.customer?.email}</p>
+                    <p className="truncate text-ink">{o.user?.name || o.shippingName}</p>
+                    <p className="truncate text-[11px] text-mute">{o.user?.email || o.shippingEmail}</p>
                   </td>
                   <td className="px-4 py-3">
                     <StatusChip label={o.status} tone={orderTone(o.status)} />
