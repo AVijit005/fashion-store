@@ -367,6 +367,7 @@ function ProductsPage() {
         }
       >
         {active && <ProductDetail product={active} edits={edits} onChange={(k, v) => setEdits(e => ({...e, [k]: v}))} />}
+      </AdminDrawer>
       <AdminDrawer
         open={isCreating}
         onClose={() => { setIsCreating(false); setNewProduct({ status: 'draft', visible: false, variants: 0, stock: 0 }); }}
