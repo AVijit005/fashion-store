@@ -310,7 +310,6 @@ function ProductsPage() {
                         <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-mute">{p.sku}</p>
                       </div>
                     </div>
-                    </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
