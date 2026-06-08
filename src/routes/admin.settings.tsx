@@ -64,7 +64,6 @@ function SettingsPage() {
         description="Configure branding, fulfillment, payments, SEO, and team access."
         actions={
           <button 
-          <button 
             onClick={() => {
               toast.success("Settings saved successfully");
               console.log("Saving settings to API:", settings);
