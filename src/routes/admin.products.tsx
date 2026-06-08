@@ -67,8 +67,8 @@ function ProductsPage() {
       return ALL.filter(
         (p) =>
           !q ||
-          p.name.toLowerCase().includes(q.toLowerCase()) ||
-          p.sku.toLowerCase().includes(q.toLowerCase()),
+          (p.name || "").toLowerCase().includes(q.toLowerCase()) ||
+          (p.sku || "").toLowerCase().includes(q.toLowerCase()),
       );
     },
     [ALL, q],

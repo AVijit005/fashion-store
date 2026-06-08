@@ -84,7 +84,7 @@ function OrdersPage() {
         if (status !== "all" && o.status !== status) return false;
         if (q) {
           const s = q.toLowerCase();
-          if (!o.number.toLowerCase().includes(s) && !o.customer.name.toLowerCase().includes(s) && !o.customer.email.toLowerCase().includes(s)) {
+          if (!(o.number || "").toLowerCase().includes(s) && !(o.customer?.name || "").toLowerCase().includes(s) && !(o.customer?.email || "").toLowerCase().includes(s)) {
             return false;
           }
         }
