@@ -223,7 +223,7 @@ function ProductPage() {
               ))}
             </div>
             <p className="text-[12px] text-mute">
-              {product.rating.toFixed(1)} · {product.reviews} reviews
+              {(product.rating || 0).toFixed(1)} · {product.reviews || 0} reviews
             </p>
           </div>
 

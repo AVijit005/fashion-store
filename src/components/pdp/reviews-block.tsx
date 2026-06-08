@@ -66,7 +66,7 @@ export function ReviewsBlock({ rating, count }: { rating: number; count: number 
       <div className="mx-auto grid max-w-[1480px] grid-cols-1 gap-10 px-5 py-20 lg:grid-cols-[320px_1fr] lg:px-10">
         <div>
           <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Reviews</p>
-          <p className="mt-2 font-display text-6xl tabular-nums">{rating.toFixed(1)}</p>
+          <p className="mt-2 font-display text-6xl tabular-nums">{(rating || 0).toFixed(1)}</p>
           <div className="mt-2 flex gap-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <Star

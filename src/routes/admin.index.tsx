@@ -294,10 +294,10 @@ function OverviewPage() {
                   <p className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-mute">
                     <span className="inline-flex items-center gap-1">
                       <Eye className="h-3 w-3" />
-                      {p.views7d.toLocaleString("en-IN")}
+                      {(p.views7d || 0).toLocaleString("en-IN")}
                     </span>
                     <span>·</span>
-                    <span>{p.conversion.toFixed(1)}%</span>
+                    <span>{(p.conversion || 0).toFixed(1)}%</span>
                   </p>
                 </div>
                 <p className="font-mono text-[12px] tabular-nums text-ink">{p.units7d}</p>

@@ -72,7 +72,7 @@ export function TrendingNow() {
                       </div>
                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/60 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
                       <p className="absolute bottom-3 left-3 right-3 text-[11px] uppercase tracking-[0.18em] text-paper opacity-0 transition group-hover:opacity-100">
-                        {p.reviews} reviews · ★ {p.rating.toFixed(1)}
+                        {p.reviews || 0} reviews · ★ {(p.rating || 0).toFixed(1)}
                       </p>
                     </div>
                     <p className="mt-3 truncate text-[14px]">{p.name}</p>

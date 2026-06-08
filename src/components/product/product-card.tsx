@@ -206,7 +206,7 @@ export const ProductCard = memo(function ProductCard({
               />
             ))}
             <span className="ml-2 text-[11px] text-mute">
-              ★ {product.rating.toFixed(1)} ({product.reviews})
+              ★ {(product.rating || 0).toFixed(1)} ({product.reviews || 0})
             </span>
             {hint === "low" && (
               <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-accent">

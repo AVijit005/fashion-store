@@ -237,9 +237,9 @@ function ProductsPage() {
                         </p>
                       )}
                     </td>
-                    <td className="px-3 py-3 text-right font-mono tabular-nums">{p.units7d}</td>
+                    <td className="px-3 py-3 text-right font-mono tabular-nums">{p.units7d || 0}</td>
                     <td className="px-3 py-3 text-right font-mono tabular-nums text-mute">
-                      {p.conversion.toFixed(1)}%
+                      {(p.conversion || 0).toFixed(1)}%
                     </td>
                     <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
