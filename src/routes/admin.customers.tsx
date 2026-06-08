@@ -4,6 +4,7 @@ import { Crown, Mail, MessageSquare, Search, Sparkles, Tag } from "lucide-react"
 import { SectionHeader, Panel } from "@/components/admin/section-header";
 import { StatusChip } from "@/components/admin/status-chip";
 import { AdminDrawer } from "@/components/admin/drawer";
+import { exportToCSV } from "@/lib/admin/export";
 import { customers as ALL, type Customer } from "@/lib/admin/data";
 import { compactInr, longDate, relTime } from "@/lib/admin/format";
 import { useQuery } from "@tanstack/react-query";
@@ -63,7 +64,10 @@ function CustomersPage() {
         description="Lifetime value, segments, support history and loyalty tiers."
         actions={
           <>
-            <button className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink">
+            <button 
+              onClick={() => exportToCSV("customers", list)}
+              className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
+            >
               Export
             </button>
             <button className="press flex items-center gap-1.5 bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper">
@@ -111,6 +115,7 @@ function CustomersPage() {
       </div>
 
       <Panel bodyClassName="p-0">
+        <div className="overflow-x-auto w-full">
         <table className="w-full text-[13px]">
           <thead className="border-b border-line bg-fog/40 text-left">
             <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
@@ -169,6 +174,7 @@ function CustomersPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </Panel>
 
       <AdminDrawer

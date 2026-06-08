@@ -15,7 +15,8 @@ import {
 import { SectionHeader, Panel } from "@/components/admin/section-header";
 import { StatusChip } from "@/components/admin/status-chip";
 import { AdminDrawer } from "@/components/admin/drawer";
-import type { Product } from "@/lib/admin/data";
+import { exportToCSV } from "@/lib/admin/export";
+import { type Product } from "@/lib/admin/data";
 import { compactInr, inr } from "@/lib/admin/format";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
@@ -42,6 +43,8 @@ function ProductsPage() {
   const [view, setView] = useState<"table" | "grid">("table");
   const [active, setActive] = useState<Product | null>(null);
   const [edits, setEdits] = useState<Partial<Product>>({});
+  const [isCreating, setIsCreating] = useState(false);
+  const [newProduct, setNewProduct] = useState<Partial<Product>>({ status: 'draft', visible: false, variants: 0, stock: 0 });
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
@@ -89,10 +92,19 @@ function ProductsPage() {
         description="Catalog, inventory, variants, scheduling and merchandising."
         actions={
           <>
+            <button 
+              onClick={() => exportToCSV("products", list)}
+              className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
+            >
+              Export CSV
+            </button>
             <button className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink">
               Import CSV
             </button>
-            <button className="press flex items-center gap-1.5 bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper">
+            <button 
+              onClick={() => setIsCreating(true)}
+              className="press flex items-center gap-1.5 bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
+            >
               <Plus className="h-3.5 w-3.5" /> New product
             </button>
           </>
@@ -140,9 +152,10 @@ function ProductsPage() {
           {list.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-mute">
               <Search className="mb-4 h-8 w-8 opacity-20" />
-              <p className="text-[13px]">No products found matching your criteria.</p>
+              <p className="text-[13px]">No products found matching your search.</p>
             </div>
           ) : (
+          <div className="overflow-x-auto w-full">
           <table className="w-full text-[13px]">
             <thead className="border-b border-line bg-fog/40 text-left">
               <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
@@ -244,6 +257,7 @@ function ProductsPage() {
               })}
             </tbody>
           </table>
+          </div>
           )}
         </Panel>
       ) : (
@@ -353,6 +367,41 @@ function ProductsPage() {
         }
       >
         {active && <ProductDetail product={active} edits={edits} onChange={(k, v) => setEdits(e => ({...e, [k]: v}))} />}
+      <AdminDrawer
+        open={isCreating}
+        onClose={() => { setIsCreating(false); setNewProduct({ status: 'draft', visible: false, variants: 0, stock: 0 }); }}
+        eyebrow="New Product"
+        title={newProduct.name || "Untitled Product"}
+        width={620}
+        footer={
+          <div className="flex justify-end gap-2">
+            <button 
+              onClick={() => { setIsCreating(false); setNewProduct({ status: 'draft', visible: false, variants: 0, stock: 0 }); }}
+              className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={() => {
+                apiClient.post(`/admin/catalog/products`, newProduct).then(() => {
+                  toast.success('Product created');
+                  queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+                  setIsCreating(false);
+                  setNewProduct({ status: 'draft', visible: false, variants: 0, stock: 0 });
+                }).catch(() => toast.error('Failed to create product'));
+              }}
+              className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
+            >
+              Create Product
+            </button>
+          </div>
+        }
+      >
+        <ProductDetail 
+          product={newProduct as Product} 
+          edits={newProduct} 
+          onChange={(k, v) => setNewProduct(e => ({...e, [k]: v}))} 
+        />
       </AdminDrawer>
     </div>
   );
@@ -368,7 +417,7 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
             key={i}
             className={`relative aspect-[4/5] overflow-hidden border ${i === 0 ? "border-ink" : "border-line"}`}
           >
-            <img src={src} alt="" className="h-full w-full object-cover" />
+            <img src={src || "https://placehold.co/400x500/f5f3ee/0d0d0d?text=No+Image"} alt="" className="h-full w-full object-cover" />
             {i === 0 && (
               <span className="absolute left-1 top-1 bg-ink px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-paper">
                 Cover
@@ -456,24 +505,26 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
 
       {tab === "seo" && (
         <div className="space-y-4">
-          <FieldRow label="Meta title" defaultValue={`${product.name} — Ink Studio`} />
+          <FieldRow label="Meta title" value={`${edits.name ?? product.name ?? ''} — Ink Studio`} onChange={() => {}} />
           <FieldRow
             label="Meta description"
-            defaultValue={`${product.name} — heavyweight cotton, ${product.collection.toLowerCase()}.`}
+            value={`${edits.name ?? product.name ?? ''} — heavyweight cotton.`}
+            onChange={() => {}}
           />
           <FieldRow
             label="URL slug"
             prefix="/p/"
-            defaultValue={product.sku.toLowerCase().replace(/[^a-z0-9]+/g, "-")}
+            value={(edits.sku ?? product.sku ?? '').toLowerCase().replace(/[^a-z0-9]+/g, "-")}
+            onChange={() => {}}
           />
           <div className="border border-line bg-fog/40 p-3">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-mute">Preview</p>
-            <p className="mt-1 text-[14px] text-ink">{product.name} — Ink Studio</p>
+            <p className="mt-1 text-[14px] text-ink">{edits.name ?? product.name ?? 'Untitled'} — Ink Studio</p>
             <p className="font-mono text-[11px] text-mute">
-              inkstudio.cc/p/{product.sku.toLowerCase()}
+              inkstudio.cc/p/{(edits.sku ?? product.sku ?? 'slug').toLowerCase()}
             </p>
             <p className="mt-1 text-[12px] text-mute">
-              {product.name} — heavyweight cotton, {product.collection.toLowerCase()}.
+              {edits.name ?? product.name ?? 'Untitled'} — heavyweight cotton.
             </p>
           </div>
         </div>

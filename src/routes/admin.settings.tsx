@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, createContext, useContext } from "react";
 import { toast } from "sonner";
 import { Bell, CreditCard, Globe, Palette, Search, ShieldCheck, Store, Truck } from "lucide-react";
 import { SectionHeader, Panel } from "@/components/admin/section-header";
@@ -25,17 +25,50 @@ const TABS = [
   { id: "domain", label: "Domain", icon: Globe },
 ] as const;
 
+const SettingsContext = createContext<any>(null);
+
 function SettingsPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("branding");
+  const [settings, setSettings] = useState({
+    brandName: "Ink Studio",
+    tagline: "Heavyweight cotton, custom prints, anime drops.",
+    notifications: {
+      newOrders: true,
+      lowStock: true,
+      studioRequests: true,
+      refundRequests: true,
+      dailyDigest: false,
+      weeklyPerformance: true,
+    },
+    seo: {
+      metaTitle: "{page} — Ink Studio",
+      metaDesc: "Heavyweight cotton, custom prints, and editorial anime drops from the Ink Studio."
+    },
+    theme: {
+      aesthetic: "Paper & Ink",
+      motionIntensity: 2
+    },
+    security: {
+      twoFactor: true,
+      sessionTimeout: true,
+      auditLog: true
+    }
+  });
+
   return (
-    <div className="space-y-6">
+    <SettingsContext.Provider value={[settings, setSettings]}>
+      <div className="space-y-6">
       <SectionHeader
         eyebrow="Workspace"
         title="Settings"
         description="Configure branding, fulfillment, payments, SEO, and team access."
         actions={
           <button 
-            onClick={() => toast.success("Settings saved successfully")}
+          <button 
+            onClick={() => {
+              toast.success("Settings saved successfully");
+              console.log("Saving settings to API:", settings);
+            }}
             className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
           >
             Save changes
@@ -76,16 +109,19 @@ function SettingsPage() {
         </div>
       </div>
     </div>
+    </SettingsContext.Provider>
   );
 }
 
 function BrandingPanel() {
+  const [settings, setSettings] = useContext(SettingsContext);
   return (
     <Panel title="Brand identity">
       <div className="space-y-5">
         <Row label="Brand name" hint="Used in emails, invoices and meta tags.">
           <input
-            defaultValue="Ink Studio"
+            value={settings.brandName}
+            onChange={e => setSettings({...settings, brandName: e.target.value})}
             className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink"
           />
         </Row>
@@ -111,7 +147,8 @@ function BrandingPanel() {
         </Row>
         <Row label="Tagline">
           <input
-            defaultValue="Heavyweight cotton, custom prints, anime drops."
+            value={settings.tagline}
+            onChange={e => setSettings({...settings, tagline: e.target.value})}
             className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink"
           />
         </Row>
@@ -121,18 +158,25 @@ function BrandingPanel() {
 }
 
 function NotificationsPanel() {
+  const [settings, setSettings] = useContext(SettingsContext);
   return (
     <Panel title="Notification preferences">
       <div className="space-y-3">
         {[
-          { label: "New orders", on: true, hint: "Email + push for every new order." },
-          { label: "Low stock alerts", on: true, hint: "When inventory drops below threshold." },
-          { label: "Studio requests", on: true, hint: "VIP and rush priority only." },
-          { label: "Refund requests", on: true },
-          { label: "Daily digest", on: false, hint: "9am IST summary email." },
-          { label: "Weekly performance", on: true },
+          { key: "newOrders", label: "New orders", hint: "Email + push for every new order." },
+          { key: "lowStock", label: "Low stock alerts", hint: "When inventory drops below threshold." },
+          { key: "studioRequests", label: "Studio requests", hint: "VIP and rush priority only." },
+          { key: "refundRequests", label: "Refund requests" },
+          { key: "dailyDigest", label: "Daily digest", hint: "9am IST summary email." },
+          { key: "weeklyPerformance", label: "Weekly performance" },
         ].map((n) => (
-          <ToggleRow key={n.label} {...n} />
+          <ToggleRow 
+            key={n.label} 
+            label={n.label} 
+            hint={n.hint} 
+            on={settings.notifications[n.key]} 
+            onChange={(v) => setSettings({...settings, notifications: {...settings.notifications, [n.key]: v}})}
+          />
         ))}
       </div>
     </Panel>
@@ -182,19 +226,22 @@ function PaymentsPanel() {
 }
 
 function SeoPanel() {
+  const [settings, setSettings] = useContext(SettingsContext);
   return (
     <Panel title="SEO defaults">
       <div className="space-y-4">
         <Row label="Meta title template" hint="Use {page} for the route title.">
           <input
-            defaultValue="{page} — Ink Studio"
+            value={settings.seo.metaTitle}
+            onChange={e => setSettings({...settings, seo: {...settings.seo, metaTitle: e.target.value}})}
             className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink"
           />
         </Row>
         <Row label="Default description">
           <textarea
             rows={2}
-            defaultValue="Heavyweight cotton, custom prints, and editorial anime drops from the Ink Studio."
+            value={settings.seo.metaDesc}
+            onChange={e => setSettings({...settings, seo: {...settings.seo, metaDesc: e.target.value}})}
             className="w-full resize-none border border-line bg-paper p-3 text-[13px] outline-none focus:border-ink"
           />
         </Row>
@@ -214,27 +261,34 @@ function SeoPanel() {
 }
 
 function ThemePanel() {
+  const [settings, setSettings] = useContext(SettingsContext);
   return (
     <Panel title="Theme customization">
       <div className="space-y-4">
         <Row label="Aesthetic" hint="Editorial paper-and-ink identity.">
           <div className="inline-flex border border-line">
-            <button className="bg-ink px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-paper">
-              Paper & Ink
-            </button>
-            <button className="px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-mute">
-              Monochrome
-            </button>
-            <button className="px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-mute">
-              High-contrast
-            </button>
+            {["Paper & Ink", "Monochrome", "High-contrast"].map(a => (
+              <button 
+                key={a}
+                onClick={() => setSettings({...settings, theme: {...settings.theme, aesthetic: a}})}
+                className={`px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] ${settings.theme.aesthetic === a ? "bg-ink text-paper" : "text-mute"}`}
+              >
+                {a}
+              </button>
+            ))}
           </div>
         </Row>
         <Row label="Typography" hint="Display / body pair.">
           <p className="text-[13px]">Editorial Serif × IBM Plex Sans</p>
         </Row>
         <Row label="Motion intensity">
-          <input type="range" min={0} max={3} defaultValue={2} className="w-full accent-ink" />
+          <input 
+            type="range" 
+            min={0} max={3} 
+            value={settings.theme.motionIntensity} 
+            onChange={e => setSettings({...settings, theme: {...settings.theme, motionIntensity: parseInt(e.target.value)}})}
+            className="w-full accent-ink" 
+          />
         </Row>
       </div>
     </Panel>
@@ -242,16 +296,28 @@ function ThemePanel() {
 }
 
 function SecurityPanel() {
+  const [settings, setSettings] = useContext(SettingsContext);
   return (
     <Panel title="Security & access">
       <div className="space-y-3">
-        <ToggleRow label="Two-factor authentication" on={true} hint="Required for all admins." />
+        <ToggleRow 
+          label="Two-factor authentication" 
+          on={settings.security.twoFactor} 
+          onChange={(v) => setSettings({...settings, security: {...settings.security, twoFactor: v}})}
+          hint="Required for all admins." 
+        />
         <ToggleRow
           label="Session timeout"
-          on={true}
+          on={settings.security.sessionTimeout}
+          onChange={(v) => setSettings({...settings, security: {...settings.security, sessionTimeout: v}})}
           hint="Auto sign-out after 8 hours of inactivity."
         />
-        <ToggleRow label="Audit log" on={true} hint="Records all admin actions." />
+        <ToggleRow 
+          label="Audit log" 
+          on={settings.security.auditLog}
+          onChange={(v) => setSettings({...settings, security: {...settings.security, auditLog: v}})}
+          hint="Records all admin actions." 
+        />
       </div>
     </Panel>
   );
@@ -296,8 +362,13 @@ function Row({
   );
 }
 
-function ToggleRow({ label, on, hint }: { label: string; on: boolean; hint?: string }) {
-  const [v, setV] = useState(on);
+function ToggleRow({ label, on, hint, onChange }: { label: string; on?: boolean; hint?: string; onChange?: (v: boolean) => void }) {
+  const [internalV, setInternalV] = useState(on ?? false);
+  const v = on !== undefined ? on : internalV;
+  const handleChange = () => {
+    if (onChange) onChange(!v);
+    else setInternalV(!v);
+  };
   return (
     <div className="flex items-start justify-between gap-3 border-b border-line/60 py-2 last:border-0">
       <div>
@@ -308,7 +379,7 @@ function ToggleRow({ label, on, hint }: { label: string; on: boolean; hint?: str
         type="button"
         role="switch"
         aria-checked={v}
-        onClick={() => setV(!v)}
+        onClick={handleChange}
         className={`relative mt-1 h-5 w-9 rounded-full transition ${v ? "bg-ink" : "bg-line"}`}
       >
         <span

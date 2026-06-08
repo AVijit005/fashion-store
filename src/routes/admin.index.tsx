@@ -36,6 +36,7 @@ function OverviewPage() {
   const { data: activityData = [] } = useQuery<any[]>({
     queryKey: ["admin-activity"],
     queryFn: () => apiClient.get("/admin/dashboard/activity"),
+    refetchInterval: 5000,
   });
   const { data: products = [] } = useQuery<any[]>({
     queryKey: ["admin-products"],
