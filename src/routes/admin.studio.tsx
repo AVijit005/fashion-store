@@ -4,7 +4,7 @@ import { Check, Crown, MessageCircle, Search, Sparkles, X, Zap } from "lucide-re
 import { SectionHeader, Panel } from "@/components/admin/section-header";
 import { StatusChip, studioTone } from "@/components/admin/status-chip";
 import { AdminDrawer } from "@/components/admin/drawer";
-import { studioRequests as ALL, type StudioRequest } from "@/lib/admin/data";
+import { type StudioRequest } from "@/lib/admin/data";
 import { longDate, relTime } from "@/lib/admin/format";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
@@ -45,7 +45,7 @@ function StudioPage() {
     queryKey: ["admin-studio"],
     queryFn: () => apiClient.get("/admin/studio"),
   });
-  const baseList = apiStudio.length > 0 ? apiStudio : ALL;
+  const baseList = apiStudio;
 
   const list = useMemo(
     () =>

@@ -4,15 +4,6 @@ import { KpiCard } from "@/components/admin/kpi-card";
 import { Panel, SectionHeader } from "@/components/admin/section-header";
 import { AreaChart, BarRow } from "@/components/admin/charts";
 import { StatusChip, orderTone } from "@/components/admin/status-chip";
-import {
-  kpis as mockKpis,
-  liveActivity as mockActivity,
-  orders,
-  products as mockProducts,
-  revenueSeries,
-  topCategories,
-  trafficSources,
-} from "@/lib/admin/data";
 import { compactInr, relTime } from "@/lib/admin/format";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
@@ -47,17 +38,17 @@ function OverviewPage() {
     queryFn: () => apiClient.get("/admin/orders"),
   });
 
-  const recent = (apiOrders.length > 0 ? apiOrders : orders).slice(0, 6);
-  const lowStock = (products.length > 0 ? products : mockProducts).filter((p: any) => p.stock > 0 && p.stock <= p.lowStockAt).slice(0, 5);
-  const trending = [...(products.length > 0 ? products : mockProducts)].sort((a: any, b: any) => (b.views7d || 0) - (a.views7d || 0)).slice(0, 5);
-  const liveActivity = activityData.length > 0 ? activityData : mockActivity;
+  const recent = apiOrders.slice(0, 6);
+  const lowStock = products.filter((p: any) => p.stock > 0 && p.stock <= p.lowStockAt).slice(0, 5);
+  const trending = [...products].sort((a: any, b: any) => (b.views7d || 0) - (a.views7d || 0)).slice(0, 5);
+  const liveActivity = activityData;
 
   const adminName = useAuthStore((s) => s.user?.email?.split('@')[0] ?? 'Admin');
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   // Dynamic calculations from real orders
-  const validOrders = apiOrders.length > 0 ? apiOrders : orders;
+  const validOrders = apiOrders;
   const realRevenue = validOrders.reduce((s, o) => s + (o.total || 0), 0);
   const realOrders = validOrders.length;
   const realAov = realOrders > 0 ? Math.round(realRevenue / realOrders) : 0;
@@ -74,7 +65,7 @@ function OverviewPage() {
     }
     return acc;
   }, []);
-  const chartSeries = dynamicSeries.length > 0 ? dynamicSeries.reverse() : revenueSeries;
+  const chartSeries = dynamicSeries;
 
   return (
     <div className="space-y-6">
@@ -97,10 +88,10 @@ function OverviewPage() {
       {/* KPI grid */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: 'Revenue', value: compactInr(realRevenue), delta: 0, spark: mockKpis[0].spark, hint: "Last 14 days" },
-          { label: 'Orders', value: String(realOrders), delta: 0, spark: mockKpis[1].spark, hint: "Last 14 days" },
-          { label: 'AOV', value: compactInr(realAov), delta: 0, spark: mockKpis[2].spark, hint: "Last 14 days" },
-          ...mockKpis.slice(3)
+          { label: 'Revenue', value: compactInr(realRevenue), delta: 0, hint: "Last 14 days" },
+          { label: 'Orders', value: String(realOrders), delta: 0, hint: "Last 14 days" },
+          { label: 'AOV', value: compactInr(realAov), delta: 0, hint: "Last 14 days" },
+          { label: 'Conversion', value: "—", delta: 0, hint: "Not enough data" }
         ].map((k: any) => (
           <KpiCard key={k.label} {...k} />
         ))}
@@ -151,22 +142,20 @@ function OverviewPage() {
             </div>
           </div>
           <div className="mt-4">
-            <AreaChart data={chartSeries} yKey="revenue" height={220} />
+            {chartSeries.length > 0 ? (
+               <AreaChart data={chartSeries} yKey="revenue" height={220} />
+            ) : (
+               <div className="flex h-[220px] items-center justify-center border border-dashed border-line bg-fog/20 text-[12px] text-mute">
+                 No revenue data available for the selected period
+               </div>
+            )}
           </div>
         </Panel>
 
         <Panel title="Traffic · Sources">
-          <BarRow
-            rows={trafficSources.map((s) => ({
-              name: s.source,
-              value: s.visits,
-              sub: `${(s.visits || 0).toLocaleString("en-IN")} · ${s.pct}%`,
-            }))}
-          />
-          <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-4">
-            <Stat label="Visitors" value="48,460" />
-            <Stat label="Sessions" value="62,180" />
-            <Stat label="Bounce" value="38%" />
+          <div className="flex flex-col items-center justify-center py-12 text-mute">
+            <Activity className="mb-4 h-8 w-8 opacity-20" />
+            <p className="text-[13px]">Analytics tracking not yet connected.</p>
           </div>
         </Panel>
       </div>
@@ -227,6 +216,11 @@ function OverviewPage() {
             </span>
           }
         >
+          {liveActivity.length === 0 ? (
+             <div className="flex flex-col items-center justify-center py-12 text-mute">
+               <p className="text-[13px]">No recent activity.</p>
+             </div>
+          ) : (
           <ol className="space-y-3">
             {liveActivity.map((a) => (
               <li
@@ -247,19 +241,16 @@ function OverviewPage() {
               </li>
             ))}
           </ol>
+          )}
         </Panel>
       </div>
 
       {/* Categories + Low stock + Trending */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         <Panel title="Top categories">
-          <BarRow
-            rows={topCategories.map((c) => ({
-              name: c.name,
-              value: c.revenue,
-              sub: `${compactInr(c.revenue)} · ${c.units} units`,
-            }))}
-          />
+          <div className="flex flex-col items-center justify-center py-12 text-mute">
+            <p className="text-[13px]">Not enough order data to categorize.</p>
+          </div>
         </Panel>
 
         <Panel
@@ -329,24 +320,6 @@ function OverviewPage() {
           </ul>
         </Panel>
       </div>
-
-      {/* Bottom strip */}
-      <Panel title="System">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <Stat label="Uptime" value="99.98%" />
-          <Stat label="Latency p95" value="184ms" />
-          <Stat label="Fulfillment SLA" value="98.4%" />
-          <Stat
-            label="Active drops"
-            value="1"
-            hint={
-              <span className="inline-flex items-center gap-1 font-mono text-[10px] text-mute">
-                <Activity className="h-3 w-3" /> Live
-              </span>
-            }
-          />
-        </div>
-      </Panel>
     </div>
   );
 }

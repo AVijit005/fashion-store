@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarClock, Eye, Plus, Star } from "lucide-react";
 import { SectionHeader, Panel } from "@/components/admin/section-header";
 import { StatusChip } from "@/components/admin/status-chip";
-import { drops as ALL, type Drop } from "@/lib/admin/data";
+import { type Drop } from "@/lib/admin/data";
 import { compactInr, longDate } from "@/lib/admin/format";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";

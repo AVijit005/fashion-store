@@ -5,7 +5,7 @@ import { SectionHeader, Panel } from "@/components/admin/section-header";
 import { StatusChip } from "@/components/admin/status-chip";
 import { AdminDrawer } from "@/components/admin/drawer";
 import { exportToCSV } from "@/lib/admin/export";
-import { customers as ALL, type Customer } from "@/lib/admin/data";
+import { type Customer } from "@/lib/admin/data";
 import { compactInr, longDate, relTime } from "@/lib/admin/format";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
