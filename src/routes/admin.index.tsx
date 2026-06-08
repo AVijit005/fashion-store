@@ -56,6 +56,26 @@ function OverviewPage() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
+  // Dynamic calculations from real orders
+  const validOrders = apiOrders.length > 0 ? apiOrders : orders;
+  const realRevenue = validOrders.reduce((s, o) => s + (o.total || 0), 0);
+  const realOrders = validOrders.length;
+  const realAov = realOrders > 0 ? Math.round(realRevenue / realOrders) : 0;
+
+  // Build a basic dynamic revenue series from real orders for the chart
+  const dynamicSeries = validOrders.reduce((acc: any[], order) => {
+    const date = new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const existing = acc.find(a => a.date === date);
+    if (existing) {
+      existing.revenue += (order.total || 0);
+      existing.orders += 1;
+    } else {
+      acc.push({ date, revenue: (order.total || 0), orders: 1 });
+    }
+    return acc;
+  }, []);
+  const chartSeries = dynamicSeries.length > 0 ? dynamicSeries.reverse() : revenueSeries;
+
   return (
     <div className="space-y-6">
       <SectionHeader
@@ -76,11 +96,12 @@ function OverviewPage() {
 
       {/* KPI grid */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {(kpisData ? [
-          { label: 'Revenue', value: kpisData.totalRevenue ? '₹' + (kpisData.totalRevenue / 100000).toFixed(2) + 'L' : '₹0', delta: 0, spark: mockKpis[0].spark, hint: "Last 14 days" },
-          { label: 'Orders', value: String(kpisData.totalOrders ?? 0), delta: 0, spark: mockKpis[1].spark, hint: "Last 14 days" },
-          ...mockKpis.slice(2)
-        ] : mockKpis).map((k: any) => (
+        {[
+          { label: 'Revenue', value: compactInr(realRevenue), delta: 0, spark: mockKpis[0].spark, hint: "Last 14 days" },
+          { label: 'Orders', value: String(realOrders), delta: 0, spark: mockKpis[1].spark, hint: "Last 14 days" },
+          { label: 'AOV', value: compactInr(realAov), delta: 0, spark: mockKpis[2].spark, hint: "Last 14 days" },
+          ...mockKpis.slice(3)
+        ].map((k: any) => (
           <KpiCard key={k.label} {...k} />
         ))}
       </div>
@@ -106,16 +127,16 @@ function OverviewPage() {
                 Total revenue
               </p>
               <p className="mt-1 font-display text-4xl tabular-nums">
-                {compactInr(revenueSeries.reduce((s, d) => s + d.revenue, 0))}
+                {compactInr(chartSeries.reduce((s, d) => s + d.revenue, 0))}
               </p>
               <p className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] tabular-nums text-ink">
-                <ArrowUpRight className="h-3 w-3" /> 18.4% vs last 30
+                <ArrowUpRight className="h-3 w-3" /> Based on live data
               </p>
             </div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-right">
               <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">Orders</p>
               <p className="font-mono text-[12px] tabular-nums">
-                {revenueSeries.reduce((s, d) => s + d.orders, 0)}
+                {chartSeries.reduce((s, d) => s + d.orders, 0)}
               </p>
               <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
                 Avg / day
@@ -123,14 +144,14 @@ function OverviewPage() {
               <p className="font-mono text-[12px] tabular-nums">
                 {compactInr(
                   Math.round(
-                    revenueSeries.reduce((s, d) => s + d.revenue, 0) / (revenueSeries.length || 1),
+                    chartSeries.reduce((s, d) => s + d.revenue, 0) / (chartSeries.length || 1),
                   ),
                 )}
               </p>
             </div>
           </div>
           <div className="mt-4">
-            <AreaChart data={revenueSeries} yKey="revenue" height={220} />
+            <AreaChart data={chartSeries} yKey="revenue" height={220} />
           </div>
         </Panel>
 
