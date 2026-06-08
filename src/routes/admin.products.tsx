@@ -11,6 +11,7 @@ import {
   Plus,
   Search,
   Star,
+  X,
 } from "lucide-react";
 import { SectionHeader, Panel } from "@/components/admin/section-header";
 import { StatusChip } from "@/components/admin/status-chip";
@@ -171,7 +172,7 @@ function ProductsPage() {
             </thead>
             <tbody>
               {list.slice((page - 1) * pageSize, page * pageSize).map((p) => {
-                const low = p.stock > 0 && p.stock <= p.lowStockAt;
+                const low = p.stock > 0 && p.stock <= (p.lowStockAt || 0);
                 const oos = p.stock === 0 && p.status === "active";
                 return (
                   <tr
@@ -279,13 +280,15 @@ function ProductsPage() {
                 <div className="absolute left-2 top-2 flex flex-col gap-1">
                   <StatusChip label={p.status} tone={STATUS_TONE[p.status]} />
                   {p.featured && <StatusChip label="Featured" tone="warn" />}
+                  {oos && <StatusChip label="Sold out" tone="negative" />}
+                  {low && <StatusChip label="Low stock" tone="warn" />}
                 </div>
               </div>
               <div className="p-3">
                 <p className="truncate text-[13px] text-ink">{p.name}</p>
                 <div className="mt-1 flex items-baseline justify-between font-mono text-[11px]">
                   <span className="tabular-nums text-ink">{inr(p.price)}</span>
-                  <span className="tabular-nums text-mute">{p.stock} stock</span>
+                  <span className={`tabular-nums ${oos ? "text-accent" : low ? "text-accent" : "text-mute"}`}>{p.stock} stock</span>
                 </div>
               </div>
             </button>
@@ -415,7 +418,7 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-3 gap-2">
-        {[product.image, product.image, product.image].map((src, i) => (
+        {((edits as any).images || [product.image].filter(Boolean)).slice(0, 3).map((src: string, i: number) => (
           <div
             key={i}
             className={`relative aspect-[4/5] overflow-hidden border ${i === 0 ? "border-ink" : "border-line"}`}
@@ -446,19 +449,19 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
         <div className="space-y-4">
           <FieldRow label="Name" value={edits.name ?? product.name} onChange={e => onChange("name", e.target.value)} />
           <div className="grid grid-cols-2 gap-3">
-            <FieldRow label="Price" prefix="₹" type="number" value={edits.price ?? product.price} onChange={e => onChange("price", Number(e.target.value))} />
+            <FieldRow label="Price" prefix="₹" type="number" value={edits.price ?? product.price} onChange={e => onChange("price", e.target.value ? Number(e.target.value) : 0)} />
             <FieldRow
               label="Compare at"
               prefix="₹"
               type="number"
               value={edits.compareAt ?? product.compareAt ?? ""}
-              onChange={e => onChange("compareAt", Number(e.target.value) || undefined)}
+              onChange={e => onChange("compareAt", e.target.value ? Number(e.target.value) : undefined)}
               placeholder="Optional"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <FieldRow label="SKU" value={edits.sku ?? product.sku} onChange={e => onChange("sku", e.target.value)} />
-            <FieldRow label="Stock" type="number" value={edits.stock ?? product.stock} onChange={e => onChange("stock", Number(e.target.value))} />
+            <FieldRow label="Stock" type="number" value={edits.stock ?? product.stock} onChange={e => onChange("stock", e.target.value ? Number(e.target.value) : 0)} />
           </div>
           <ToggleRow label="Visible on storefront" checked={edits.visible ?? product.visible} onChange={v => onChange("visible", v)} />
           <ToggleRow
@@ -472,62 +475,80 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
 
       {tab === "media" && (
         <div className="grid grid-cols-3 gap-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <button
-              key={i}
-              className="flex aspect-[4/5] items-center justify-center border border-dashed border-line text-mute transition hover:border-ink hover:text-ink"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
+          {((edits as any).images || [product.image].filter(Boolean)).map((src: string, i: number) => (
+             <div key={i} className="relative aspect-[4/5] overflow-hidden border border-line group">
+               <img src={src} alt="" className="h-full w-full object-cover" />
+               <button onClick={() => onChange("images", ((edits as any).images || [product.image]).filter((_: any, idx: number) => idx !== i))} className="absolute top-1 right-1 bg-paper/90 p-1 text-accent opacity-0 transition group-hover:opacity-100 hover:bg-paper">
+                 <X className="h-3 w-3" />
+               </button>
+             </div>
           ))}
+          <label className="flex aspect-[4/5] cursor-pointer items-center justify-center border border-dashed border-line text-mute transition hover:border-ink hover:text-ink">
+            <Plus className="h-5 w-5" />
+            <input type="file" className="hidden" accept="image/*" onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                 const url = URL.createObjectURL(file);
+                 onChange("images", [...((edits as any).images || [product.image].filter(Boolean)), url]);
+                 if (!product.image && !(edits as any).image) onChange("image", url);
+              }
+            }} />
+          </label>
         </div>
       )}
 
-      {tab === "variants" && (
-        <div className="space-y-2">
-          {[
-            { size: "S", color: "Bone", stock: 24, sku: `${product.sku}-S-BNE` },
-            { size: "M", color: "Bone", stock: 48, sku: `${product.sku}-M-BNE` },
-            { size: "L", color: "Bone", stock: 38, sku: `${product.sku}-L-BNE` },
-            { size: "XL", color: "Bone", stock: 32, sku: `${product.sku}-XL-BNE` },
-          ].map((v) => (
+      {tab === "variants" && (() => {
+        const variants = (edits as any).variantsData || [
+            { size: "S", color: "Bone", stock: 24, sku: `${product.sku || 'SKU'}-S-BNE` },
+            { size: "M", color: "Bone", stock: 48, sku: `${product.sku || 'SKU'}-M-BNE` },
+            { size: "L", color: "Bone", stock: 38, sku: `${product.sku || 'SKU'}-L-BNE` },
+            { size: "XL", color: "Bone", stock: 32, sku: `${product.sku || 'SKU'}-XL-BNE` },
+        ];
+        return (
+        <div className="space-y-3">
+          {variants.map((v: any, i: number) => (
             <div
-              key={v.sku}
-              className="grid grid-cols-[1fr_1fr_80px_120px] items-center gap-3 border border-line bg-paper p-3 text-[12px]"
+              key={i}
+              className="grid grid-cols-[1fr_1fr_80px_120px_auto] items-center gap-3 border border-line bg-paper p-3 text-[12px]"
             >
-              <p className="text-ink">{v.size}</p>
-              <p className="text-mute">{v.color}</p>
-              <p className="text-right font-mono tabular-nums">{v.stock}</p>
-              <p className="text-right font-mono text-[10px] uppercase tracking-[0.18em] text-mute">
-                {v.sku}
-              </p>
+              <input value={v.size} onChange={(e) => { const n = [...variants]; n[i].size = e.target.value; onChange("variantsData", n); }} className="w-full bg-transparent outline-none" placeholder="Size" />
+              <input value={v.color} onChange={(e) => { const n = [...variants]; n[i].color = e.target.value; onChange("variantsData", n); }} className="w-full bg-transparent outline-none text-mute" placeholder="Color" />
+              <input type="number" value={v.stock} onChange={(e) => { const n = [...variants]; n[i].stock = e.target.value ? Number(e.target.value) : 0; onChange("variantsData", n); }} className="w-full bg-transparent outline-none text-right font-mono tabular-nums" />
+              <input value={v.sku} onChange={(e) => { const n = [...variants]; n[i].sku = e.target.value; onChange("variantsData", n); }} className="w-full bg-transparent outline-none text-right font-mono text-[10px] uppercase tracking-[0.18em] text-mute" placeholder="SKU" />
+              <button onClick={() => onChange("variantsData", variants.filter((_: any, idx: number) => idx !== i))} className="text-accent hover:opacity-70"><X className="h-3 w-3"/></button>
             </div>
           ))}
+          <button 
+            onClick={() => onChange("variantsData", [...variants, { size: "", color: "", stock: 0, sku: "" }])}
+            className="flex w-full items-center justify-center gap-1.5 border border-dashed border-line bg-fog/20 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add variant
+          </button>
         </div>
-      )}
+      )})()}
 
       {tab === "seo" && (
         <div className="space-y-4">
-          <FieldRow label="Meta title" value={`${edits.name ?? product.name ?? ''} — Ink Studio`} onChange={() => {}} />
+          <FieldRow label="Meta title" value={(edits as any).metaTitle ?? `${edits.name ?? product.name ?? ''} — Ink Studio`} onChange={(e) => onChange("metaTitle", e.target.value)} />
           <FieldRow
             label="Meta description"
-            value={`${edits.name ?? product.name ?? ''} — heavyweight cotton.`}
-            onChange={() => {}}
+            value={(edits as any).metaDesc ?? `${edits.name ?? product.name ?? ''} — heavyweight cotton.`}
+            onChange={(e) => onChange("metaDesc", e.target.value)}
           />
           <FieldRow
             label="URL slug"
             prefix="/p/"
-            value={(edits.sku ?? product.sku ?? '').toLowerCase().replace(/[^a-z0-9]+/g, "-")}
-            onChange={() => {}}
+            value={(edits as any).slug ?? (edits.sku ?? product.sku ?? '').toLowerCase().replace(/[^a-z0-9]+/g, "-")}
+            onChange={(e) => onChange("slug", e.target.value)}
           />
           <div className="border border-line bg-fog/40 p-3">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-mute">Preview</p>
-            <p className="mt-1 text-[14px] text-ink">{edits.name ?? product.name ?? 'Untitled'} — Ink Studio</p>
+            <p className="mt-1 text-[14px] text-ink">{(edits as any).metaTitle ?? `${edits.name ?? product.name ?? 'Untitled'} — Ink Studio`}</p>
             <p className="font-mono text-[11px] text-mute">
-              inkstudio.cc/p/{(edits.sku ?? product.sku ?? 'slug').toLowerCase()}
+              inkstudio.cc/p/{(edits as any).slug ?? (edits.sku ?? product.sku ?? 'slug').toLowerCase().replace(/[^a-z0-9]+/g, "-")}
             </p>
             <p className="mt-1 text-[12px] text-mute">
-              {edits.name ?? product.name ?? 'Untitled'} — heavyweight cotton.
+              {(edits as any).metaDesc ?? `${edits.name ?? product.name ?? 'Untitled'} — heavyweight cotton.`}
             </p>
           </div>
         </div>

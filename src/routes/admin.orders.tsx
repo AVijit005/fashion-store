@@ -64,7 +64,8 @@ function OrdersPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [active, setActive] = useState<Order | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [manualOrder, setManualOrder] = useState({ email: '', items: '', total: '' });
+  const [manualOrder, setManualOrder] = useState({ email: '', items: [] as { id: string, qty: number }[], total: 0 });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
@@ -77,9 +78,12 @@ function OrdersPage() {
     },
   });
 
+  useEffect(() => {
+    setPage(1);
+  }, [status, q]);
+
   const list = useMemo(
     () => {
-      setPage(1); // Reset page on filter change
       return ALL_ORDERS.filter((o) => {
         if (status !== "all" && o.status !== status) return false;
         if (q) {
@@ -356,22 +360,29 @@ function OrdersPage() {
         footer={
           <div className="flex justify-end gap-2">
             <button 
-              onClick={() => setIsCreating(false)}
+              onClick={() => {
+                setIsCreating(false);
+                setManualOrder({ email: '', items: [], total: 0 });
+              }}
               className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
             >
               Cancel
             </button>
             <button 
+              disabled={isSubmitting}
               onClick={() => {
+                setIsSubmitting(true);
                 apiClient.post(`/admin/orders`, manualOrder).then(() => {
                   toast.success('Order created');
                   queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
                   setIsCreating(false);
-                }).catch(() => toast.error('Failed to create manual order'));
+                  setManualOrder({ email: '', items: [], total: 0 });
+                }).catch(() => toast.error('Failed to create manual order'))
+                  .finally(() => setIsSubmitting(false));
               }}
-              className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
+              className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
             >
-              Submit Order
+              {isSubmitting ? "Submitting..." : "Submit Order"}
             </button>
           </div>
         }
@@ -386,19 +397,25 @@ function OrdersPage() {
             />
           </div>
           <div>
-            <label className="text-[12px] text-mute">Product IDs (comma separated)</label>
-            <input 
-              value={manualOrder.items} 
-              onChange={e => setManualOrder(m => ({...m, items: e.target.value}))}
-              className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" 
-            />
+            <label className="text-[12px] text-mute">Items</label>
+            <div className="space-y-2 mt-1">
+              {manualOrder.items.map((item: any, i: number) => (
+                <div key={i} className="flex gap-2">
+                  <input value={item.id} onChange={e => { const n = [...manualOrder.items]; n[i].id = e.target.value; setManualOrder(m => ({...m, items: n}))}} placeholder="Product ID / SKU" className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" />
+                  <input type="number" value={item.qty} onChange={e => { const n = [...manualOrder.items]; n[i].qty = Number(e.target.value); setManualOrder(m => ({...m, items: n}))}} placeholder="Qty" className="h-9 w-24 border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums" />
+                  <button onClick={() => setManualOrder(m => ({...m, items: m.items.filter((_, idx) => idx !== i)}))} className="text-accent hover:opacity-70 px-2">✕</button>
+                </div>
+              ))}
+              <button onClick={() => setManualOrder(m => ({...m, items: [...m.items, { id: "", qty: 1 }]}))} className="press border border-dashed border-line bg-fog/20 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink w-full">+ Add Item</button>
+            </div>
           </div>
           <div>
             <label className="text-[12px] text-mute">Total Amount</label>
             <input 
+              type="number"
               value={manualOrder.total} 
-              onChange={e => setManualOrder(m => ({...m, total: e.target.value}))}
-              className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" 
+              onChange={e => setManualOrder(m => ({...m, total: Number(e.target.value)}))}
+              className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums" 
             />
           </div>
         </div>
@@ -450,10 +467,10 @@ function OrderDetail({ order }: { order: Order }) {
       {/* Items */}
       <section>
         <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-mute">
-          Items · {order.items.length}
+          Items · {order.items?.length || 0}
         </p>
         <ul className="mt-3 divide-y divide-line/60 border border-line">
-          {order.items.map((it, idx) => (
+          {(order.items || []).map((it, idx) => (
             <li key={idx} className="flex gap-3 p-3">
               <img src={it.image} alt="" className="h-14 w-12 object-cover" />
               <div className="flex-1">
@@ -472,8 +489,8 @@ function OrderDetail({ order }: { order: Order }) {
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="border border-line p-4">
           <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-mute">Customer</p>
-          <p className="mt-2 text-[14px] text-ink">{order.customer.name}</p>
-          <p className="text-[12px] text-mute">{order.customer.email}</p>
+          <p className="mt-2 text-[14px] text-ink">{order.customer?.name}</p>
+          <p className="text-[12px] text-mute">{order.customer?.email}</p>
           <p className="mt-3 text-[12px] text-mute">
             Ships to <span className="text-ink">{order.city}, IN</span>
           </p>

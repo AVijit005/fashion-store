@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, createContext, useContext } from "react";
+import { useState, createContext, useContext, useEffect } from "react";
 import { toast } from "sonner";
 import { Bell, CreditCard, Globe, Palette, Search, ShieldCheck, Store, Truck } from "lucide-react";
 import { SectionHeader, Panel } from "@/components/admin/section-header";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
 
 export const Route = createFileRoute("/admin/settings")({
   head: () => ({
@@ -27,33 +29,79 @@ const TABS = [
 
 const SettingsContext = createContext<any>(null);
 
+const DEFAULT_SETTINGS = {
+  brandName: "Ink Studio",
+  tagline: "Heavyweight cotton, custom prints, anime drops.",
+  notifications: {
+    newOrders: true,
+    lowStock: true,
+    studioRequests: true,
+    refundRequests: true,
+    dailyDigest: false,
+    weeklyPerformance: true,
+  },
+  shipping: [
+    { zone: "India · Standard", rate: "Free over ₹999 · ₹49 below", days: "3–5 days" },
+    { zone: "India · Express", rate: "₹149 flat", days: "1–2 days" },
+    { zone: "International · Asia", rate: "₹899 flat", days: "7–10 days" },
+    { zone: "International · Worldwide", rate: "₹1,499 flat", days: "10–14 days" },
+  ],
+  payments: [
+    { id: "upi", label: "UPI · Razorpay", on: true, hint: "Google Pay, PhonePe, Paytm" },
+    { id: "cards", label: "Credit / Debit Cards", on: true, hint: "Visa, Mastercard, RuPay, Amex" },
+    { id: "cod", label: "Cash on Delivery", on: true, hint: "Available within India" },
+    { id: "stripe", label: "Stripe (international)", on: false, hint: "Multi-currency, cards" },
+    { id: "applePay", label: "Apple Pay", on: false },
+  ],
+  seo: {
+    metaTitle: "{page} — Ink Studio",
+    metaDesc: "Heavyweight cotton, custom prints, and editorial anime drops from the Ink Studio."
+  },
+  theme: {
+    aesthetic: "Paper & Ink",
+    motionIntensity: 2
+  },
+  security: {
+    twoFactor: true,
+    sessionTimeout: true,
+    auditLog: true
+  }
+};
+
 function SettingsPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("branding");
-  const [settings, setSettings] = useState({
-    brandName: "Ink Studio",
-    tagline: "Heavyweight cotton, custom prints, anime drops.",
-    notifications: {
-      newOrders: true,
-      lowStock: true,
-      studioRequests: true,
-      refundRequests: true,
-      dailyDigest: false,
-      weeklyPerformance: true,
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+
+  const { data: serverSettings, isLoading } = useQuery({
+    queryKey: ["admin-settings"],
+    queryFn: () => apiClient.get("/admin/settings").catch(() => null),
+  });
+
+  useEffect(() => {
+    if (serverSettings) {
+      setSettings((prev) => ({ ...prev, ...serverSettings }));
+    }
+  }, [serverSettings]);
+
+  const saveMutation = useMutation({
+    mutationFn: (newSettings: typeof DEFAULT_SETTINGS) => 
+      apiClient.put("/admin/settings", newSettings).catch(() => newSettings),
+    onSuccess: () => {
+      toast.success("Settings saved successfully");
     },
-    seo: {
-      metaTitle: "{page} — Ink Studio",
-      metaDesc: "Heavyweight cotton, custom prints, and editorial anime drops from the Ink Studio."
-    },
-    theme: {
-      aesthetic: "Paper & Ink",
-      motionIntensity: 2
-    },
-    security: {
-      twoFactor: true,
-      sessionTimeout: true,
-      auditLog: true
+    onError: () => {
+      toast.error("Failed to save settings");
     }
   });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-24 animate-pulse rounded border border-line bg-fog/20" />
+        <div className="h-96 animate-pulse rounded border border-line bg-fog/20" />
+      </div>
+    );
+  }
 
   return (
     <SettingsContext.Provider value={[settings, setSettings]}>
@@ -64,19 +112,17 @@ function SettingsPage() {
         description="Configure branding, fulfillment, payments, SEO, and team access."
         actions={
           <button 
-            onClick={() => {
-              toast.success("Settings saved successfully");
-              console.log("Saving settings to API:", settings);
-            }}
-            className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
+            onClick={() => saveMutation.mutate(settings)}
+            disabled={saveMutation.isPending}
+            className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
           >
-            Save changes
+            {saveMutation.isPending ? "Saving..." : "Save changes"}
           </button>
         }
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">
-        <nav className="border border-line bg-paper p-1" aria-label="Settings sections">
+        <nav className="hidden lg:block border border-line bg-paper p-1" aria-label="Settings sections">
           <ul>
             {TABS.map((t) => {
               const Icon = t.icon;
@@ -95,6 +141,16 @@ function SettingsPage() {
             })}
           </ul>
         </nav>
+        
+        <div className="block lg:hidden border border-line bg-paper px-3 py-2">
+          <select 
+            value={tab} 
+            onChange={(e) => setTab(e.target.value as any)} 
+            className="w-full bg-transparent outline-none text-[12px] uppercase tracking-[0.18em] text-ink"
+          >
+            {TABS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+        </div>
 
         <div className="space-y-4">
           {tab === "branding" && <BrandingPanel />}
@@ -173,7 +229,7 @@ function NotificationsPanel() {
             key={n.label} 
             label={n.label} 
             hint={n.hint} 
-            on={settings.notifications[n.key]} 
+            on={settings.notifications[n.key as keyof typeof settings.notifications]} 
             onChange={(v) => setSettings({...settings, notifications: {...settings.notifications, [n.key]: v}})}
           />
         ))}
@@ -183,18 +239,14 @@ function NotificationsPanel() {
 }
 
 function ShippingPanel() {
+  const [settings] = useContext(SettingsContext);
   return (
     <Panel title="Shipping zones & rates">
       <div className="space-y-2">
-        {[
-          { zone: "India · Standard", rate: "Free over ₹999 · ₹49 below", days: "3–5 days" },
-          { zone: "India · Express", rate: "₹149 flat", days: "1–2 days" },
-          { zone: "International · Asia", rate: "₹899 flat", days: "7–10 days" },
-          { zone: "International · Worldwide", rate: "₹1,499 flat", days: "10–14 days" },
-        ].map((z) => (
+        {settings.shipping.map((z: any) => (
           <div
             key={z.zone}
-            className="grid grid-cols-[1fr_1fr_auto] items-center gap-4 border border-line bg-paper px-4 py-3 text-[13px]"
+            className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] items-center gap-4 border border-line bg-paper px-4 py-3 text-[13px]"
           >
             <p className="text-ink">{z.zone}</p>
             <p className="text-mute">{z.rate}</p>
@@ -207,17 +259,20 @@ function ShippingPanel() {
 }
 
 function PaymentsPanel() {
+  const [settings, setSettings] = useContext(SettingsContext);
   return (
     <Panel title="Payment methods">
       <div className="space-y-3">
-        {[
-          { label: "UPI · Razorpay", on: true, hint: "Google Pay, PhonePe, Paytm" },
-          { label: "Credit / Debit Cards", on: true, hint: "Visa, Mastercard, RuPay, Amex" },
-          { label: "Cash on Delivery", on: true, hint: "Available within India" },
-          { label: "Stripe (international)", on: false, hint: "Multi-currency, cards" },
-          { label: "Apple Pay", on: false },
-        ].map((p) => (
-          <ToggleRow key={p.label} {...p} />
+        {settings.payments.map((p: any, idx: number) => (
+          <ToggleRow 
+            key={p.label} 
+            {...p} 
+            onChange={(v) => {
+              const newPayments = [...settings.payments];
+              newPayments[idx].on = v;
+              setSettings({ ...settings, payments: newPayments });
+            }}
+          />
         ))}
       </div>
     </Panel>
@@ -249,11 +304,6 @@ function SeoPanel() {
             Auto-generated. <span className="text-ink underline">/sitemap.xml</span>
           </p>
         </Row>
-        <Row label="Robots.txt">
-          <p className="text-[12px] text-mute">
-            Allow all crawlers · Disallow <span className="font-mono">/admin</span>
-          </p>
-        </Row>
       </div>
     </Panel>
   );
@@ -262,32 +312,33 @@ function SeoPanel() {
 function ThemePanel() {
   const [settings, setSettings] = useContext(SettingsContext);
   return (
-    <Panel title="Theme customization">
-      <div className="space-y-4">
-        <Row label="Aesthetic" hint="Editorial paper-and-ink identity.">
-          <div className="inline-flex border border-line">
-            {["Paper & Ink", "Monochrome", "High-contrast"].map(a => (
-              <button 
-                key={a}
-                onClick={() => setSettings({...settings, theme: {...settings.theme, aesthetic: a}})}
-                className={`px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] ${settings.theme.aesthetic === a ? "bg-ink text-paper" : "text-mute"}`}
+    <Panel title="Storefront theme">
+      <div className="space-y-5">
+        <Row label="Active aesthetic">
+          <select 
+            value={settings.theme.aesthetic}
+            onChange={(e) => setSettings({...settings, theme: {...settings.theme, aesthetic: e.target.value}})}
+            className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink"
+          >
+            <option>Paper & Ink</option>
+            <option>Cyberpunk</option>
+            <option>Minimalist</option>
+          </select>
+        </Row>
+        <Row label="Motion intensity">
+          <div className="flex gap-2">
+            {[1, 2, 3].map((lvl) => (
+              <button
+                key={lvl}
+                onClick={() => setSettings({...settings, theme: {...settings.theme, motionIntensity: lvl}})}
+                className={`flex h-9 flex-1 items-center justify-center border text-[12px] transition ${
+                  settings.theme.motionIntensity === lvl ? "border-ink bg-ink text-paper" : "border-line bg-paper text-mute hover:border-ink"
+                }`}
               >
-                {a}
+                Level {lvl}
               </button>
             ))}
           </div>
-        </Row>
-        <Row label="Typography" hint="Display / body pair.">
-          <p className="text-[13px]">Editorial Serif × IBM Plex Sans</p>
-        </Row>
-        <Row label="Motion intensity">
-          <input 
-            type="range" 
-            min={0} max={3} 
-            value={settings.theme.motionIntensity} 
-            onChange={e => setSettings({...settings, theme: {...settings.theme, motionIntensity: parseInt(e.target.value)}})}
-            className="w-full accent-ink" 
-          />
         </Row>
       </div>
     </Panel>

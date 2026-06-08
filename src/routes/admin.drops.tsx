@@ -25,7 +25,7 @@ function DropsPage() {
     queryKey: ["admin-drops"],
     queryFn: () => apiClient.get("/admin/drops"),
   });
-  const baseList = apiDrops.length > 0 ? apiDrops : ALL;
+  const baseList = apiDrops;
 
   if (isLoading) {
     return (
@@ -110,7 +110,7 @@ function DropCard({ drop }: { drop: Drop }) {
             <div className="flex items-baseline justify-between font-mono text-[11px] uppercase tracking-[0.18em] text-mute">
               <span>Sell-through</span>
               <span className="tabular-nums text-ink">
-                {drop.sold}/{drop.capsuleSize} · {sellThrough}%
+                {drop.sold || 0}/{drop.capsuleSize || '?'} · {sellThrough || 0}%
               </span>
             </div>
             <div className="h-[3px] bg-fog">
@@ -120,9 +120,9 @@ function DropCard({ drop }: { drop: Drop }) {
         )}
 
         <div className="mt-4 grid grid-cols-3 gap-3 border-t border-line pt-3">
-          <Cell label="Revenue" value={compactInr(drop.revenue)} />
-          <Cell label="Units" value={String(drop.units)} />
-          <Cell label="CR" value={`${drop.conversion.toFixed(1)}%`} />
+          <Cell label="Revenue" value={compactInr(drop.revenue || 0)} />
+          <Cell label="Units" value={String(drop.units || 0)} />
+          <Cell label="CR" value={`${(drop.conversion || 0).toFixed(1)}%`} />
         </div>
 
         {drop.status === "live" && remaining <= 20 && remaining > 0 && (
@@ -162,6 +162,7 @@ function Countdown({ to }: { to: string }) {
     const i = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(i);
   }, []);
+  if (!to) return null;
   const diff = Math.max(0, new Date(to).getTime() - now);
   const d = Math.floor(diff / 86400000);
   const h = Math.floor((diff % 86400000) / 3600000);

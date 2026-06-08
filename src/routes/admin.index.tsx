@@ -123,7 +123,7 @@ function OverviewPage() {
               <p className="font-mono text-[12px] tabular-nums">
                 {compactInr(
                   Math.round(
-                    revenueSeries.reduce((s, d) => s + d.revenue, 0) / revenueSeries.length,
+                    revenueSeries.reduce((s, d) => s + d.revenue, 0) / (revenueSeries.length || 1),
                   ),
                 )}
               </p>
@@ -139,7 +139,7 @@ function OverviewPage() {
             rows={trafficSources.map((s) => ({
               name: s.source,
               value: s.visits,
-              sub: `${s.visits.toLocaleString("en-IN")} · ${s.pct}%`,
+              sub: `${(s.visits || 0).toLocaleString("en-IN")} · ${s.pct}%`,
             }))}
           />
           <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-4">
@@ -164,6 +164,7 @@ function OverviewPage() {
           }
           bodyClassName="p-0"
         >
+          <div className="overflow-x-auto w-full">
           <table className="w-full text-[13px]">
             <thead className="border-b border-line bg-fog/40 text-left">
               <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
@@ -181,8 +182,8 @@ function OverviewPage() {
                     <p className="text-[11px] text-mute">{relTime(o.createdAt)}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="truncate text-ink">{o.customer.name}</p>
-                    <p className="truncate text-[11px] text-mute">{o.customer.email}</p>
+                    <p className="truncate text-ink">{o.customer?.name}</p>
+                    <p className="truncate text-[11px] text-mute">{o.customer?.email}</p>
                   </td>
                   <td className="px-4 py-3">
                     <StatusChip label={o.status} tone={orderTone(o.status)} />
@@ -194,6 +195,7 @@ function OverviewPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </Panel>
 
         <Panel

@@ -32,7 +32,7 @@ function CustomersPage() {
     queryFn: () => apiClient.get("/admin/customers"),
   });
 
-  const baseList = apiCustomers.length > 0 ? apiCustomers : ALL;
+  const baseList = apiCustomers;
 
   const list = useMemo(
     () =>
@@ -44,7 +44,7 @@ function CustomersPage() {
     [baseList, seg, q],
   );
 
-  const totalSpend = baseList.reduce((s, c) => s + c.spend, 0);
+  const totalSpend = baseList.reduce((s, c) => s + (c.spend || 0), 0);
 
   if (isLoading) {
     return (
@@ -81,7 +81,7 @@ function CustomersPage() {
         <MiniStat label="Total LTV" value={compactInr(totalSpend)} delta="+12.4%" />
         <MiniStat
           label="Avg orders"
-          value={(baseList.reduce((s, c) => s + c.orders, 0) / (baseList.length || 1)).toFixed(1)}
+          value={(baseList.reduce((s, c) => s + (c.orders || 0), 0) / (baseList.length || 1)).toFixed(1)}
         />
         <MiniStat label="Repeat rate" value="48%" delta="+3.2%" />
         <MiniStat
@@ -138,7 +138,7 @@ function CustomersPage() {
                 <td className="px-3 py-3">
                   <div className="flex items-center gap-3">
                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-[10px] font-medium text-paper">
-                      {c.name
+                      {(c.name || "Unknown")
                         .split(" ")
                         .map((n) => n[0])
                         .join("")
@@ -244,7 +244,7 @@ function CustomerDetail({ customer }: { customer: Customer }) {
       <section>
         <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-mute">Segmentation</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {["High-LTV", "Anime fan", "Mumbai", customer.loyalty.toUpperCase()].map((t) => (
+          {["High-LTV", "Anime fan", "Mumbai", (customer.loyalty || "").toUpperCase()].map((t) => (
             <span
               key={t}
               className="inline-flex items-center gap-1 border border-line bg-paper px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-mute"
