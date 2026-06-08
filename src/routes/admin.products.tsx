@@ -219,7 +219,7 @@ function ProductsPage() {
                             )}
                           </p>
                           <p className="text-[11px] text-mute">
-                            {p.collection} · {p.variants} variants
+                            {p.collection} · {Array.isArray(p.variants) ? p.variants.length : (p.variants || 0)} variants
                           </p>
                         </div>
                       </div>
