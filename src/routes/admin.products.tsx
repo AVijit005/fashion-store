@@ -62,9 +62,34 @@ function ProductsPage() {
     },
   });
 
+  const updateProductMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Product> }) => {
+      return apiClient.put(`/admin/catalog/products/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      setActive(null);
+    },
+  });
+
+  const createProductMutation = useMutation({
+    mutationFn: async (data: Partial<Product>) => {
+      return apiClient.post(`/admin/catalog/products`, data);
+    },
+    onSuccess: () => {
+      toast.success("Product created");
+      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      setIsCreating(false);
+      setNewProduct({ status: 'draft', visible: false, variants: 0, stock: 0 });
+    },
+  });
+
+  useEffect(() => {
+    setPage(1);
+  }, [q]);
+
   const list = useMemo(
     () => {
-      setPage(1);
       return ALL.filter(
         (p) =>
           !q ||
@@ -156,7 +181,8 @@ function ProductsPage() {
               <p className="text-[13px]">No products found matching your search.</p>
             </div>
           ) : (
-          <div className="overflow-x-auto w-full">
+          <>
+          <div className="overflow-x-auto w-full hidden md:block">
           <table className="w-full text-[13px]">
             <thead className="border-b border-line bg-fog/40 text-left">
               <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
@@ -245,9 +271,7 @@ function ProductsPage() {
                     <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => {
-                          apiClient.put(`/admin/catalog/products/${p.id}`, { visible: !p.visible })
-                            .then(() => queryClient.invalidateQueries({ queryKey: ["admin-products"] }))
-                            .catch(() => toast.error("Failed to update visibility"));
+                          updateProductMutation.mutate({ id: p.id, data: { visible: !p.visible } });
                         }}
                         aria-label={p.visible ? "Hide" : "Show"}
                         className="text-mute hover:text-ink"
@@ -261,6 +285,66 @@ function ProductsPage() {
             </tbody>
           </table>
           </div>
+
+          {/* Mobile Layout */}
+          <div className="flex flex-col md:hidden">
+            {list.slice((page - 1) * pageSize, page * pageSize).map((p) => {
+              const low = p.stock > 0 && p.stock <= (p.lowStockAt || 0);
+              const oos = p.stock === 0 && p.status === "active";
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => setActive(p)}
+                  className="flex flex-col gap-3 border-b border-line/60 p-4 transition hover:bg-fog/30 cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 shrink-0 bg-fog">
+                        <img src={p.image || "https://placehold.co/400x500/f5f3ee/0d0d0d?text=No+Image"} alt="" className="h-10 w-10 object-cover" />
+                      </div>
+                      <div>
+                        <p className="flex items-center gap-1.5 text-[13px] text-ink font-medium">
+                          {p.name}
+                          {p.featured && <Star className="h-3 w-3 text-accent" />}
+                        </p>
+                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-mute">{p.sku}</p>
+                      </div>
+                    </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        updateProductMutation.mutate({ id: p.id, data: { visible: !p.visible } });
+                      }}
+                      aria-label={p.visible ? "Hide" : "Show"}
+                      className="p-2 text-mute hover:text-ink"
+                    >
+                      {p.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-1">
+                      <StatusChip label={p.status} tone={STATUS_TONE[p.status]} />
+                      {oos ? (
+                        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Sold out</p>
+                      ) : low ? (
+                        <p className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
+                          <AlertTriangle className="h-2.5 w-2.5" /> Low
+                        </p>
+                      ) : (
+                        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-mute">In stock</p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono tabular-nums text-[13px]">{inr(p.price)}</p>
+                      <p className="font-mono text-[11px] text-mute">{p.stock} units</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          </>
           )}
         </Panel>
       ) : (
@@ -329,43 +413,41 @@ function ProductsPage() {
         footer={
           <div className="flex justify-between gap-2">
             <button 
+              disabled={updateProductMutation.isPending && updateProductMutation.variables?.data.status === 'archived'}
               onClick={() => {
-                apiClient.put(`/admin/catalog/products/${active?.id}`, { ...edits, status: 'archived' })
-                  .then(() => {
-                    toast.success('Product archived');
-                    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-                    setActive(null);
-                  })
-                  .catch(() => toast.error('Failed to archive'));
+                updateProductMutation.mutate(
+                  { id: active?.id as string, data: { ...edits, status: 'archived' } },
+                  { onSuccess: () => toast.success('Product archived') }
+                );
               }}
-              className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
+              className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
             >
-              Archive
+              {updateProductMutation.isPending && updateProductMutation.variables?.data.status === 'archived' ? "Archiving..." : "Archive"}
             </button>
             <div className="flex gap-2">
               <button 
+                disabled={updateProductMutation.isPending && updateProductMutation.variables?.data.status === 'draft'}
                 onClick={() => {
-                  apiClient.put(`/admin/catalog/products/${active?.id}`, { ...edits, status: 'draft' }).then(() => {
-                    toast.success('Saved as draft');
-                    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-                    setActive(null);
-                  }).catch(() => toast.error('Failed to save draft'));
+                  updateProductMutation.mutate(
+                    { id: active?.id as string, data: { ...edits, status: 'draft' } },
+                    { onSuccess: () => toast.success('Saved as draft') }
+                  );
                 }}
-                className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
+                className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
               >
-                Save draft
+                {updateProductMutation.isPending && updateProductMutation.variables?.data.status === 'draft' ? "Saving..." : "Save draft"}
               </button>
               <button 
+                disabled={updateProductMutation.isPending && updateProductMutation.variables?.data.status === 'active'}
                 onClick={() => {
-                  apiClient.put(`/admin/catalog/products/${active?.id}`, { ...edits, status: 'active' }).then(() => {
-                    toast.success('Product published');
-                    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-                    setActive(null);
-                  }).catch(() => toast.error('Failed to save changes'));
+                  updateProductMutation.mutate(
+                    { id: active?.id as string, data: { ...edits, status: 'active' } },
+                    { onSuccess: () => toast.success('Product published') }
+                  );
                 }}
-                className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
+                className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
               >
-                Save changes
+                {updateProductMutation.isPending && updateProductMutation.variables?.data.status === 'active' ? "Saving..." : "Save changes"}
               </button>
             </div>
           </div>
@@ -382,23 +464,18 @@ function ProductsPage() {
         footer={
           <div className="flex justify-end gap-2">
             <button 
+              disabled={createProductMutation.isPending}
               onClick={() => { setIsCreating(false); setNewProduct({ status: 'draft', visible: false, variants: 0, stock: 0 }); }}
-              className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
+              className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
             >
               Cancel
             </button>
             <button 
-              onClick={() => {
-                apiClient.post(`/admin/catalog/products`, newProduct).then(() => {
-                  toast.success('Product created');
-                  queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-                  setIsCreating(false);
-                  setNewProduct({ status: 'draft', visible: false, variants: 0, stock: 0 });
-                }).catch(() => toast.error('Failed to create product'));
-              }}
-              className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
+              disabled={createProductMutation.isPending}
+              onClick={() => createProductMutation.mutate(newProduct)}
+              className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
             >
-              Create Product
+              {createProductMutation.isPending ? "Creating..." : "Create Product"}
             </button>
           </div>
         }
@@ -539,10 +616,10 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
               key={i}
               className="grid grid-cols-[1fr_1fr_80px_120px_auto] items-center gap-3 border border-line bg-paper p-3 text-[12px]"
             >
-              <input value={v.size} onChange={(e) => { const n = [...variants]; n[i].size = e.target.value; onChange("variantsData", n); }} className="w-full bg-transparent outline-none" placeholder="Size" />
-              <input value={v.color} onChange={(e) => { const n = [...variants]; n[i].color = e.target.value; onChange("variantsData", n); }} className="w-full bg-transparent outline-none text-mute" placeholder="Color" />
-              <input type="number" value={v.stock} onChange={(e) => { const n = [...variants]; n[i].stock = e.target.value ? Number(e.target.value) : 0; onChange("variantsData", n); }} className="w-full bg-transparent outline-none text-right font-mono tabular-nums" />
-              <input value={v.sku} onChange={(e) => { const n = [...variants]; n[i].sku = e.target.value; onChange("variantsData", n); }} className="w-full bg-transparent outline-none text-right font-mono text-[10px] uppercase tracking-[0.18em] text-mute" placeholder="SKU" />
+              <input value={v.size} onChange={(e) => { onChange("variantsData", variants.map((it, idx) => idx === i ? { ...it, size: e.target.value } : it)); }} className="w-full bg-transparent outline-none" placeholder="Size" />
+              <input value={v.color} onChange={(e) => { onChange("variantsData", variants.map((it, idx) => idx === i ? { ...it, color: e.target.value } : it)); }} className="w-full bg-transparent outline-none text-mute" placeholder="Color" />
+              <input type="number" value={v.stock} onChange={(e) => { onChange("variantsData", variants.map((it, idx) => idx === i ? { ...it, stock: e.target.value ? Number(e.target.value) : 0 } : it)); }} className="w-full bg-transparent outline-none text-right font-mono tabular-nums" />
+              <input value={v.sku} onChange={(e) => { onChange("variantsData", variants.map((it, idx) => idx === i ? { ...it, sku: e.target.value } : it)); }} className="w-full bg-transparent outline-none text-right font-mono text-[10px] uppercase tracking-[0.18em] text-mute" placeholder="SKU" />
               <button onClick={() => onChange("variantsData", variants.filter((_: any, idx: number) => idx !== i))} className="text-accent hover:opacity-70"><X className="h-3 w-3"/></button>
             </div>
           ))}

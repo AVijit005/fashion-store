@@ -1,5 +1,6 @@
 import { Controller, Get, Put, Post, Param, Body, UseGuards, Query } from '@nestjs/common';
 import { AdminOrdersService } from './admin.orders.service';
+import { CreatePosOrderDto } from './dto/admin.orders.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -24,7 +25,7 @@ export class AdminOrdersController {
   }
 
   @Post()
-  async createOrder(@Body() body: any) {
+  async createOrder(@Body() body: CreatePosOrderDto) {
     return this.ordersService.createOrder(body);
   }
 

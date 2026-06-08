@@ -1,5 +1,29 @@
 import { apiClient } from "./client";
-import { type Product } from "@/lib/data/products";
+
+export type Product = {
+  id: string;
+  slug: string;
+  name: string;
+  category: string;
+  tagline: string;
+  price: number;
+  mrp: number;
+  rating: number;
+  reviews: number;
+  colors: { name: string; hex: string }[];
+  sizes: string[];
+  images: string[];
+  badges: ("new" | "trending" | "limited" | "oversized" | "anime" | "bestseller")[];
+  story: string;
+  variants?: {
+    id: string;
+    size: string;
+    color: string;
+    sku: string;
+    stockQuantity: number;
+    priceOverride?: number | null;
+  }[];
+};
 
 // A lookup map to translate backend color names to hexadecimal values for color swatches.
 const COLOR_HEX_MAP: Record<string, string> = {
@@ -132,6 +156,9 @@ export function mapBackendProduct(p: BackendProduct): Product {
     })),
   };
 }
+
+export const products: Product[] = [];
+export const categories: any[] = [];
 
 export const catalogApi = {
   async getCategories() {

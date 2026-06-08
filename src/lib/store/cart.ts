@@ -21,6 +21,7 @@ export type CartItem = {
   size: string;
   color: string;
   qty: number;
+  maxQty?: number;
   custom?: boolean;
   customData?: any;
 };
@@ -123,6 +124,11 @@ export const useCart = create<CartState>()(
 
       setQty: (k, qty) => {
         const item = get().items.find((it) => keyFor(it) === k);
+        if (item && item.maxQty !== undefined && qty > item.maxQty) {
+          toast.error(`Only ${item.maxQty} left in stock`);
+          qty = item.maxQty;
+        }
+        
         set({
           items: get()
             .items.map((it) => (keyFor(it) === k ? { ...it, qty } : it))

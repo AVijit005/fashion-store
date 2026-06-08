@@ -2,8 +2,8 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { ProductGridShell } from "@/components/plp/product-grid-shell";
 import { useState, useEffect } from "react";
 import { catalogApi } from "@/lib/api/catalog";
-import { type Product } from "@/lib/data/products";
-import { categories } from "@/lib/data/categories";
+import { type Product } from "@/lib/api/catalog";
+import { categories } from "@/lib/api/catalog";
 import { LoadingState } from "@/components/state/loading";
 
 export const Route = createFileRoute("/c/$category")({

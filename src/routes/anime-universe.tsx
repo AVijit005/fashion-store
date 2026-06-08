@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { breadcrumbJsonLd, collectionJsonLd } from "@/lib/seo";
 import { Reveal } from "@/components/ui/reveal";
 import { ProductCard } from "@/components/product/product-card";
-import { products } from "@/lib/data/products";
+import { products } from "@/lib/api/catalog";
 
 export const Route = createFileRoute("/anime-universe")({
   head: () => ({

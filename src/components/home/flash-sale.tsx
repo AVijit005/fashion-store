@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Reveal } from "@/components/ui/reveal";
 import { useCountdown } from "@/hooks/use-countdown";
-import { products } from "@/lib/data/products";
+import { products } from "@/lib/api/catalog";
 import { inr, pct } from "@/lib/format";
 import { Link } from "@tanstack/react-router";
 

@@ -3,7 +3,7 @@ import { X, Plus, Heart, ArrowRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { Product } from "@/lib/data/products";
+import type { Product } from "@/lib/api/catalog";
 import { inr, pct } from "@/lib/format";
 import { useCart } from "@/lib/store/cart";
 import { useWishlist } from "@/lib/store/wishlist";

@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight, Heart, Plus, Share2, Gift, Flame, Star } from "lucide-react";
 import { toast } from "sonner";
-import type { Product } from "@/lib/data/products";
+import type { Product } from "@/lib/api/catalog";
 import { inr, pct } from "@/lib/format";
 import { useCart } from "@/lib/store/cart";
 import { useWishlist } from "@/lib/store/wishlist";
@@ -164,6 +164,7 @@ function ProductPage() {
       mrp: product.mrp,
       size,
       color,
+      maxQty: selectedVariant.stockQuantity,
     });
   };
 

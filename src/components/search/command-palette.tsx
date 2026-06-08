@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/command";
 import { useCommandPalette } from "@/lib/store/command-palette";
 import { useRecentSearches } from "@/lib/store/recent-searches";
-import { type Product } from "@/lib/data/products";
-import { categories } from "@/lib/data/categories";
+import { type Product, catalogApi } from "@/lib/api/catalog";
+import { useQuery } from "@tanstack/react-query";
 import { inr } from "@/lib/format";
 import { catalogApi } from "@/lib/api/catalog";
 
@@ -51,6 +51,14 @@ export function CommandPalette() {
 
   const [results, setResults] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const { data: dynamicCategories = [] } = useQuery({
+    queryKey: ["command-palette-categories"],
+    queryFn: async () => {
+      const res = await catalogApi.getCategories();
+      return Array.isArray(res) ? res : [];
+    },
+  });
 
   // Global hotkey
   useEffect(() => {
@@ -170,7 +178,7 @@ export function CommandPalette() {
 
         <CommandSeparator />
         <CommandGroup heading="Categories">
-          {categories.slice(0, 8).map((c) => (
+          {dynamicCategories.slice(0, 8).map((c: any) => (
             <CommandItem
               key={c.slug}
               value={`category ${c.name}`}

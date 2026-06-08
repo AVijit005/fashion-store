@@ -49,38 +49,59 @@ export class AdminOrdersService {
   }
 
   async createOrder(data: any) {
-    const { email, total, items } = data; // items: [{ id, qty }]
+    const { email, items } = data; // items: [{ id, qty }]
     
-    // Deduct stock for each item
-    for (const item of (items || [])) {
-      if (item.id) {
-        await this.prisma.productVariant.updateMany({
+    return this.prisma.$transaction(async (tx) => {
+      const orderItemsData = [];
+
+      // Deduct stock for each item safely
+      for (const item of (items || [])) {
+        if (!item.id) continue;
+        
+        const variant = await tx.productVariant.findUnique({
           where: { id: item.id },
+          include: { product: true }
+        });
+
+        if (!variant) throw new BadRequestException(`Variant ${item.id} not found`);
+
+        const res = await tx.productVariant.updateMany({
+          where: { id: item.id, stockQuantity: { gte: item.qty } },
           data: { stockQuantity: { decrement: item.qty } }
         });
-      }
-    }
 
-    return this.prisma.order.create({
-      data: {
-        totalAmount: total || 0,
-        shippingEmail: email || 'pos@store.com',
-        shippingName: email?.split('@')[0] || 'POS Customer',
-        shippingPhone: '',
-        shippingStreet: 'In-store',
-        shippingCity: '',
-        shippingState: '',
-        shippingPostalCode: '',
-        shippingCountry: '',
-        status: 'PAID', // POS orders are considered paid
-        items: items && items.length > 0 ? {
-          create: items.map((item: any) => ({
-             productVariantId: item.id || undefined,
-             quantity: item.qty || 1,
-             priceAtPurchase: 0,
-          }))
-        } : undefined
+        if (res.count === 0) {
+          throw new BadRequestException(`Insufficient stock for variant ${item.id}`);
+        }
+
+        orderItemsData.push({
+          productVariantId: variant.id,
+          quantity: item.qty,
+          priceAtPurchase: variant.priceOverride || variant.product.basePrice,
+        });
       }
+
+      const calculatedTotal = orderItemsData.reduce((acc, item) => acc + (item.quantity * item.priceAtPurchase), 0);
+
+      return tx.order.create({
+        data: {
+          totalAmount: calculatedTotal,
+          shippingEmail: email || 'pos@store.com',
+          shippingName: email?.split('@')[0] || 'POS Customer',
+          shippingPhone: '',
+          shippingStreet: 'In-store',
+          shippingCity: '',
+          shippingState: '',
+          shippingPostalCode: '',
+          shippingCountry: '',
+          status: 'PAID', // POS orders are considered paid
+          paymentStatus: 'COMPLETED',
+          paymentMethod: 'POS',
+          items: {
+            create: orderItemsData,
+          },
+        },
+      });
     });
   }
 
@@ -106,10 +127,16 @@ export class AdminOrdersService {
       throw new BadRequestException('Order is not paid');
     }
     
-    // Mock refund processing
-    return this.prisma.order.update({
-      where: { id },
+    // Mock refund processing using atomic update
+    const res = await this.prisma.order.updateMany({
+      where: { id, status: 'PAID' },
       data: { status: 'REFUNDED' },
     });
+    
+    if (res.count === 0) {
+      throw new BadRequestException('Order is not paid or already refunded');
+    }
+
+    return this.prisma.order.findUnique({ where: { id } });
   }
 }

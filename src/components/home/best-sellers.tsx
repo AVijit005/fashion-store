@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Reveal } from "@/components/ui/reveal";
 import { ProductCard } from "@/components/product/product-card";
 import { ProductCardSkeleton } from "@/components/product/product-skeleton";
-import { type Product } from "@/lib/data/products";
+import { type Product } from "@/lib/api/catalog";
 import { catalogApi } from "@/lib/api/catalog";
 
 export function BestSellers() {

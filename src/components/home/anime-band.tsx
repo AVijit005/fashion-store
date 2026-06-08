@@ -1,11 +1,19 @@
 import { Link } from "@tanstack/react-router";
 import { Reveal } from "@/components/ui/reveal";
 import anime from "@/assets/campaign-anime.jpg";
-import { products } from "@/lib/data/products";
+import { useQuery } from "@tanstack/react-query";
+import { catalogApi, type Product } from "@/lib/api/catalog";
 import { inr } from "@/lib/format";
 
 export function AnimeBand() {
-  const items = products.filter((p) => p.badges.includes("anime")).slice(0, 3);
+  const { data: animeProducts = [] } = useQuery({
+    queryKey: ["anime-band-products"],
+    queryFn: async () => {
+      const res = await catalogApi.getProducts({ category: "anime", limit: 3 });
+      return res.products || [];
+    },
+  });
+
   return (
     <section className="bg-ink text-paper">
       <div className="mx-auto grid max-w-[1480px] grid-cols-1 gap-10 px-5 py-20 lg:grid-cols-[1fr_1.1fr] lg:gap-16 lg:px-10 lg:py-32">
@@ -36,8 +44,8 @@ export function AnimeBand() {
             </p>
           </Reveal>
           <div className="mt-10 grid grid-cols-3 gap-4">
-            {items.map((p, i) => (
-              <Reveal key={p.id} delay={i * 0.08}>
+            {animeProducts.map((p: Product, i: number) => (
+              <Reveal key={p.id} delay={i * 0.05}>
                 <Link to="/p/$slug" params={{ slug: p.slug }} className="group block">
                   <div className="aspect-[3/4] overflow-hidden bg-graphite">
                     <img

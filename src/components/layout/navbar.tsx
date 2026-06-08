@@ -6,9 +6,9 @@ import { useCart } from "@/lib/store/cart";
 import { useWishlist } from "@/lib/store/wishlist";
 import { useCommandPalette } from "@/lib/store/command-palette";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { categories } from "@/lib/data/categories";
-import { products } from "@/lib/data/products";
+import { catalogApi, type Product } from "@/lib/api/catalog";
 import { useAuthStore } from "@/lib/store/auth";
+import { useQuery } from "@tanstack/react-query";
 
 type MegaKey = "Shop" | "Anime" | "Studio" | null;
 
@@ -169,6 +169,22 @@ export function Navbar() {
   const { isAuthenticated, user, setAuthModalOpen } = useAuthStore();
   const router = useRouter();
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const res = await catalogApi.getCategories();
+      return Array.isArray(res) ? res : [];
+    },
+  });
+
+  const { data: featuredProducts = [] } = useQuery({
+    queryKey: ["navbar-featured-products"],
+    queryFn: async () => {
+      const res = await catalogApi.getProducts({ featured: true, limit: 10 });
+      return res.products || [];
+    },
+  });
+
   const handleAccountClick = () => {
     if (isAuthenticated) {
       router.navigate({ to: "/account" });
@@ -190,7 +206,7 @@ export function Navbar() {
   }, [path]);
 
   const megaData = mega ? megaContent[mega] : null;
-  const featureProduct = megaData ? products.find((p) => p.slug === megaData.featureSlug) : null;
+  const featureProduct = megaData ? featuredProducts.find((p: Product) => p.slug === megaData.featureSlug) || featuredProducts[0] : null;
 
   return (
     <>
@@ -438,7 +454,7 @@ export function Navbar() {
                       Suggested products
                     </p>
                     <ul className="space-y-3">
-                      {products.slice(0, 3).map((p) => (
+                      {featuredProducts.slice(0, 3).map((p: Product) => (
                         <li key={p.id}>
                           <Link
                             to="/p/$slug"

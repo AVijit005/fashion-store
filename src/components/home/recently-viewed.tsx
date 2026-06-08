@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useRecentlyViewed } from "@/lib/store/recently-viewed";
-import { products } from "@/lib/data/products";
+import { products } from "@/lib/api/catalog";
 import { inr } from "@/lib/format";
 
 export function RecentlyViewed() {

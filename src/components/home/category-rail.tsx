@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Reveal } from "@/components/ui/reveal";
-import { categories } from "@/lib/data/categories";
+import { categories } from "@/lib/api/catalog";
 
 export function CategoryRail() {
   return (

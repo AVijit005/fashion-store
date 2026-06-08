@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
-import { products } from "@/lib/data/products";
-import { categories } from "@/lib/data/categories";
+import { products } from "@/lib/api/catalog";
+import { categories } from "@/lib/api/catalog";
 
 // Note: Replace with the production project URL once a custom domain is configured.
 const BASE_URL = "";

@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { breadcrumbJsonLd, collectionJsonLd } from "@/lib/seo";
 import { Reveal } from "@/components/ui/reveal";
 import { Gift, Sparkles, Heart } from "lucide-react";
-import { products } from "@/lib/data/products";
+import { products } from "@/lib/api/catalog";
 import { inr } from "@/lib/format";
 
 export const Route = createFileRoute("/gift-guide")({

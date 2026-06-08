@@ -78,6 +78,27 @@ function OrdersPage() {
     },
   });
 
+  const createOrderMutation = useMutation({
+    mutationFn: async (data: any) => apiClient.post('/admin/orders', data),
+    onSuccess: () => {
+      toast.success('Order created successfully');
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      setIsCreating(false);
+      setManualOrder({ email: '', items: [], total: 0 });
+    }
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ ids, status }: { ids: string[], status: string }) => {
+      return Promise.all(ids.map(id => apiClient.put(`/admin/orders/${id}/status`, { status })));
+    },
+    onSuccess: (_, variables) => {
+      toast.success(`Marked ${variables.ids.length} orders as ${variables.status.toLowerCase()}`);
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      setSelected([]);
+    }
+  });
+
   useEffect(() => {
     setPage(1);
   }, [status, q]);
@@ -167,18 +188,7 @@ function OrdersPage() {
           </p>
           <div className="flex items-center gap-2">
             <BulkBtn icon={<Printer className="h-3.5 w-3.5" />} onClick={() => toast.success('Labels sent to printer')}>Print labels</BulkBtn>
-            <BulkBtn 
-              icon={<Truck className="h-3.5 w-3.5" />}
-              onClick={() => {
-                Promise.all(selected.map(id => apiClient.put(`/admin/orders/${id}/status`, { status: 'SHIPPED' })))
-                  .then(() => {
-                    toast.success(`Marked ${selected.length} orders as shipped`);
-                    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-                    setSelected([]);
-                  })
-                  .catch(() => toast.error('Failed to update orders'));
-              }}
-            >Mark shipped</BulkBtn>
+            <BulkBtn icon={<Truck className="h-3.5 w-3.5" />} disabled={updateStatusMutation.isPending} onClick={() => updateStatusMutation.mutate({ ids: selected, status: 'SHIPPED' })}>{updateStatusMutation.isPending ? "Updating..." : "Mark shipped"}</BulkBtn>
             <BulkBtn icon={<Mail className="h-3.5 w-3.5" />} onClick={() => toast.success('Emails queued')}>Email customers</BulkBtn>
             <button
               onClick={() => setSelected([])}
@@ -197,7 +207,8 @@ function OrdersPage() {
             <p className="text-[13px]">No orders found matching your criteria.</p>
           </div>
         ) : (
-        <div className="overflow-x-auto w-full">
+        <>
+        <div className="overflow-x-auto w-full hidden md:block">
         <table className="w-full text-[13px]">
           <thead className="border-b border-line bg-fog/40 text-left">
             <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
@@ -259,6 +270,48 @@ function OrdersPage() {
           </tbody>
         </table>
         </div>
+
+        {/* Mobile Layout */}
+        <div className="flex flex-col md:hidden">
+          {list.map((o: any) => (
+            <div 
+              key={o.id}
+              onClick={() => setActive(o)}
+              className="flex flex-col gap-3 border-b border-line/60 p-4 transition hover:bg-fog/30"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selected.includes(o.id)}
+                      onChange={() => toggle(o.id)}
+                      aria-label={`Select ${o.number}`}
+                    />
+                  </div>
+                  <div>
+                    <p className="font-mono text-[12px] text-ink">{o.number}</p>
+                    <p className="text-[11px] text-mute">{relTime(o.createdAt)}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-mono tabular-nums text-[13px]">{compactInr(o.total)}</p>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-mute">{o.payment}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[12px] text-ink">{o.customer.name}</p>
+                  <p className="text-[11px] text-mute">{o.city}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <StatusChip label={o.status} tone={orderTone(o.status)} />
+                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-mute">{FULFILL_LABEL[o.fulfillment]}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        </>
         )}
         {meta.totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-line bg-fog/20 px-4 py-3 text-[12px]">
@@ -294,17 +347,17 @@ function OrdersPage() {
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-col gap-1">
               <button 
+                disabled={updateStatusMutation.isPending && updateStatusMutation.variables?.status === 'CANCELLED'}
                 onClick={() => {
                    if (!window.confirm("Are you sure you want to cancel this order? This action cannot be undone.")) return;
-                   apiClient.put(`/admin/orders/${active?.id}/status`, { status: 'CANCELLED' }).then(() => {
-                     toast.success('Order cancelled');
-                     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-                     setActive(null);
-                   }).catch((err) => { toast.error('Failed to cancel order'); });
+                   updateStatusMutation.mutate(
+                     { ids: [active?.id as string], status: 'CANCELLED' },
+                     { onSuccess: () => setActive(null) }
+                   );
                 }}
-                className="press flex items-center gap-1.5 border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
+                className="press flex items-center gap-1.5 border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
               >
-                <RotateCcw className="h-3.5 w-3.5" /> Cancel / Refund
+                {updateStatusMutation.isPending && updateStatusMutation.variables?.status === 'CANCELLED' ? "Cancelling..." : <><RotateCcw className="h-3.5 w-3.5" /> Cancel / Refund</>}
               </button>
               {active?.paymentProvider === "RAZORPAY" && active?.status !== "FAILED" && active?.status !== "PAYMENT_PENDING" && (
                 <p className="text-[9px] text-accent max-w-[150px] leading-tight">
@@ -320,16 +373,16 @@ function OrdersPage() {
                 Print invoice
               </button>
               <button 
+                disabled={updateStatusMutation.isPending && updateStatusMutation.variables?.status === 'SHIPPED'}
                 onClick={() => {
-                  apiClient.put(`/admin/orders/${active?.id}/status`, { status: 'SHIPPED' }).then(() => {
-                    toast.success('Order marked as shipped');
-                    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-                    setActive(null);
-                  }).catch((err) => { toast.error('Failed to fulfill order'); });
+                   updateStatusMutation.mutate(
+                     { ids: [active?.id as string], status: 'SHIPPED' },
+                     { onSuccess: () => setActive(null) }
+                   );
                 }}
-                className="press flex items-center gap-1.5 bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
+                className="press flex items-center gap-1.5 bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
               >
-                <PackageCheck className="h-3.5 w-3.5" /> Fulfill
+                {updateStatusMutation.isPending && updateStatusMutation.variables?.status === 'SHIPPED' ? "Fulfilling..." : <><PackageCheck className="h-3.5 w-3.5" /> Fulfill</>}
               </button>
             </div>
           </div>
@@ -346,29 +399,21 @@ function OrdersPage() {
         footer={
           <div className="flex justify-end gap-2">
             <button 
+              disabled={createOrderMutation.isPending}
               onClick={() => {
                 setIsCreating(false);
                 setManualOrder({ email: '', items: [], total: 0 });
               }}
-              className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
+              className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
             >
               Cancel
             </button>
             <button 
-              disabled={isSubmitting}
-              onClick={() => {
-                setIsSubmitting(true);
-                apiClient.post(`/admin/orders`, manualOrder).then(() => {
-                  toast.success('Order created');
-                  queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-                  setIsCreating(false);
-                  setManualOrder({ email: '', items: [], total: 0 });
-                }).catch(() => toast.error('Failed to create manual order'))
-                  .finally(() => setIsSubmitting(false));
-              }}
+              disabled={createOrderMutation.isPending}
+              onClick={() => createOrderMutation.mutate(manualOrder)}
               className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
             >
-              {isSubmitting ? "Submitting..." : "Submit Order"}
+              {createOrderMutation.isPending ? "Submitting..." : "Submit Order"}
             </button>
           </div>
         }
@@ -387,8 +432,8 @@ function OrdersPage() {
             <div className="space-y-2 mt-1">
               {manualOrder.items.map((item: any, i: number) => (
                 <div key={i} className="flex gap-2">
-                  <input value={item.id} onChange={e => { const n = [...manualOrder.items]; n[i].id = e.target.value; setManualOrder(m => ({...m, items: n}))}} placeholder="Product ID / SKU" className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" />
-                  <input type="number" value={item.qty} onChange={e => { const n = [...manualOrder.items]; n[i].qty = Number(e.target.value); setManualOrder(m => ({...m, items: n}))}} placeholder="Qty" className="h-9 w-24 border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums" />
+                  <input value={item.id} onChange={e => { setManualOrder(m => ({...m, items: m.items.map((it, idx) => idx === i ? { ...it, id: e.target.value } : it)}))}} placeholder="Product ID / SKU" className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" />
+                  <input type="number" value={item.qty} onChange={e => { setManualOrder(m => ({...m, items: m.items.map((it, idx) => idx === i ? { ...it, qty: Number(e.target.value) } : it)}))}} placeholder="Qty" className="h-9 w-24 border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums" />
                   <button onClick={() => setManualOrder(m => ({...m, items: m.items.filter((_, idx) => idx !== i)}))} className="text-accent hover:opacity-70 px-2">✕</button>
                 </div>
               ))}
@@ -519,9 +564,9 @@ function Checkbox({ checked, onChange, ...rest }: React.InputHTMLAttributes<HTML
   );
 }
 
-function BulkBtn({ children, icon, onClick }: { children: React.ReactNode; icon: React.ReactNode; onClick?: () => void }) {
+function BulkBtn({ children, icon, onClick, disabled }: { children: React.ReactNode; icon: React.ReactNode; onClick?: () => void; disabled?: boolean }) {
   return (
-    <button onClick={onClick} className="flex items-center gap-1.5 border border-paper/20 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-paper transition hover:bg-paper/10">
+    <button onClick={onClick} disabled={disabled} className="flex items-center gap-1.5 border border-paper/20 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-paper transition hover:bg-paper/10 disabled:opacity-50 disabled:cursor-not-allowed">
       {icon}
       {children}
     </button>

@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { AdminCatalogService } from './admin.catalog.service';
+import { CreateProductDto, UpdateProductDto } from './dto/admin.catalog.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -17,12 +18,12 @@ export class AdminCatalogController {
   }
 
   @Post('products')
-  async createProduct(@Body() data: any) {
+  async createProduct(@Body() data: CreateProductDto) {
     return this.catalogService.createProduct(data);
   }
 
   @Put('products/:id')
-  async updateProduct(@Param('id') id: string, @Body() data: any) {
+  async updateProduct(@Param('id') id: string, @Body() data: UpdateProductDto) {
     return this.catalogService.updateProduct(id, data);
   }
 

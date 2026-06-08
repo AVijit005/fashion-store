@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Reveal } from "@/components/ui/reveal";
 import { TrendingUp, Flame } from "lucide-react";
 import { ProductCardSkeleton } from "@/components/product/product-skeleton";
-import { type Product } from "@/lib/data/products";
+import { type Product } from "@/lib/api/catalog";
 import { inr } from "@/lib/format";
 import { catalogApi } from "@/lib/api/catalog";
 

@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { inr } from "@/lib/format";
-import type { Product } from "@/lib/data/products";
+import type { Product } from "@/lib/api/catalog";
 
 export function CompleteTheLook({ items }: { items: Product[] }) {
   if (items.length === 0) return null;

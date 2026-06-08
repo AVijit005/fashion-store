@@ -7,7 +7,7 @@ import { useWishlist } from "@/lib/store/wishlist";
 import { useCart } from "@/lib/store/cart";
 import { useFlyToCart } from "@/lib/store/fly-to-cart";
 import { QuickViewDialog } from "@/components/product/quick-view-dialog";
-import type { Product } from "@/lib/data/products";
+import type { Product } from "@/lib/api/catalog";
 import { inr, pct } from "@/lib/format";
 import { EASE } from "@/lib/motion";
 

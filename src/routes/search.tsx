@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { useCommandPalette } from "@/lib/store/command-palette";
-import { type Product } from "@/lib/data/products";
+import { type Product } from "@/lib/api/catalog";
 import { ProductCard } from "@/components/product/product-card";
 import { catalogApi } from "@/lib/api/catalog";
 import { LoadingState } from "@/components/state/loading";

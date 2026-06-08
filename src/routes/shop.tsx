@@ -3,7 +3,7 @@ import { breadcrumbJsonLd, collectionJsonLd } from "@/lib/seo";
 import { ProductGridShell } from "@/components/plp/product-grid-shell";
 import { useState, useEffect } from "react";
 import { catalogApi } from "@/lib/api/catalog";
-import { type Product } from "@/lib/data/products";
+import { type Product } from "@/lib/api/catalog";
 import { LoadingState } from "@/components/state/loading";
 
 export const Route = createFileRoute("/shop")({

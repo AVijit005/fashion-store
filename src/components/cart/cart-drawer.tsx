@@ -4,12 +4,19 @@ import { Minus, Plus, X, ShoppingBag } from "lucide-react";
 import { useEffect } from "react";
 import { useCart, itemKey } from "@/lib/store/cart";
 import { inr } from "@/lib/format";
-import { products } from "@/lib/data/products";
+import { catalogApi, type Product } from "@/lib/api/catalog";
 import { FreeShippingBar } from "@/components/cart/free-shipping-bar";
+import { useQuery } from "@tanstack/react-query";
 
 export function CartDrawer() {
   const { open, setOpen, items, setQty, remove, subtotal, savings } = useCart();
-  const recommended = products.slice(0, 4);
+  const { data: recommended = [] } = useQuery({
+    queryKey: ["cart-recommended"],
+    queryFn: async () => {
+      const res = await catalogApi.getProducts({ limit: 4 });
+      return res.products || [];
+    },
+  });
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -132,8 +139,9 @@ export function CartDrawer() {
                                   </span>
                                   <button
                                     onClick={() => setQty(k, it.qty + 1)}
+                                    disabled={it.maxQty !== undefined && it.qty >= it.maxQty}
                                     aria-label={`Increase quantity of ${it.name}`}
-                                    className="flex h-8 w-8 items-center justify-center transition hover:bg-fog focus-ink-inset"
+                                    className="flex h-8 w-8 items-center justify-center transition hover:bg-fog focus-ink-inset disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     <Plus className="h-3.5 w-3.5" />
                                   </button>
@@ -164,7 +172,7 @@ export function CartDrawer() {
                     You may also like
                   </p>
                   <div className="flex gap-3 overflow-x-auto hide-scrollbar">
-                    {recommended.map((p) => (
+                    {recommended.map((p: Product) => (
                       <Link
                         key={p.id}
                         to="/p/$slug"

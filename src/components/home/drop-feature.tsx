@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Reveal } from "@/components/ui/reveal";
 import { ProductCard } from "@/components/product/product-card";
-import { products } from "@/lib/data/products";
+import { products } from "@/lib/api/catalog";
 
 export function DropFeature() {
   const items = products

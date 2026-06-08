@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Heart } from "lucide-react";
 import { useWishlist } from "@/lib/store/wishlist";
-import { products } from "@/lib/data/products";
+import { products } from "@/lib/api/catalog";
 import { ProductCard } from "@/components/product/product-card";
 import { EmptyState } from "@/components/state/empty";
 

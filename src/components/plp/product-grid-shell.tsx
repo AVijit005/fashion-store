@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SlidersHorizontal, X, ChevronDown } from "lucide-react";
 import { ProductCard } from "@/components/product/product-card";
 import { Reveal } from "@/components/ui/reveal";
-import { products as ALL, type Product } from "@/lib/data/products";
+import { products as ALL, type Product } from "@/lib/api/catalog";
 
 const SIZE_OPTS = ["S", "M", "L", "XL", "XXL"];
 const COLOR_OPTS = [

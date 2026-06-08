@@ -77,8 +77,9 @@ function CartPage() {
                         </span>
                         <button
                           onClick={() => setQty(k, it.qty + 1)}
+                          disabled={it.maxQty !== undefined && it.qty >= it.maxQty}
                           aria-label={`Increase quantity of ${it.name}`}
-                          className="flex h-9 w-9 items-center justify-center transition hover:bg-fog focus-ink-inset"
+                          className="flex h-9 w-9 items-center justify-center transition hover:bg-fog focus-ink-inset disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Plus className="h-3.5 w-3.5" />
                         </button>
