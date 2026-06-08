@@ -347,6 +347,62 @@ function OrdersPage() {
       >
         {active && <OrderDetail order={active} />}
       </AdminDrawer>
+
+      <AdminDrawer
+        open={isCreating}
+        onClose={() => setIsCreating(false)}
+        eyebrow="Manual POS"
+        title="Create Order"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button 
+              onClick={() => setIsCreating(false)}
+              className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={() => {
+                apiClient.post(`/admin/orders`, manualOrder).then(() => {
+                  toast.success('Order created');
+                  queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+                  setIsCreating(false);
+                }).catch(() => toast.error('Failed to create manual order'));
+              }}
+              className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
+            >
+              Submit Order
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="text-[12px] text-mute">Customer Email</label>
+            <input 
+              value={manualOrder.email} 
+              onChange={e => setManualOrder(m => ({...m, email: e.target.value}))}
+              className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" 
+            />
+          </div>
+          <div>
+            <label className="text-[12px] text-mute">Product IDs (comma separated)</label>
+            <input 
+              value={manualOrder.items} 
+              onChange={e => setManualOrder(m => ({...m, items: e.target.value}))}
+              className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" 
+            />
+          </div>
+          <div>
+            <label className="text-[12px] text-mute">Total Amount</label>
+            <input 
+              value={manualOrder.total} 
+              onChange={e => setManualOrder(m => ({...m, total: e.target.value}))}
+              className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" 
+            />
+          </div>
+        </div>
+      </AdminDrawer>
     </div>
   );
 }
@@ -429,139 +485,18 @@ function OrderDetail({ order }: { order: Order }) {
             <Row label="Shipping" value="Free" />
             <Row label="Tax" value="Included" />
             <div className="mt-2 flex items-baseline justify-between border-t border-line pt-2 text-ink">
-          <div className="flex gap-2">
-            <button
-              disabled={page === 1}
-              onClick={() => setPage(p => p - 1)}
-              className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <button
-              disabled={page * pageSize >= list.length}
-              onClick={() => setPage(p => p + 1)}
-              className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
+              <dt className="text-[11px] uppercase tracking-[0.22em] text-mute">Total</dt>
+              <dd className="font-mono text-lg tabular-nums">{inr(order.total)}</dd>
+            </div>
+          </dl>
         </div>
-      )}
-    </Panel>
-
-    <AdminDrawer
-      open={!!active}
-      onClose={() => setActive(null)}
-      eyebrow={active ? `${longDate(active.createdAt)}` : ""}
-      title={active ? `Order ${active.number}` : ""}
-      footer={
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex flex-col gap-1">
-            <button 
-              onClick={() => {
-                 if (!window.confirm("Are you sure you want to cancel this order? This action cannot be undone.")) return;
-                 apiClient.put(`/admin/orders/${active?.id}/status`, { status: 'CANCELLED' }).then(() => {
-                   toast.success('Order cancelled');
-                   queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-                   setActive(null);
-                 }).catch((err) => { toast.error('Failed to cancel order'); });
-              }}
-              className="press flex items-center gap-1.5 border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
-            >
-              <RotateCcw className="h-3.5 w-3.5" /> Cancel / Refund
-            </button>
-            {active?.paymentProvider === "RAZORPAY" && active?.status !== "FAILED" && active?.status !== "PAYMENT_PENDING" && (
-              <p className="text-[9px] text-accent max-w-[150px] leading-tight">
-                Warning: Does not auto-refund via Razorpay.
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => window.print()}
-              className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
-            >
-              Print invoice
-            </button>
-            <button 
-              onClick={() => {
-                apiClient.put(`/admin/orders/${active?.id}/status`, { status: 'SHIPPED' }).then(() => {
-                  toast.success('Order marked as shipped');
-                  queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-                  setActive(null);
-                }).catch((err) => { toast.error('Failed to fulfill order'); });
-              }}
-              className="press flex items-center gap-1.5 bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
-            >
-              <PackageCheck className="h-3.5 w-3.5" /> Fulfill
-            </button>
-          </div>
-        </div>
-      }
-    >
-      {active && <OrderDetail order={active} />}
-    </AdminDrawer>
-
-    <AdminDrawer
-      open={isCreating}
-      onClose={() => setIsCreating(false)}
-      eyebrow="Manual POS"
-      title="Create Order"
-      footer={
-        <div className="flex justify-end gap-2">
-          <button 
-            onClick={() => setIsCreating(false)}
-            className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
-          >
-            Cancel
-          </button>
-          <button 
-            onClick={() => {
-              apiClient.post(`/admin/orders`, manualOrder).then(() => {
-                toast.success('Order created');
-                queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-                setIsCreating(false);
-              }).catch(() => toast.error('Failed to create manual order'));
-            }}
-            className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
-          >
-            Submit Order
-          </button>
-        </div>
-      }
-    >
-      <div className="space-y-4">
-        <div>
-          <label className="text-[12px] text-mute">Customer Email</label>
-          <input 
-            value={manualOrder.email} 
-            onChange={e => setManualOrder(m => ({...m, email: e.target.value}))}
-            className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" 
-          />
-        </div>
-        <div>
-          <label className="text-[12px] text-mute">Product IDs (comma separated)</label>
-          <input 
-            value={manualOrder.items} 
-            onChange={e => setManualOrder(m => ({...m, items: e.target.value}))}
-            className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" 
-          />
-        </div>
-        <div>
-          <label className="text-[12px] text-mute">Total Amount</label>
-          <input 
-            value={manualOrder.total} 
-            onChange={e => setManualOrder(m => ({...m, total: e.target.value}))}
-            className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" 
-          />
-        </div>
-      </div>
-    </AdminDrawer>
-  </div>
-);
+      </section>
+    </div>
+  );
 }
 
 function Row({ label, value }: { label: string; value: string }) {
+  return (
     <div className="flex justify-between">
       <dt className="text-mute">{label}</dt>
       <dd className="font-mono tabular-nums text-ink">{value}</dd>
