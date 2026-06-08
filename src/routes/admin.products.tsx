@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   CalendarClock,
@@ -40,6 +41,13 @@ function ProductsPage() {
   const [q, setQ] = useState("");
   const [view, setView] = useState<"table" | "grid">("table");
   const [active, setActive] = useState<Product | null>(null);
+  const [edits, setEdits] = useState<Partial<Product>>({});
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
+
+  useEffect(() => {
+    setEdits({});
+  }, [active]);
 
   const queryClient = useQueryClient();
   const { data: ALL = [], isLoading } = useQuery<Product[]>({
@@ -51,15 +59,27 @@ function ProductsPage() {
   });
 
   const list = useMemo(
-    () =>
-      ALL.filter(
+    () => {
+      setPage(1);
+      return ALL.filter(
         (p) =>
           !q ||
           p.name.toLowerCase().includes(q.toLowerCase()) ||
           p.sku.toLowerCase().includes(q.toLowerCase()),
-      ),
-    [q],
+      );
+    },
+    [ALL, q],
   );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-24 animate-pulse rounded border border-line bg-fog/20" />
+        <div className="h-12 animate-pulse rounded border border-line bg-fog/20" />
+        <div className="h-96 animate-pulse rounded border border-line bg-fog/20" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -117,6 +137,12 @@ function ProductsPage() {
 
       {view === "table" ? (
         <Panel bodyClassName="p-0">
+          {list.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-mute">
+              <Search className="mb-4 h-8 w-8 opacity-20" />
+              <p className="text-[13px]">No products found matching your criteria.</p>
+            </div>
+          ) : (
           <table className="w-full text-[13px]">
             <thead className="border-b border-line bg-fog/40 text-left">
               <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
@@ -131,7 +157,7 @@ function ProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {list.map((p) => {
+              {list.slice((page - 1) * pageSize, page * pageSize).map((p) => {
                 const low = p.stock > 0 && p.stock <= p.lowStockAt;
                 const oos = p.stock === 0 && p.status === "active";
                 return (
@@ -202,6 +228,11 @@ function ProductsPage() {
                     </td>
                     <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
+                        onClick={() => {
+                          apiClient.put(`/admin/catalog/products/${p.id}`, { visible: !p.visible })
+                            .then(() => queryClient.invalidateQueries({ queryKey: ["admin-products"] }))
+                            .catch(() => toast.error("Failed to update visibility"));
+                        }}
                         aria-label={p.visible ? "Hide" : "Show"}
                         className="text-mute hover:text-ink"
                       >
@@ -213,10 +244,11 @@ function ProductsPage() {
               })}
             </tbody>
           </table>
+          )}
         </Panel>
       ) : (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-          {list.map((p) => (
+          {list.slice((page - 1) * pageSize, page * pageSize).map((p) => (
             <button
               key={p.id}
               onClick={() => setActive(p)}
@@ -245,6 +277,30 @@ function ProductsPage() {
         </div>
       )}
 
+      {list.length > pageSize && (
+        <div className="flex items-center justify-between border-t border-line bg-fog/20 px-4 py-3 text-[12px]">
+          <p className="text-mute">
+            Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, list.length)} of {list.length} products
+          </p>
+          <div className="flex gap-2">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage(p => p - 1)}
+              className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              disabled={page * pageSize >= list.length}
+              onClick={() => setPage(p => p + 1)}
+              className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
       <AdminDrawer
         open={!!active}
         onClose={() => setActive(null)}
@@ -253,16 +309,28 @@ function ProductsPage() {
         width={620}
         footer={
           <div className="flex justify-between gap-2">
-            <button className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink">
+            <button 
+              onClick={() => {
+                apiClient.put(`/admin/catalog/products/${active?.id}`, { ...edits, status: 'archived' })
+                  .then(() => {
+                    toast.success('Product archived');
+                    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+                    setActive(null);
+                  })
+                  .catch(() => toast.error('Failed to archive'));
+              }}
+              className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
+            >
               Archive
             </button>
             <div className="flex gap-2">
               <button 
                 onClick={() => {
-                  apiClient.put(`/admin/catalog/products/${active?.id}`, { status: 'draft' }).then(() => {
+                  apiClient.put(`/admin/catalog/products/${active?.id}`, { ...edits, status: 'draft' }).then(() => {
+                    toast.success('Saved as draft');
                     queryClient.invalidateQueries({ queryKey: ["admin-products"] });
                     setActive(null);
-                  });
+                  }).catch(() => toast.error('Failed to save draft'));
                 }}
                 className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
               >
@@ -270,10 +338,11 @@ function ProductsPage() {
               </button>
               <button 
                 onClick={() => {
-                  apiClient.put(`/admin/catalog/products/${active?.id}`, { status: 'active' }).then(() => {
+                  apiClient.put(`/admin/catalog/products/${active?.id}`, { ...edits, status: 'active' }).then(() => {
+                    toast.success('Product published');
                     queryClient.invalidateQueries({ queryKey: ["admin-products"] });
                     setActive(null);
-                  });
+                  }).catch(() => toast.error('Failed to save changes'));
                 }}
                 className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
               >
@@ -283,13 +352,13 @@ function ProductsPage() {
           </div>
         }
       >
-        {active && <ProductDetail product={active} />}
+        {active && <ProductDetail product={active} edits={edits} onChange={(k, v) => setEdits(e => ({...e, [k]: v}))} />}
       </AdminDrawer>
     </div>
   );
 }
 
-function ProductDetail({ product }: { product: Product }) {
+function ProductDetail({ product, edits, onChange }: { product: Product, edits: Partial<Product>, onChange: (key: string, value: any) => void }) {
   const [tab, setTab] = useState<"general" | "media" | "variants" | "seo" | "schedule">("general");
   return (
     <div className="space-y-5">
@@ -323,24 +392,27 @@ function ProductDetail({ product }: { product: Product }) {
 
       {tab === "general" && (
         <div className="space-y-4">
-          <FieldRow label="Name" defaultValue={product.name} />
+          <FieldRow label="Name" value={edits.name ?? product.name} onChange={e => onChange("name", e.target.value)} />
           <div className="grid grid-cols-2 gap-3">
-            <FieldRow label="Price" prefix="₹" defaultValue={String(product.price)} />
+            <FieldRow label="Price" prefix="₹" type="number" value={edits.price ?? product.price} onChange={e => onChange("price", Number(e.target.value))} />
             <FieldRow
               label="Compare at"
               prefix="₹"
-              defaultValue={product.compareAt ? String(product.compareAt) : ""}
+              type="number"
+              value={edits.compareAt ?? product.compareAt ?? ""}
+              onChange={e => onChange("compareAt", Number(e.target.value) || undefined)}
               placeholder="Optional"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <FieldRow label="SKU" defaultValue={product.sku} />
-            <FieldRow label="Stock" defaultValue={String(product.stock)} />
+            <FieldRow label="SKU" value={edits.sku ?? product.sku} onChange={e => onChange("sku", e.target.value)} />
+            <FieldRow label="Stock" type="number" value={edits.stock ?? product.stock} onChange={e => onChange("stock", Number(e.target.value))} />
           </div>
-          <ToggleRow label="Visible on storefront" defaultChecked={product.visible} />
+          <ToggleRow label="Visible on storefront" checked={edits.visible ?? product.visible} onChange={v => onChange("visible", v)} />
           <ToggleRow
             label="Featured"
-            defaultChecked={product.featured}
+            checked={edits.featured ?? product.featured}
+            onChange={v => onChange("featured", v)}
             hint="Surfaces on home and category pages"
           />
         </div>
@@ -409,10 +481,11 @@ function ProductDetail({ product }: { product: Product }) {
 
       {tab === "schedule" && (
         <div className="space-y-4">
-          <ToggleRow label="Schedule publish" defaultChecked={!!product.scheduledFor} />
+          <ToggleRow label="Schedule publish" checked={!!(edits.scheduledFor ?? product.scheduledFor)} onChange={v => { if (!v) onChange("scheduledFor", undefined); }} />
           <FieldRow
             label="Publish at"
-            defaultValue={product.scheduledFor?.slice(0, 16).replace("T", " ") ?? ""}
+            value={(edits.scheduledFor ?? product.scheduledFor)?.slice(0, 16).replace("T", " ") ?? ""}
+            onChange={e => onChange("scheduledFor", e.target.value ? new Date(e.target.value).toISOString() : undefined)}
             placeholder="YYYY-MM-DD HH:MM"
           />
           <FieldRow label="Available until" placeholder="Optional" />
@@ -447,13 +520,15 @@ function FieldRow({
 function ToggleRow({
   label,
   hint,
-  defaultChecked,
+  checked,
+  onChange,
 }: {
   label: string;
   hint?: string;
-  defaultChecked?: boolean;
+  checked?: boolean;
+  onChange?: (checked: boolean) => void;
 }) {
-  const [on, setOn] = useState(!!defaultChecked);
+  const on = checked ?? false;
   return (
     <div className="flex items-start justify-between gap-4 border-y border-line py-3">
       <div>
@@ -464,7 +539,7 @@ function ToggleRow({
         type="button"
         role="switch"
         aria-checked={on}
-        onClick={() => setOn(!on)}
+        onClick={() => onChange?.(!on)}
         className={`relative h-5 w-9 rounded-full transition ${on ? "bg-ink" : "bg-line"}`}
       >
         <span

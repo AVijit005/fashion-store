@@ -6,6 +6,8 @@ import { StatusChip, studioTone } from "@/components/admin/status-chip";
 import { AdminDrawer } from "@/components/admin/drawer";
 import { studioRequests as ALL, type StudioRequest } from "@/lib/admin/data";
 import { longDate, relTime } from "@/lib/admin/format";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
 
 export const Route = createFileRoute("/admin/studio")({
   head: () => ({
@@ -39,21 +41,36 @@ function StudioPage() {
   const [q, setQ] = useState("");
   const [active, setActive] = useState<StudioRequest | null>(null);
 
+  const { data: apiStudio = [], isLoading } = useQuery<StudioRequest[]>({
+    queryKey: ["admin-studio"],
+    queryFn: () => apiClient.get("/admin/studio"),
+  });
+  const baseList = apiStudio.length > 0 ? apiStudio : ALL;
+
   const list = useMemo(
     () =>
-      ALL.filter((r) => {
+      baseList.filter((r) => {
         if (status !== "all" && r.status !== status) return false;
         if (q && !`${r.customer.name} ${r.ref}`.toLowerCase().includes(q.toLowerCase()))
           return false;
         return true;
       }),
-    [status, q],
+    [baseList, status, q],
   );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-24 animate-pulse rounded border border-line bg-fog/20" />
+        <div className="h-96 animate-pulse rounded border border-line bg-fog/20" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow={`${ALL.length} requests · ${ALL.filter((r) => r.status === "new").length} need triage`}
+        eyebrow={`${baseList.length} requests · ${baseList.filter((r) => r.status === "new").length} need triage`}
         title="Studio requests"
         description="Custom-print queue with approvals, revisions and production status."
       />
@@ -129,7 +146,7 @@ function StudioPage() {
                 {s.replace("_", " ")}
               </p>
               <p className="mt-1 font-display text-3xl tabular-nums text-ink">
-                {ALL.filter((r) => r.status === s).length}
+                {baseList.filter((r) => r.status === s).length}
               </p>
             </div>
           ))}

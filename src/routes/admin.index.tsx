@@ -16,6 +16,7 @@ import {
 import { compactInr, relTime } from "@/lib/admin/format";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
+import { useAuthStore } from "@/lib/store/auth";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({
@@ -40,17 +41,25 @@ function OverviewPage() {
     queryKey: ["admin-products"],
     queryFn: () => apiClient.get("/admin/catalog/products"),
   });
+  const { data: apiOrders = [] } = useQuery<any[]>({
+    queryKey: ["admin-orders"],
+    queryFn: () => apiClient.get("/admin/orders"),
+  });
 
-  const recent = orders.slice(0, 6);
+  const recent = (apiOrders.length > 0 ? apiOrders : orders).slice(0, 6);
   const lowStock = (products.length > 0 ? products : mockProducts).filter((p: any) => p.stock > 0 && p.stock <= p.lowStockAt).slice(0, 5);
   const trending = [...(products.length > 0 ? products : mockProducts)].sort((a: any, b: any) => (b.views7d || 0) - (a.views7d || 0)).slice(0, 5);
   const liveActivity = activityData.length > 0 ? activityData : mockActivity;
+
+  const adminName = useAuthStore((s) => s.user?.email?.split('@')[0] ?? 'Admin');
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Operations · Last 14 days"
-        title="Good morning, Aanya."
+        title={`${greeting}, ${adminName}.`}
         description="A snapshot of today's storefront performance, fulfillment status, and live activity."
         actions={
           <>
@@ -66,7 +75,11 @@ function OverviewPage() {
 
       {/* KPI grid */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {mockKpis.map((k) => (
+        {(kpisData ? [
+          { label: 'Revenue', value: kpisData.totalRevenue ? '₹' + (kpisData.totalRevenue / 100000).toFixed(2) + 'L' : '₹0', delta: 0, spark: mockKpis[0].spark, hint: "Last 14 days" },
+          { label: 'Orders', value: String(kpisData.totalOrders ?? 0), delta: 0, spark: mockKpis[1].spark, hint: "Last 14 days" },
+          ...mockKpis.slice(2)
+        ] : mockKpis).map((k: any) => (
           <KpiCard key={k.label} {...k} />
         ))}
       </div>

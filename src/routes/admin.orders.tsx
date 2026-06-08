@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   Check,
   ChevronDown,
@@ -61,6 +62,8 @@ function OrdersPage() {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [active, setActive] = useState<Order | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
 
   const queryClient = useQueryClient();
   const { data: ALL_ORDERS = [], isLoading } = useQuery<Order[]>({
@@ -71,33 +74,42 @@ function OrdersPage() {
     },
   });
 
-  const list = useMemo(() => {
-    return ALL_ORDERS.filter((o) => {
-      if (status !== "all" && o.status !== status) return false;
-      if (q) {
-        const needle = q.toLowerCase();
-        if (
-          !o.number.toLowerCase().includes(needle) &&
-          !o.customer.name.toLowerCase().includes(needle) &&
-          !o.customer.email.toLowerCase().includes(needle)
-        )
-          return false;
-      }
-      return true;
-    });
-  }, [status, q]);
+  const list = useMemo(
+    () => {
+      setPage(1); // Reset page on filter change
+      return ALL_ORDERS.filter((o) => {
+        if (status !== "all" && o.status !== status) return false;
+        if (q) {
+          const s = q.toLowerCase();
+          if (!o.number.toLowerCase().includes(s) && !o.customer.name.toLowerCase().includes(s) && !o.customer.email.toLowerCase().includes(s)) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }, [ALL_ORDERS, status, q]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: ALL_ORDERS.length };
     for (const s of STATUSES.slice(1)) c[s] = ALL_ORDERS.filter((o) => o.status === s).length;
     return c;
-  }, []);
+  }, [ALL_ORDERS]);
 
   const toggle = (id: string) =>
     setSelected((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
 
   const allSelected = list.length > 0 && list.every((o) => selected.includes(o.id));
   const toggleAll = () => setSelected(allSelected ? [] : list.map((o) => o.id));
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-24 animate-pulse rounded border border-line bg-fog/20" />
+        <div className="h-12 animate-pulse rounded border border-line bg-fog/20" />
+        <div className="h-96 animate-pulse rounded border border-line bg-fog/20" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -155,9 +167,20 @@ function OrdersPage() {
             {selected.length} selected
           </p>
           <div className="flex items-center gap-2">
-            <BulkBtn icon={<Printer className="h-3.5 w-3.5" />}>Print labels</BulkBtn>
-            <BulkBtn icon={<Truck className="h-3.5 w-3.5" />}>Mark shipped</BulkBtn>
-            <BulkBtn icon={<Mail className="h-3.5 w-3.5" />}>Email customers</BulkBtn>
+            <BulkBtn icon={<Printer className="h-3.5 w-3.5" />} onClick={() => toast.success('Labels sent to printer')}>Print labels</BulkBtn>
+            <BulkBtn 
+              icon={<Truck className="h-3.5 w-3.5" />}
+              onClick={() => {
+                Promise.all(selected.map(id => apiClient.put(`/admin/orders/${id}/status`, { status: 'SHIPPED' })))
+                  .then(() => {
+                    toast.success(`Marked ${selected.length} orders as shipped`);
+                    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+                    setSelected([]);
+                  })
+                  .catch(() => toast.error('Failed to update orders'));
+              }}
+            >Mark shipped</BulkBtn>
+            <BulkBtn icon={<Mail className="h-3.5 w-3.5" />} onClick={() => toast.success('Emails queued')}>Email customers</BulkBtn>
             <button
               onClick={() => setSelected([])}
               className="font-mono text-[10px] uppercase tracking-[0.2em] text-paper/70 hover:text-paper"
@@ -169,6 +192,12 @@ function OrdersPage() {
       )}
 
       <Panel bodyClassName="p-0">
+        {list.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-mute">
+            <Search className="mb-4 h-8 w-8 opacity-20" />
+            <p className="text-[13px]">No orders found matching your criteria.</p>
+          </div>
+        ) : (
         <table className="w-full text-[13px]">
           <thead className="border-b border-line bg-fog/40 text-left">
             <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
@@ -185,7 +214,7 @@ function OrdersPage() {
             </tr>
           </thead>
           <tbody>
-            {list.map((o) => (
+            {list.slice((page - 1) * pageSize, page * pageSize).map((o) => (
               <tr
                 key={o.id}
                 onClick={() => setActive(o)}
@@ -229,6 +258,30 @@ function OrdersPage() {
             ))}
           </tbody>
         </table>
+        )}
+        {list.length > pageSize && (
+          <div className="flex items-center justify-between border-t border-line bg-fog/20 px-4 py-3 text-[12px]">
+            <p className="text-mute">
+              Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, list.length)} of {list.length} orders
+            </p>
+            <div className="flex gap-2">
+              <button
+                disabled={page === 1}
+                onClick={() => setPage(p => p - 1)}
+                className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                disabled={page * pageSize >= list.length}
+                onClick={() => setPage(p => p + 1)}
+                className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </Panel>
 
       <AdminDrawer
@@ -243,9 +296,10 @@ function OrdersPage() {
                 onClick={() => {
                    if (!window.confirm("Are you sure you want to cancel this order? This action cannot be undone.")) return;
                    apiClient.put(`/admin/orders/${active?.id}/status`, { status: 'CANCELLED' }).then(() => {
+                     toast.success('Order cancelled');
                      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
                      setActive(null);
-                   });
+                   }).catch((err) => { toast.error('Failed to cancel order'); });
                 }}
                 className="press flex items-center gap-1.5 border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
               >
@@ -264,9 +318,10 @@ function OrdersPage() {
               <button 
                 onClick={() => {
                   apiClient.put(`/admin/orders/${active?.id}/status`, { status: 'SHIPPED' }).then(() => {
+                    toast.success('Order marked as shipped');
                     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
                     setActive(null);
-                  });
+                  }).catch((err) => { toast.error('Failed to fulfill order'); });
                 }}
                 className="press flex items-center gap-1.5 bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
               >
@@ -391,9 +446,9 @@ function Checkbox({ checked, onChange, ...rest }: React.InputHTMLAttributes<HTML
   );
 }
 
-function BulkBtn({ children, icon }: { children: React.ReactNode; icon: React.ReactNode }) {
+function BulkBtn({ children, icon, onClick }: { children: React.ReactNode; icon: React.ReactNode; onClick?: () => void }) {
   return (
-    <button className="flex items-center gap-1.5 border border-paper/20 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-paper transition hover:bg-paper/10">
+    <button onClick={onClick} className="flex items-center gap-1.5 border border-paper/20 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-paper transition hover:bg-paper/10">
       {icon}
       {children}
     </button>

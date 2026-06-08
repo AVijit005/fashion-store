@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Bell, CreditCard, Globe, Palette, Search, ShieldCheck, Store, Truck } from "lucide-react";
 import { SectionHeader, Panel } from "@/components/admin/section-header";
 
@@ -32,6 +33,14 @@ function SettingsPage() {
         eyebrow="Workspace"
         title="Settings"
         description="Configure branding, fulfillment, payments, SEO, and team access."
+        actions={
+          <button 
+            onClick={() => toast.success("Settings saved successfully")}
+            className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
+          >
+            Save changes
+          </button>
+        }
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">

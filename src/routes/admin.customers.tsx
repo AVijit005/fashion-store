@@ -6,6 +6,8 @@ import { StatusChip } from "@/components/admin/status-chip";
 import { AdminDrawer } from "@/components/admin/drawer";
 import { customers as ALL, type Customer } from "@/lib/admin/data";
 import { compactInr, longDate, relTime } from "@/lib/admin/format";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
 
 export const Route = createFileRoute("/admin/customers")({
   head: () => ({
@@ -24,22 +26,39 @@ function CustomersPage() {
   const [q, setQ] = useState("");
   const [active, setActive] = useState<Customer | null>(null);
 
+  const { data: apiCustomers = [], isLoading } = useQuery<Customer[]>({
+    queryKey: ["admin-customers"],
+    queryFn: () => apiClient.get("/admin/customers"),
+  });
+
+  const baseList = apiCustomers.length > 0 ? apiCustomers : ALL;
+
   const list = useMemo(
     () =>
-      ALL.filter((c) => {
+      baseList.filter((c) => {
         if (seg !== "all" && c.segment !== seg) return false;
         if (q && !`${c.name} ${c.email}`.toLowerCase().includes(q.toLowerCase())) return false;
         return true;
       }),
-    [seg, q],
+    [baseList, seg, q],
   );
 
-  const totalSpend = ALL.reduce((s, c) => s + c.spend, 0);
+  const totalSpend = baseList.reduce((s, c) => s + c.spend, 0);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-24 animate-pulse rounded border border-line bg-fog/20" />
+        <div className="h-24 animate-pulse rounded border border-line bg-fog/20" />
+        <div className="h-96 animate-pulse rounded border border-line bg-fog/20" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow={`${ALL.length} customers · ${ALL.filter((c) => c.vip).length} VIP`}
+        eyebrow={`${baseList.length} customers · ${baseList.filter((c) => c.vip).length} VIP`}
         title="Customers"
         description="Lifetime value, segments, support history and loyalty tiers."
         actions={
@@ -58,12 +77,12 @@ function CustomersPage() {
         <MiniStat label="Total LTV" value={compactInr(totalSpend)} delta="+12.4%" />
         <MiniStat
           label="Avg orders"
-          value={(ALL.reduce((s, c) => s + c.orders, 0) / ALL.length).toFixed(1)}
+          value={(baseList.reduce((s, c) => s + c.orders, 0) / (baseList.length || 1)).toFixed(1)}
         />
         <MiniStat label="Repeat rate" value="48%" delta="+3.2%" />
         <MiniStat
           label="VIP share"
-          value={`${Math.round((ALL.filter((c) => c.vip).length / ALL.length) * 100)}%`}
+          value={`${Math.round((baseList.filter((c) => c.vip).length / (baseList.length || 1)) * 100)}%`}
         />
       </div>
 

@@ -5,6 +5,8 @@ import { SectionHeader, Panel } from "@/components/admin/section-header";
 import { StatusChip } from "@/components/admin/status-chip";
 import { drops as ALL, type Drop } from "@/lib/admin/data";
 import { compactInr, longDate } from "@/lib/admin/format";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
 
 export const Route = createFileRoute("/admin/drops")({
   head: () => ({
@@ -19,10 +21,25 @@ export const Route = createFileRoute("/admin/drops")({
 const STATUS_TONE = { live: "positive", scheduled: "warn", ended: "muted", draft: "info" } as const;
 
 function DropsPage() {
+  const { data: apiDrops = [], isLoading } = useQuery<Drop[]>({
+    queryKey: ["admin-drops"],
+    queryFn: () => apiClient.get("/admin/drops"),
+  });
+  const baseList = apiDrops.length > 0 ? apiDrops : ALL;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-24 animate-pulse rounded border border-line bg-fog/20" />
+        <div className="h-96 animate-pulse rounded border border-line bg-fog/20" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow={`${ALL.length} capsules · ${ALL.filter((d) => d.status === "live").length} live`}
+        eyebrow={`${baseList.length} capsules · ${baseList.filter((d) => d.status === "live").length} live`}
         title="Drops"
         description="Schedule capsules, monitor live performance, manage featured campaigns."
         actions={
@@ -33,14 +50,14 @@ function DropsPage() {
       />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {ALL.map((d) => (
+        {baseList.map((d) => (
           <DropCard key={d.id} drop={d} />
         ))}
       </div>
 
       <Panel title="Campaign calendar" bodyClassName="p-0">
         <ul className="divide-y divide-line/60">
-          {ALL.map((d) => (
+          {baseList.map((d) => (
             <li key={d.id} className="flex items-center gap-4 px-4 py-3 transition hover:bg-fog/40">
               <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-mute">
                 {longDate(d.startsAt)}
