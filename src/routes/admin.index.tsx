@@ -75,10 +75,10 @@ function OverviewPage() {
       {/* KPI grid */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: 'Revenue', value: compactInr(realRevenue), delta: 0, hint: "Last 14 days" },
-          { label: 'Orders', value: String(realOrders), delta: 0, hint: "Last 14 days" },
-          { label: 'AOV', value: compactInr(realAov), delta: 0, hint: "Last 14 days" },
-          { label: 'Conversion', value: "—", delta: 0, hint: "Not enough data" }
+          { label: 'Revenue', value: compactInr(realRevenue), delta: 0, spark: chartSeries.map((d: any) => d.revenue), hint: "Last 14 days" },
+          { label: 'Orders', value: String(realOrders), delta: 0, spark: chartSeries.map((d: any) => d.orders), hint: "Last 14 days" },
+          { label: 'AOV', value: compactInr(realAov), delta: 0, spark: [], hint: "Last 14 days" },
+          { label: 'Conversion', value: "—", delta: 0, spark: [], hint: "Not enough data" }
         ].map((k: any) => (
           <KpiCard key={k.label} {...k} />
         ))}
