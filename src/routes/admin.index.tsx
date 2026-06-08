@@ -252,7 +252,7 @@ function OverviewPage() {
                   key={p.id}
                   className="flex items-center gap-3 border-b border-line/60 pb-2.5 last:border-0 last:pb-0"
                 >
-                  <img src={p.image} alt="" className="h-10 w-10 object-cover" />
+                  <img src={p.image || "https://placehold.co/400x500/f5f3ee/0d0d0d?text=No+Image"} alt="" className="h-10 w-10 object-cover" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] text-ink">{p.name}</p>
                     <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-mute">

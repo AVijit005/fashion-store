@@ -181,7 +181,9 @@ function ProductsPage() {
                   >
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-3">
-                        <img src={p.image} alt="" className="h-10 w-10 object-cover" />
+                        <div className="h-10 w-10 shrink-0 bg-fog">
+                          <img src={p.image || "https://placehold.co/400x500/f5f3ee/0d0d0d?text=No+Image"} alt="" className="h-10 w-10 object-cover" />
+                        </div>
                         <div className="min-w-0">
                           <p className="flex items-center gap-1.5 truncate text-ink">
                             {p.name}
@@ -270,7 +272,7 @@ function ProductsPage() {
             >
               <div className="relative aspect-[4/5] overflow-hidden bg-fog">
                 <img
-                  src={p.image}
+                  src={p.image || "https://placehold.co/400x500/f5f3ee/0d0d0d?text=No+Image"}
                   alt=""
                   className="h-full w-full object-cover transition group-hover:scale-[1.02]"
                 />

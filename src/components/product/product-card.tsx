@@ -53,13 +53,13 @@ export const ProductCard = memo(function ProductCard({
       return;
     }
     const rect = cardRef.current?.getBoundingClientRect();
-    if (rect) launch(product.images[0], rect);
+    if (rect) launch(product.images?.[0] || "https://placehold.co/600x800/f5f3ee/0d0d0d?text=No+Image", rect);
     add({
       id: product.id,
       variantId: selectedVariant.id,
       slug: product.slug,
       name: product.name,
-      image: product.images[0],
+      image: product.images?.[0] || "https://placehold.co/600x800/f5f3ee/0d0d0d?text=No+Image",
       price: product.price,
       mrp: product.mrp,
       size,
@@ -78,14 +78,14 @@ export const ProductCard = memo(function ProductCard({
         <Link to="/p/$slug" params={{ slug: product.slug }} className="block">
           <div className="relative aspect-[3/4] overflow-hidden bg-fog">
             <img
-              src={product.images[0]}
+              src={product.images?.[0] || "https://placehold.co/600x800/f5f3ee/0d0d0d?text=No+Image"}
               alt={product.name}
               loading={priority ? "eager" : "lazy"}
               className={`absolute inset-0 h-full w-full object-cover transition-all duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                hover && product.images[1] ? "scale-105 opacity-0" : "scale-100 opacity-100"
+                hover && product.images?.[1] ? "scale-105 opacity-0" : "scale-100 opacity-100"
               }`}
             />
-            {product.images[1] && (
+            {product.images?.[1] && (
               <img
                 src={product.images[1]}
                 alt=""
