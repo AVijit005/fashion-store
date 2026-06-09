@@ -30,9 +30,10 @@ export class CatalogService {
     const offset = Math.min(Math.max(filters.offset || 0, 0), 10000);
     const now = new Date();
 
-    // Visibility boundary: must be PUBLISHED, and if linked to a drop, the drop must be released/active
+    // Visibility boundary: must be PUBLISHED, not deleted, and if linked to a drop, the drop must be released/active
     const where: Prisma.ProductWhereInput = {
       status: ProductStatus.PUBLISHED,
+      isDeleted: false,
       OR: [
         { dropId: null },
         {
@@ -94,6 +95,7 @@ export class CatalogService {
       where: {
         slug,
         status: ProductStatus.PUBLISHED,
+        isDeleted: false,
         OR: [
           { dropId: null },
           {

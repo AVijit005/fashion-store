@@ -17,14 +17,14 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+    return this.prisma.user.findFirst({
+      where: { email: email.toLowerCase(), isDeleted: false },
     });
   }
 
   async findById(id: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
-      where: { id },
+    return this.prisma.user.findFirst({
+      where: { id, isDeleted: false },
     });
   }
 
@@ -35,6 +35,13 @@ export class UsersService {
     return this.prisma.user.update({
       where: { id },
       data,
+    });
+  }
+
+  async softDelete(id: string): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data: { isDeleted: true },
     });
   }
 }

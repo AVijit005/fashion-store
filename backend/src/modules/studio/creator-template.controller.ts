@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, UseGuards, Req, Query } from
 import { CreatorTemplateService } from './creator-template.service';
 import { CreateCreatorTemplateDto, UpdateCreatorTemplateDto } from './dto/creator-template.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
+import { OptionalAuthGuard } from '../../common/guards/optional-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
@@ -27,16 +28,18 @@ export class CreatorTemplateController {
     return this.templateService.create(user.id, createDto);
   }
 
-  @UseGuards(AuthGuard)
+  @UseGuards(OptionalAuthGuard)
   @Get()
   @ApiOperation({
-    summary: 'List all templates. Admins/Creators see all, Customers see PUBLISHED only.',
+    summary: 'List all templates. Admins/Creators see all, Customers/Guests see PUBLISHED only.',
   })
   @ApiQuery({ name: 'status', enum: TemplateStatus, required: false })
   findAll(@CurrentUser() user: RequestUser, @Query('status') status?: TemplateStatus) {
-    // Customers can only see published templates
-    const finalStatus = user.role === Role.CUSTOMER ? TemplateStatus.PUBLISHED : status;
-    return this.templateService.findAll(user.id, user.role as Role, finalStatus);
+    const role = user?.role || Role.CUSTOMER;
+    const userId = user?.id || '';
+    // Customers and guests can only see published templates
+    const finalStatus = role === Role.CUSTOMER ? TemplateStatus.PUBLISHED : status;
+    return this.templateService.findAll(userId, role as Role, finalStatus);
   }
 
   @UseGuards(AuthGuard)

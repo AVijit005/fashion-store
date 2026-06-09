@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { apiClient, setMemoryAccessToken } from "../api/client";
+import { apiClient } from "../api/client";
 import { cartApi, getOrCreateCartSessionId } from "../api/cart";
 import { syncWishlistOnLogin } from "./wishlist";
 
@@ -38,7 +38,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setAuthModalView: (view) => set({ authModalView: view }),
 
   setTokens: (accessToken) => {
-    setMemoryAccessToken(accessToken);
     set({ accessToken, isAuthenticated: true });
   },
 
@@ -115,7 +114,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (typeof window !== "undefined") {
         localStorage.removeItem("ink_logged_in");
       }
-      setMemoryAccessToken(null);
       set({ user: null, accessToken: null, isAuthenticated: false });
 
       // Clear private data from local storage

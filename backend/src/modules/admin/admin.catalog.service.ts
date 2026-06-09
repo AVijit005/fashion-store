@@ -8,6 +8,7 @@ export class AdminCatalogService {
 
   async getProducts() {
     return this.prisma.product.findMany({
+      where: { isDeleted: false },
       orderBy: { createdAt: 'desc' },
       include: {
         category: true,
@@ -39,7 +40,7 @@ export class AdminCatalogService {
   }
 
   async updateProduct(id: string, data: any) {
-    const product = await this.prisma.product.findUnique({ where: { id } });
+    const product = await this.prisma.product.findFirst({ where: { id, isDeleted: false } });
     if (!product) {
       throw new NotFoundException('Product not found');
     }
@@ -47,11 +48,12 @@ export class AdminCatalogService {
     const { variantsData, images, image, categoryId, collectionId, dropId, ...productData } = data;
     
     if (variantsData) {
-      await this.prisma.productVariant.deleteMany({
+      await this.prisma.productVariant.updateMany({
         where: {
           productId: id,
           id: { notIn: variantsData.map((v: any) => v.id).filter(Boolean) },
         },
+        data: { isDeleted: true },
       });
       for (const v of variantsData) {
         if (v.id) {
@@ -77,8 +79,9 @@ export class AdminCatalogService {
   }
 
   async deleteProduct(id: string) {
-    return this.prisma.product.delete({
+    return this.prisma.product.update({
       where: { id },
+      data: { isDeleted: true },
     });
   }
 }

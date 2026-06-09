@@ -36,6 +36,8 @@
     "@nestjs/swagger": "^11.4.4",
     "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^6.4.1",
+    "@sentry/node": "^10.56.0",
+    "@sentry/profiling-node": "^10.56.0",
     "argon2": "^0.44.0",
     "bullmq": "^5.41.3",
     "class-transformer": "^0.5.1",

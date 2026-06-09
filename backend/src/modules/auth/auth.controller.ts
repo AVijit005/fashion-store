@@ -58,6 +58,7 @@ export class AuthController {
 
     const tokens = await this.authService.login(loginDto, ipAddress, userAgent);
     this.setRefreshTokenCookie(res, tokens.refreshToken);
+    this.setAccessTokenCookie(res, tokens.accessToken);
 
     return { accessToken: tokens.accessToken };
   }
@@ -78,6 +79,7 @@ export class AuthController {
 
     const tokens = await this.authService.refresh(refreshToken, ipAddress, userAgent);
     this.setRefreshTokenCookie(res, tokens.refreshToken);
+    this.setAccessTokenCookie(res, tokens.accessToken);
 
     return { accessToken: tokens.accessToken };
   }
@@ -91,6 +93,7 @@ export class AuthController {
       await this.authService.logout(refreshToken);
     }
     this.clearRefreshTokenCookie(res);
+    this.clearAccessTokenCookie(res);
     return { message: 'Logged out successfully' };
   }
 
@@ -109,11 +112,31 @@ export class AuthController {
 
   private clearRefreshTokenCookie(res: Response) {
     const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
-    res.clearCookie('refresh_token', {
+    res.cookie('refresh_token', '', {
       httpOnly: true,
       secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
-      path: '/auth',
+      sameSite: 'strict',
+      expires: new Date(0),
+    });
+  }
+
+  private setAccessTokenCookie(res: Response, token: string) {
+    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    res.cookie('access_token', token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+  }
+
+  private clearAccessTokenCookie(res: Response) {
+    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    res.cookie('access_token', '', {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      expires: new Date(0),
     });
   }
 }

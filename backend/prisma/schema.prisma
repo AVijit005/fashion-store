@@ -62,6 +62,7 @@ model User {
   verificationToken    String?       @unique @map("verification_token")
   passwordResetToken   String?       @unique @map("password_reset_token")
   passwordResetExpires DateTime?     @map("password_reset_expires")
+  isDeleted            Boolean       @default(false) @map("is_deleted")
   createdAt            DateTime      @default(now()) @map("created_at")
   updatedAt            DateTime      @updatedAt @map("updated_at")
   addresses            Address[]
@@ -172,6 +173,7 @@ model Product {
   metaTitle       String?          @map("meta_title")
   metaDescription String?          @map("meta_description")
   collections     Collection[]     @relation("ProductCollections")
+  isDeleted       Boolean          @default(false) @map("is_deleted")
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
   variants        ProductVariant[]
@@ -192,6 +194,7 @@ model ProductVariant {
   color         String
   stockQuantity Int         @default(0) @map("stock_quantity")
   priceOverride Decimal?    @map("price_override") @db.Decimal(10, 2)
+  isDeleted     Boolean     @default(false) @map("is_deleted")
   mediaUrls     String[]    @map("media_urls")
   thumbnailUrl  String?     @map("thumbnail_url")
   orderItems    OrderItem[]

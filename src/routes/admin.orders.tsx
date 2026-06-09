@@ -19,7 +19,7 @@ import { AdminDrawer } from "@/components/admin/drawer";
 import { exportToCSV } from "@/lib/admin/export";
 import type { Order, OrderStatus } from "@/lib/admin/data";
 import { compactInr, inr, longDate, relTime } from "@/lib/admin/format";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 
 export const Route = createFileRoute("/admin/orders")({
@@ -70,12 +70,23 @@ function OrdersPage() {
   const pageSize = 15;
 
   const queryClient = useQueryClient();
-  const { data: apiOrdersRes, isLoading } = useQuery<any>({
-    queryKey: ["admin-orders", page, q, status],
-    queryFn: async () => {
-      const res = await apiClient.get<any>(`/admin/orders?page=${page}&limit=${pageSize}&q=${encodeURIComponent(q)}&status=${status}`);
-      return res;
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage
+  } = useInfiniteQuery({
+    queryKey: ["admin-orders", q, status],
+    queryFn: async ({ pageParam = 1 }) => {
+      return apiClient.get<any>(`/admin/orders?page=${pageParam}&limit=${pageSize}&q=${encodeURIComponent(q)}&status=${status}`);
     },
+    getNextPageParam: (lastPage, allPages) => {
+      const totalPages = lastPage.meta?.totalPages || 1;
+      const nextPage = allPages.length + 1;
+      return nextPage <= totalPages ? nextPage : undefined;
+    },
+    initialPageParam: 1,
   });
 
   const createOrderMutation = useMutation({
@@ -99,12 +110,10 @@ function OrdersPage() {
     }
   });
 
-  useEffect(() => {
-    setPage(1);
-  }, [status, q]);
-
-  const list = apiOrdersRes?.data || [];
-  const meta = apiOrdersRes?.meta || { total: 0, totalPages: 1 };
+  const list = useMemo(() => {
+    return data?.pages.flatMap((page) => page.data) || [];
+  }, [data]);
+  const meta = data?.pages[0]?.meta || { total: 0, totalPages: 1 };
 
   const counts: Record<string, number> = { all: meta.total };
   // Note: Tab counts for specific statuses are hidden in paginated mode unless the backend sends them
@@ -270,6 +279,19 @@ function OrdersPage() {
           </tbody>
         </table>
         </div>
+        {hasNextPage && (
+          <div className="flex justify-center p-4 border-t border-line">
+            <button
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="border border-line bg-paper px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
+            >
+              {isFetchingNextPage ? "Loading more..." : "Load more"}
+            </button>
+          </div>
+        )}
+        </>
+        )}
 
         {/* Mobile Layout */}
         <div className="flex flex-col md:hidden">

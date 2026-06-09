@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Type, Image as ImageIcon, Trash2, Plus, ShoppingBag } from "lucide-react";
+import { Type, Image as ImageIcon, Trash2, Plus, ShoppingBag, LayoutTemplate } from "lucide-react";
 import { useCart } from "@/lib/store/cart";
 import { inr } from "@/lib/format";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
 
 export const Route = createFileRoute("/studio")({
   head: () => ({
@@ -70,8 +72,14 @@ function Studio() {
   ]);
   const [selected, setSelected] = useState<string | null>("l1");
   const [text, setText] = useState("INK");
+  const [activeTab, setActiveTab] = useState<"product" | "templates">("product");
   const canvasRef = useRef<HTMLDivElement>(null);
   const add = useCart((s) => s.add);
+
+  const { data: templates = [] } = useQuery<any[]>({
+    queryKey: ["creator-templates"],
+    queryFn: () => apiClient.get("/studio/templates"),
+  });
 
   const product = PRODUCTS.find((p) => p.id === productId)!;
   const colorHex = COLORS.find((c) => c.name === color)!.hex;
@@ -146,24 +154,74 @@ function Studio() {
       <div className="mx-auto grid max-w-[1480px] grid-cols-1 gap-6 px-5 py-10 lg:grid-cols-[280px_1fr_320px] lg:gap-8 lg:px-10">
         {/* Left: tools */}
         <aside className="space-y-8">
-          <div>
-            <p className="mb-3 text-[11px] uppercase tracking-[0.22em] text-mute">Product</p>
-            <div className="grid grid-cols-2 gap-2">
-              {PRODUCTS.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setProductId(p.id)}
-                  className={`border p-3 text-left transition ${productId === p.id ? "border-ink" : "border-line hover:border-graphite"}`}
-                >
-                  <div className="aspect-square overflow-hidden bg-fog">
-                    <img src={p.mockup} alt={p.name} className="h-full w-full object-cover" />
-                  </div>
-                  <p className="mt-2 text-[12px]">{p.name}</p>
-                  <p className="text-[11px] tabular-nums text-mute">{inr(p.price)}</p>
-                </button>
-              ))}
-            </div>
+          <div className="flex border-b border-line mb-6">
+            <button
+              onClick={() => setActiveTab("product")}
+              className={`flex-1 py-3 text-[11px] uppercase tracking-[0.22em] text-center transition ${activeTab === "product" ? "border-b-2 border-ink text-ink font-medium" : "text-mute hover:text-ink"}`}
+            >
+              Base Product
+            </button>
+            <button
+              onClick={() => setActiveTab("templates")}
+              className={`flex-1 py-3 text-[11px] uppercase tracking-[0.22em] text-center transition ${activeTab === "templates" ? "border-b-2 border-ink text-ink font-medium" : "text-mute hover:text-ink"}`}
+            >
+              Templates
+            </button>
           </div>
+
+          {activeTab === "product" ? (
+            <div>
+              <p className="mb-3 text-[11px] uppercase tracking-[0.22em] text-mute">Product</p>
+              <div className="grid grid-cols-2 gap-2">
+                {PRODUCTS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setProductId(p.id)}
+                    className={`border p-3 text-left transition ${productId === p.id ? "border-ink" : "border-line hover:border-graphite"}`}
+                  >
+                    <div className="aspect-square overflow-hidden bg-fog">
+                      <img src={p.mockup} alt={p.name} className="h-full w-full object-cover" />
+                    </div>
+                    <p className="mt-2 text-[12px]">{p.name}</p>
+                    <p className="text-[11px] tabular-nums text-mute">{inr(p.price)}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="mb-3 text-[11px] uppercase tracking-[0.22em] text-mute">Creator Templates</p>
+              {templates.length === 0 ? (
+                <p className="text-sm text-mute">No templates available yet.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {templates.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => {
+                        if (t.designJson && Array.isArray(t.designJson.layers)) {
+                          setLayers(t.designJson.layers);
+                          if (t.designJson.productId) setProductId(t.designJson.productId);
+                          if (t.designJson.color) setColor(t.designJson.color);
+                        }
+                      }}
+                      className="border border-line p-3 text-left transition hover:border-graphite"
+                    >
+                      <div className="aspect-square overflow-hidden bg-fog flex items-center justify-center">
+                        {t.previewImage ? (
+                           <img src={t.previewImage} alt={t.title} className="h-full w-full object-cover" />
+                        ) : (
+                           <LayoutTemplate className="h-8 w-8 text-mute opacity-50" />
+                        )}
+                      </div>
+                      <p className="mt-2 text-[12px] truncate">{t.title}</p>
+                      <p className="text-[10px] text-mute truncate">{t.category || "General"}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <p className="mb-3 text-[11px] uppercase tracking-[0.22em] text-mute">Color</p>

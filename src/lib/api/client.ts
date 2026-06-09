@@ -22,11 +22,6 @@ export class APIError extends Error {
 }
 
 let refreshPromise: Promise<void> | null = null;
-let memoryAccessToken: string | null = null;
-
-export function setMemoryAccessToken(token: string | null) {
-  memoryAccessToken = token;
-}
 
 function unwrapApiData<T>(parsed: unknown, validate?: (data: unknown) => boolean): T {
   let data = parsed;
@@ -58,11 +53,7 @@ export const apiClient = {
       headers.set("Content-Type", "application/json");
     }
 
-    // Attach JWT Access Token if user is logged in
-    if (memoryAccessToken) {
-      headers.set("Authorization", `Bearer ${memoryAccessToken}`);
-    }
-
+    // Backend now relies on HttpOnly cookies, so we don't need to manually attach a Bearer token.
     if (typeof window !== "undefined") {
       // Attach Guest Session ID for Cart identification
       const guestSessionId = localStorage.getItem("ink_cart_session_id");
@@ -87,7 +78,7 @@ export const apiClient = {
 
     if (!response.ok) {
       if (response.status === 401 && path !== "/auth/refresh" && path !== "/auth/login") {
-        if (memoryAccessToken || (typeof window !== "undefined" && localStorage.getItem("ink_logged_in") === "true")) {
+        if (typeof window !== "undefined" && localStorage.getItem("ink_logged_in") === "true") {
           if (!refreshPromise) {
             refreshPromise = (async () => {
                 const refreshUrl = new URL(`${BASE_URL}/auth/refresh`);

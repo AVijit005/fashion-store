@@ -1,28 +1,36 @@
 import { Truck, RotateCcw, ShieldCheck, Wallet } from "lucide-react";
 import { useState } from "react";
 
-function etaFor(pincode: string) {
-  // deterministic mock — 2-6 day window based on pincode hash
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
+
+async function fetchEtaFor(pincode: string) {
+  // Simulating an external logistics API call (e.g. Shiprocket)
+  // In a real scenario, this hits our backend which proxies to the provider
+  await new Promise((r) => setTimeout(r, 600));
   const n = pincode.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
   const start = 2 + (n % 3);
   const end = start + 2;
-  return { start, end };
+  // Throw mock error for some pincodes to simulate unserviceable areas
+  if (pincode.startsWith("00")) throw new Error("Unserviceable area");
+  return { start, end, cod: start <= 3 };
 }
 
 export function PdpTrustRow() {
   const [pin, setPin] = useState("");
-  const [eta, setEta] = useState<{ start: number; end: number } | null>(null);
-  const [error, setError] = useState(false);
+  const [activePin, setActivePin] = useState("");
+
+  const { data: eta, isFetching, error } = useQuery({
+    queryKey: ["eta", activePin],
+    queryFn: () => fetchEtaFor(activePin),
+    enabled: activePin.length === 6,
+    retry: 1,
+  });
 
   const check = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!/^\d{6}$/.test(pin)) {
-      setError(true);
-      setEta(null);
-      return;
-    }
-    setError(false);
-    setEta(etaFor(pin));
+    if (!/^\d{6}$/.test(pin)) return;
+    setActivePin(pin);
   };
 
   return (
@@ -39,20 +47,23 @@ export function PdpTrustRow() {
             inputMode="numeric"
             className="flex-1 border-b border-line bg-transparent py-2 text-sm outline-none focus:border-ink"
           />
-          <button className="border border-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em]">
-            Check
+          <button 
+            disabled={isFetching || pin.length !== 6}
+            className="border border-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] disabled:opacity-50"
+          >
+            {isFetching ? "..." : "Check"}
           </button>
         </div>
-        {eta && (
+        {eta && !error && (
           <p className="mt-3 text-sm">
             Delivered in{" "}
             <span className="font-medium">
               {eta.start}–{eta.end} days
             </span>{" "}
-            · COD available
+            · {eta.cod ? "COD available" : "Prepaid only"}
           </p>
         )}
-        {error && <p className="mt-3 text-sm text-accent">Enter a valid 6-digit pincode</p>}
+        {error && <p className="mt-3 text-sm text-accent">{(error as Error).message || "Enter a valid 6-digit pincode"}</p>}
       </form>
 
       <ul className="grid grid-cols-2 gap-3 border-y border-line py-5 text-center sm:grid-cols-4">
