@@ -279,19 +279,6 @@ function OrdersPage() {
           </tbody>
         </table>
         </div>
-        {hasNextPage && (
-          <div className="flex justify-center p-4 border-t border-line">
-            <button
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="border border-line bg-paper px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
-            >
-              {isFetchingNextPage ? "Loading more..." : "Load more"}
-            </button>
-          </div>
-        )}
-        </>
-        )}
 
         {/* Mobile Layout */}
         <div className="flex flex-col md:hidden">
@@ -333,30 +320,18 @@ function OrdersPage() {
             </div>
           ))}
         </div>
-        </>
-        )}
-        {meta.totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-line bg-fog/20 px-4 py-3 text-[12px]">
-            <p className="text-mute">
-              Showing page {page} of {meta.totalPages} ({meta.total} orders total)
-            </p>
-            <div className="flex gap-2">
-              <button
-                disabled={page === 1}
-                onClick={() => setPage(p => p - 1)}
-                className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                disabled={page >= meta.totalPages}
-                onClick={() => setPage(p => p + 1)}
-                className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
+        {hasNextPage && (
+          <div className="flex justify-center p-4 border-t border-line">
+            <button
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="border border-line bg-paper px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
+            >
+              {isFetchingNextPage ? "Loading more..." : "Load more"}
+            </button>
           </div>
+        )}
+        </>
         )}
       </Panel>
 
