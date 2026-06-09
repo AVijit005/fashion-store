@@ -6,7 +6,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci
+RUN npm install
 
 COPY . .
 
@@ -20,10 +20,10 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci
+RUN npm install
 
 COPY --from=builder /usr/src/app/dist ./dist
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate resolve --rolled-back 20260530000000_seed_admin && npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "node scripts/deploy-db.js && node dist/main"]
