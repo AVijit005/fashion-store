@@ -5,8 +5,8 @@
   "private": true,
   "license": "MIT",
   "scripts": {
-    "postinstall": "npx prisma migrate resolve --rolled-back 20260530000000_seed_admin || true",
-    "build": "npx ts-node scripts/kill-locks.ts || true && npx prisma migrate resolve --rolled-back 20260609000000_add_soft_deletes || true && npx prisma migrate deploy && nest build",
+    "postinstall": "node scripts/deploy-db.js",
+    "build": "npx ts-node scripts/kill-locks.ts || true && node scripts/deploy-db.js && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
