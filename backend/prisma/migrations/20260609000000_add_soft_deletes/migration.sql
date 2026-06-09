@@ -1,8 +1,8 @@
 -- AlterTable
-ALTER TABLE "User" ADD COLUMN "isDeleted" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "users" ADD COLUMN "is_deleted" BOOLEAN NOT NULL DEFAULT false;
 
 -- AlterTable
-ALTER TABLE "Product" ADD COLUMN "isDeleted" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "products" ADD COLUMN "is_deleted" BOOLEAN NOT NULL DEFAULT false;
 
 -- AlterTable
-ALTER TABLE "ProductVariant" ADD COLUMN "isDeleted" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "product_variants" ADD COLUMN "is_deleted" BOOLEAN NOT NULL DEFAULT false;
