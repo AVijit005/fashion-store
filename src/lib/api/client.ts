@@ -55,8 +55,18 @@ export const apiClient = {
       headers.set("Content-Type", "application/json");
     }
 
-    // Backend now relies on HttpOnly cookies, so we don't need to manually attach a Bearer token.
+    // Backend relies on HttpOnly cookies, but we also attach the Bearer token if available
+    // as a fallback for cross-origin issues.
     if (typeof window !== "undefined") {
+      // Lazy load auth store to prevent circular dependency
+      try {
+        const { useAuthStore } = await import("../store/auth");
+        const token = useAuthStore.getState().accessToken;
+        if (token) {
+          headers.set("Authorization", `Bearer ${token}`);
+        }
+      } catch (err) {}
+
       // Attach Guest Session ID for Cart identification
       const guestSessionId = localStorage.getItem("ink_cart_session_id");
       if (guestSessionId) {

@@ -115,7 +115,7 @@ export class AuthController {
     res.cookie('refresh_token', '', {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: isProduction ? 'none' : 'lax',
       expires: new Date(0),
     });
   }
@@ -125,7 +125,7 @@ export class AuthController {
     res.cookie('access_token', token, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: isProduction ? 'none' : 'lax',
       maxAge: 15 * 60 * 1000, // 15 minutes
     });
   }
@@ -135,7 +135,7 @@ export class AuthController {
     res.cookie('access_token', '', {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: isProduction ? 'none' : 'lax',
       expires: new Date(0),
     });
   }
