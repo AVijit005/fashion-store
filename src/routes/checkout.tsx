@@ -459,7 +459,7 @@ function CheckoutPage() {
                 role="radiogroup"
                 aria-label="Shipping method"
               >
-                {[{ id: "standard", t: "Standard (India Only)", d: "3–5 business days", p: subtotal > 999 ? 0 : 79 }].map((o) => (
+                {[{ id: "standard", t: "Standard (India Only)", d: "3–5 business days", p: subtotal() > 999 ? 0 : 79 }].map((o) => (
                   <label
                     key={o.id}
                     className={`flex cursor-pointer items-center justify-between gap-4 border p-5 transition ${shipping === o.id ? "border-ink" : "border-line hover:border-graphite"}`}

@@ -367,7 +367,7 @@ function ProductPage() {
               Fabric & care
             </summary>
             <p className="mt-3 text-sm text-graphite">
-              {product.tags && product.tags.includes("heavyweight") 
+              {(product as any).tags && (product as any).tags.includes("heavyweight") 
                 ? "100% combed cotton, 240gsm. Machine wash cold, inside out. Tumble dry low. Iron reverse only." 
                 : "Premium materials. Follow label instructions for care."}
             </p>

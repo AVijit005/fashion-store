@@ -15,6 +15,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { apiClient } from "@/lib/api/client";
 import { useAddresses, useDeleteAddress, useUpdatePreferences } from "@/lib/api/users";
 import { AddressForm } from "@/components/account/address-form";
+import { useAuthStore } from "@/lib/store/auth";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
