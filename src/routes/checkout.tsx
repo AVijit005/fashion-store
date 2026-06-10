@@ -669,7 +669,7 @@ function CheckoutPage() {
             </div>
             <div className="flex justify-between">
               <dt className="text-mute">GST</dt>
-              <dd className="tabular-nums">{inr(tax)}</dd>
+              <dd className="tabular-nums">Included</dd>
             </div>
             <div className="mt-3 flex items-baseline justify-between border-t border-line pt-3">
               <dt className="text-[11px] uppercase tracking-[0.22em] text-mute">Total</dt>
