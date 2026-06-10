@@ -39,6 +39,7 @@ const PHOTO_IDS = [
 ];
 
 const NOUNS = [
+  // Apparel
   { term: 'Oversized Hoodie', cat: 'hoodies' },
   { term: 'Heavyweight Tee', cat: 'oversized-tees' },
   { term: 'Bomber Jacket', cat: 'jackets' },
@@ -58,7 +59,18 @@ const NOUNS = [
   { term: 'Mock Neck Crew', cat: 'sweatshirts' },
   { term: 'Anime Collab Tee', cat: 'anime' },
   { term: 'Essential Tee', cat: 'oversized-tees' },
-  { term: 'Washed Hoodie', cat: 'hoodies' }
+  { term: 'Washed Hoodie', cat: 'hoodies' },
+  // Accessories
+  { term: 'Matte Mobile Cover', cat: 'mobile-covers' },
+  { term: 'Armored Phone Case', cat: 'mobile-covers' },
+  { term: 'Silicone Snap Case', cat: 'mobile-covers' },
+  { term: 'Ceramic Studio Mug', cat: 'mugs' },
+  { term: 'Matte Black Mug', cat: 'mugs' },
+  { term: 'Heavyweight Canvas Tote', cat: 'tote-bags' },
+  { term: 'Utility Tote Bag', cat: 'tote-bags' },
+  { term: 'Manifesto Poster', cat: 'posters' },
+  { term: 'Editorial Art Print', cat: 'posters' },
+  { term: 'Archive Poster', cat: 'posters' }
 ];
 
 const ADJECTIVES = ['Monolith', 'Void', 'Shogun', 'Crimson', 'Phantom', 'Yurei', 'Noir', 'Ronin', 'Strata', 'Echo', 'Horizon', 'Akira', 'Vortex', 'Nebula', 'Urban', 'Onyx', 'Cobalt', 'Apex', 'Nomad', 'Zenith', 'Kinetics', 'Aura', 'Ethereal', 'Paradox', 'Nova', 'Cyber', 'Neon', 'Lunar', 'Solstice', 'Eclipse', 'Vector', 'Quantum', 'Glitch', 'Kitsune', 'Mecha', 'Samurai', 'Drift', 'Ascent', 'Rebel', 'Rogue'];
@@ -88,7 +100,7 @@ const TAGS_POOL = ['oversized', 'bestseller', 'trending', 'new', 'limited', 'ani
 
 const PRODUCTS_MOCK: any[] = [];
 
-for (let i = 0; i < 225; i++) {
+for (let i = 0; i < 500; i++) {
   const adj = ADJECTIVES[i % ADJECTIVES.length];
   const nounObj = NOUNS[Math.floor(Math.random() * NOUNS.length)];
   const title = `${adj} ${nounObj.term}`;
