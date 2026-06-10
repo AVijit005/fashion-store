@@ -1,8 +1,8 @@
-import { Controller, Get, Inject } from '@nestjs/common';
+import { Controller, Get, Head, Inject } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import Redis from 'ioredis';
 
-@Controller('health')
+@Controller()
 export class HealthController {
   constructor(
     private readonly prisma: PrismaService,
@@ -10,6 +10,12 @@ export class HealthController {
   ) {}
 
   @Get()
+  @Head()
+  rootHealth() {
+    return { status: 'Aura Streetwear Backend is live.' };
+  }
+
+  @Get('health')
   async checkHealth() {
     let dbStatus = 'UP';
     let redisStatus = 'UP';
