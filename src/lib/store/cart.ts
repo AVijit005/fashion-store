@@ -43,50 +43,51 @@ type CartState = {
 const keyFor = (i: { id: string; size: string; color: string }) => `${i.id}-${i.size}-${i.color}`;
 
 // Simple queue for backend sync to prevent race conditions
-const syncQueue: (() => Promise<void>)[] = [];
+const syncQueue: { task: () => Promise<void>, rollback?: () => void }[] = [];
 let isSyncing = false;
 
 async function processQueue() {
   if (isSyncing || syncQueue.length === 0) return;
   isSyncing = true;
   while (syncQueue.length > 0) {
-    const task = syncQueue.shift();
-    if (task) {
+    const item = syncQueue.shift();
+    if (item) {
       try {
-        await task();
+        await item.task();
       } catch (err) {
         console.error("[cart] Backend sync failed:", err);
         const msg = err instanceof Error ? err.message : "Failed to update cart";
         toast.error(msg);
+        if (item.rollback) item.rollback();
       }
     }
   }
   isSyncing = false;
 }
 
-function enqueueSync(task: () => Promise<void>) {
-  syncQueue.push(task);
+function enqueueSync(task: () => Promise<void>, rollback?: () => void) {
+  syncQueue.push({ task, rollback });
   processQueue();
 }
 
-function syncAdd(itemId: string, quantity: number, customData?: any) {
-  enqueueSync(() => cartApi.addItem(itemId, quantity, customData).then(() => {}));
+function syncAdd(itemId: string, quantity: number, customData?: any, rollback?: () => void) {
+  enqueueSync(() => cartApi.addItem(itemId, quantity, customData).then(() => {}), rollback);
 }
 
-function syncUpdate(itemId: string, qty: number) {
+function syncUpdate(itemId: string, qty: number, rollback?: () => void) {
   if (qty <= 0) {
-    enqueueSync(() => cartApi.removeItem(itemId).then(() => {}));
+    enqueueSync(() => cartApi.removeItem(itemId).then(() => {}), rollback);
   } else {
-    enqueueSync(() => cartApi.updateItem(itemId, qty).then(() => {}));
+    enqueueSync(() => cartApi.updateItem(itemId, qty).then(() => {}), rollback);
   }
 }
 
-function syncRemove(itemId: string) {
-  enqueueSync(() => cartApi.removeItem(itemId).then(() => {}));
+function syncRemove(itemId: string, rollback?: () => void) {
+  enqueueSync(() => cartApi.removeItem(itemId).then(() => {}), rollback);
 }
 
-function syncClear() {
-  enqueueSync(() => cartApi.clearCart().then(() => {}));
+function syncClear(rollback?: () => void) {
+  enqueueSync(() => cartApi.clearCart().then(() => {}), rollback);
 }
 
 export const useCart = create<CartState>()(
@@ -98,6 +99,7 @@ export const useCart = create<CartState>()(
       setItems: (items) => set({ items }),
 
       add: (i) => {
+        const previousItems = get().items;
         const qty = i.qty ?? 1;
         const k = keyFor(i);
         const existing = get().items.find((it) => keyFor(it) === k);
@@ -111,18 +113,20 @@ export const useCart = create<CartState>()(
           set({ items: [...get().items, { ...i, qty }], open: true });
         }
 
-        // Sync to backend
-        syncAdd(i.variantId || i.id, qty, i.customData);
+        // Sync to backend with rollback closure
+        syncAdd(i.variantId || i.id, qty, i.customData, () => set({ items: previousItems }));
       },
 
       remove: (k) => {
+        const previousItems = get().items;
         const item = get().items.find((it) => keyFor(it) === k);
         set({ items: get().items.filter((it) => keyFor(it) !== k) });
 
-        syncRemove(item?.variantId || k);
+        syncRemove(item?.variantId || k, () => set({ items: previousItems }));
       },
 
       setQty: (k, qty) => {
+        const previousItems = get().items;
         const item = get().items.find((it) => keyFor(it) === k);
         if (item && item.maxQty !== undefined && qty > item.maxQty) {
           toast.error(`Only ${item.maxQty} left in stock`);
@@ -136,13 +140,14 @@ export const useCart = create<CartState>()(
         });
 
         if (item) {
-          syncUpdate(item.variantId || k, qty);
+          syncUpdate(item.variantId || k, qty, () => set({ items: previousItems }));
         }
       },
 
       clear: () => {
+        const previousItems = get().items;
         set({ items: [] });
-        syncClear();
+        syncClear(() => set({ items: previousItems }));
       },
 
       subtotal: () => get().items.reduce((s, i) => s + i.price * i.qty, 0),

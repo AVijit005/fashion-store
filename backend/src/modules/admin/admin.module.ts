@@ -13,9 +13,10 @@ import { AdminStudioController } from './admin.studio.controller';
 import { AdminStudioService } from './admin.studio.service';
 import { PrismaService } from '../../config/prisma.service';
 import { AuthModule } from '../auth/auth.module';
+import { OrdersModule } from '../orders/orders.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, OrdersModule],
   controllers: [
     AdminCatalogController,
     AdminOrdersController,

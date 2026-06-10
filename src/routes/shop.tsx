@@ -33,25 +33,27 @@ export const Route = createFileRoute("/shop")({
   component: ShopPage,
 });
 
+import { useQuery } from "@tanstack/react-query";
+
 function ShopPage() {
-  const [list, setList] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: list = [], isLoading, isError } = useQuery({
+    queryKey: ["products", "all"],
+    queryFn: async () => {
+      const res = await catalogApi.getProducts({ limit: 100 });
+      return res.products || [];
+    },
+  });
 
-  useEffect(() => {
-    catalogApi
-      .getProducts({ limit: 100 })
-      .then((res) => {
-        setList(res.products);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error(err);
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return <LoadingState label="Loading products" />;
+  }
+
+  if (isError) {
+    return (
+      <div className="py-20 text-center">
+        <p className="text-red-500">Failed to load products.</p>
+      </div>
+    );
   }
 
   return (

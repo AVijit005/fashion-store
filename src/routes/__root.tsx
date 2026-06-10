@@ -7,6 +7,7 @@ import {
   useRouterState,
   HeadContent,
   Scripts,
+  Navigate,
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
@@ -152,10 +153,7 @@ function RootComponent() {
     }
     
     if (!isAuthenticated || user?.role !== "ADMIN") {
-      if (typeof window !== "undefined") {
-        window.location.href = "/";
-      }
-      return null;
+      return <Navigate to="/" />;
     }
 
     return (

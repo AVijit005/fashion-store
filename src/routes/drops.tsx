@@ -33,10 +33,30 @@ export const Route = createFileRoute("/drops")({
   component: DropsPage,
 });
 
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
+
 function DropsPage() {
+  const { data: dynamicDrops } = useQuery({
+    queryKey: ["drops"],
+    queryFn: () => apiClient.get("/catalog/drops").then((res) => res.data),
+  });
+
   const [target, setTarget] = useState<number | null>(null);
   useEffect(() => setTarget(Date.now() + 1000 * 60 * 60 * 62), []);
   const { h, m, s } = useCountdown(target ?? 0);
+
+  // Fallback to imported drops if API fails or returns empty, but map dynamic otherwise
+  const activeDrops = dynamicDrops?.length > 0 
+    ? dynamicDrops.map((d: any) => ({
+        slug: d.slug,
+        title: d.name,
+        date: new Date(d.releaseDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        blurb: "Exclusive limited release. Available for members early.",
+        img: d.products?.[0]?.mediaUrls?.[0] || "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&q=80&w=1600",
+        units: "Limited Stock"
+      }))
+    : drops;
 
   return (
     <div className="bg-paper">
@@ -70,7 +90,7 @@ function DropsPage() {
 
       <div className="mx-auto max-w-[1480px] px-5 py-20 lg:px-10 lg:py-28">
         <ul className="space-y-12 lg:space-y-20">
-          {drops.map((d, i) => (
+          {activeDrops.map((d, i) => (
             <Reveal key={d.slug}>
               <li className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-16">
                 <div

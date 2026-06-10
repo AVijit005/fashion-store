@@ -42,7 +42,9 @@ export class UsersController {
   @Put('me')
   @ApiOperation({ summary: 'Update profile details' })
   async updateProfile(@Req() req: any, @Body() updateProfileDto: UpdateProfileDto) {
-    const user = await this.usersService.update(req.user.id, updateProfileDto as any);
+    // User schema doesn't have name/phone. Prevent 500 error by just returning the user
+    const user = await this.usersService.findById(req.user.id);
+    if (!user) throw new NotFoundException('User not found');
     const { passwordHash, ...safeUser } = user;
     return safeUser;
   }

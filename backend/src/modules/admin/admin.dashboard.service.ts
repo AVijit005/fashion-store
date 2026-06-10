@@ -15,11 +15,15 @@ export class AdminDashboardService {
       _count: true,
     });
 
-    const recentOrders = await this.prisma.order.findMany({
-      where: { createdAt: { gte: thirtyDaysAgo } },
-      select: { totalAmount: true, createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    });
+    const dailySeries = await this.prisma.$queryRaw<any[]>`
+      SELECT 
+        DATE(created_at) as date, 
+        SUM(total_amount) as revenue, 
+        COUNT(id) as orders
+      FROM orders
+      WHERE created_at >= ${thirtyDaysAgo}
+      GROUP BY DATE(created_at)
+    `;
 
     const seriesMap = new Map<string, { revenue: number; orders: number }>();
     for(let i=30; i>=0; i--) {
@@ -29,12 +33,13 @@ export class AdminDashboardService {
       seriesMap.set(dateStr, { revenue: 0, orders: 0 });
     }
 
-    recentOrders.forEach(order => {
-      const dateStr = new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    dailySeries.forEach(row => {
+      const d = new Date(row.date);
+      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       if (seriesMap.has(dateStr)) {
          const existing = seriesMap.get(dateStr)!;
-         existing.revenue += Number(order.totalAmount);
-         existing.orders += 1;
+         existing.revenue += Number(row.revenue);
+         existing.orders += Number(row.orders);
       }
     });
 
@@ -44,28 +49,27 @@ export class AdminDashboardService {
       orders: data.orders
     }));
 
-    const categoriesAggr = await this.prisma.orderItem.findMany({
-      where: { order: { createdAt: { gte: thirtyDaysAgo } } },
-      include: {
-        productVariant: {
-          include: { product: { include: { category: true } } }
-        }
-      }
-    });
+    const categoriesAggr = await this.prisma.$queryRaw<any[]>`
+      SELECT 
+        COALESCE(c.name, 'Uncategorized') as name, 
+        SUM(oi.price_at_purchase * oi.quantity) as revenue, 
+        COUNT(oi.id) as orders
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      LEFT JOIN product_variants pv ON oi.product_variant_id = pv.id
+      LEFT JOIN products p ON pv.product_id = p.id
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE o.created_at >= ${thirtyDaysAgo}
+      GROUP BY c.name
+      ORDER BY revenue DESC
+      LIMIT 5
+    `;
 
-    const catMap = new Map<string, { revenue: number, orders: number }>();
-    for (const item of categoriesAggr) {
-      const catName = item.productVariant?.product?.category?.name || 'Uncategorized';
-      const existing = catMap.get(catName) || { revenue: 0, orders: 0 };
-      existing.revenue += Number(item.priceAtPurchase) * item.quantity;
-      existing.orders += 1;
-      catMap.set(catName, existing);
-    }
-    
-    const topCategories = Array.from(catMap.entries())
-      .map(([name, data]) => ({ name, revenue: data.revenue, orders: data.orders }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
+    const topCategories = categoriesAggr.map(cat => ({
+      name: cat.name,
+      revenue: Number(cat.revenue),
+      orders: Number(cat.orders)
+    }));
 
     return {
       totalOrders: aggregations._count,

@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import { OrderStatus } from '@prisma/client';
+import { OrdersService } from '../orders/orders.service';
 
 @Injectable()
 export class AdminOrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ordersService: OrdersService,
+  ) {}
 
   async getOrders(page: number = 1, limit: number = 50, search?: string, status?: string) {
     const where: any = {};
@@ -54,25 +58,26 @@ export class AdminOrdersService {
     return this.prisma.$transaction(async (tx) => {
       const orderItemsData = [];
 
-      // Deduct stock for each item safely
-      for (const item of (items || [])) {
-        if (!item.id) continue;
-        
-        const variant = await tx.productVariant.findUnique({
-          where: { id: item.id },
-          include: { product: true }
-        });
+      const validItems = (items || []).filter((i: any) => i.id);
+      const variantIds = validItems.map((i: any) => i.id);
+      
+      const variants = await tx.productVariant.findMany({
+        where: { id: { in: variantIds } },
+        include: { product: true }
+      });
+      const dbVariantMap = new Map(variants.map(v => [v.id, v]));
 
+      for (const item of validItems) {
+        const variant = dbVariantMap.get(item.id);
         if (!variant) throw new BadRequestException(`Variant ${item.id} not found`);
-
-        const res = await tx.productVariant.updateMany({
-          where: { id: item.id, stockQuantity: { gte: item.qty } },
-          data: { stockQuantity: { decrement: item.qty } }
-        });
-
-        if (res.count === 0) {
+        if (variant.stockQuantity < item.qty) {
           throw new BadRequestException(`Insufficient stock for variant ${item.id}`);
         }
+
+        await tx.productVariant.update({
+          where: { id: item.id },
+          data: { stockQuantity: { decrement: item.qty } }
+        });
 
         orderItemsData.push({
           productVariantId: variant.id,
@@ -111,11 +116,12 @@ export class AdminOrdersService {
       throw new NotFoundException('Order not found');
     }
     
-    // Simplistic status update for now (ignoring state machine validations)
-    return this.prisma.order.update({
-      where: { id },
-      data: { status },
-    });
+    return this.ordersService.transitionStatus(
+      id,
+      status,
+      'ADMIN',
+      'Status updated manually by admin'
+    );
   }
 
   async processRefund(id: string) {
@@ -127,16 +133,12 @@ export class AdminOrdersService {
       throw new BadRequestException('Order is not paid');
     }
     
-    // Mock refund processing using atomic update
-    const res = await this.prisma.order.updateMany({
-      where: { id, status: 'PAID' },
-      data: { status: 'REFUNDED' },
-    });
-    
-    if (res.count === 0) {
-      throw new BadRequestException('Order is not paid or already refunded');
-    }
-
-    return this.prisma.order.findUnique({ where: { id } });
+    // Process refund using OrdersService to ensure inventory restoration
+    return this.ordersService.transitionStatus(
+      id,
+      'REFUNDED',
+      'ADMIN',
+      'Order refunded manually by admin'
+    );
   }
 }

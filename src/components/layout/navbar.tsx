@@ -205,7 +205,22 @@ export function Navbar() {
     setMega(null);
   }, [path]);
 
-  const megaData = mega ? megaContent[mega] : null;
+  const megaData = mega ? { ...megaContent[mega] } : null;
+  
+  if (megaData && mega === "Shop" && categories.length > 0) {
+    megaData.columns = [
+      {
+        title: "Categories",
+        links: categories.slice(0, 6).map((c: any) => ({ 
+          l: c.name, 
+          to: "/c/$category", 
+          params: { category: c.slug } 
+        }))
+      },
+      ...megaContent.Shop.columns.slice(1)
+    ];
+  }
+
   const featureProduct = megaData ? featuredProducts.find((p: Product) => p.slug === megaData.featureSlug) || featuredProducts[0] : null;
 
   return (

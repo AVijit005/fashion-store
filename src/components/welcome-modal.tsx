@@ -35,6 +35,9 @@ export function WelcomeModal() {
           className="fixed inset-0 z-[55] flex items-end justify-center bg-ink/40 backdrop-blur-sm sm:items-center"
         >
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="welcome-modal-title"
             initial={{ y: 40, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}
@@ -44,7 +47,7 @@ export function WelcomeModal() {
           >
             <button
               onClick={close}
-              aria-label="Close"
+              aria-label="Close welcome offer"
               className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center bg-paper/90 hover:bg-fog"
             >
               <X className="h-4 w-4" />
@@ -52,13 +55,13 @@ export function WelcomeModal() {
             <div className="hidden bg-fog sm:block">
               <img
                 src="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=900&q=80&auto=format&fit=crop"
-                alt=""
+                alt="Welcome to Ink Studio"
                 className="h-full w-full object-cover"
               />
             </div>
             <div className="p-8 sm:p-10">
               <p className="text-[11px] uppercase tracking-[0.22em] text-mute">First visit</p>
-              <h2 className="mt-2 font-display text-4xl leading-[0.95] sm:text-5xl">
+              <h2 id="welcome-modal-title" className="mt-2 font-display text-4xl leading-[0.95] sm:text-5xl">
                 10% off your <span className="italic">first piece.</span>
               </h2>
               <p className="mt-3 text-sm text-mute">

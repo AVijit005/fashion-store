@@ -93,6 +93,9 @@ export function AuthModal() {
           onClick={() => setAuthModalOpen(false)}
         >
           <motion.aside
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="auth-modal-title"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -108,7 +111,7 @@ export function AuthModal() {
                   {authModalView === "signup" && "Join Ink Studio"}
                   {authModalView === "forgot-password" && "Reset access"}
                 </p>
-                <h2 className="font-display text-2xl">
+                <h2 id="auth-modal-title" className="font-display text-2xl">
                   {authModalView === "login" && "Sign In"}
                   {authModalView === "signup" && "Create Account"}
                   {authModalView === "forgot-password" && "Forgot Password"}

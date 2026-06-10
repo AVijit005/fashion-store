@@ -48,7 +48,7 @@ export class AdminCatalogService {
       data: {
         ...productData,
         categoryId,
-        collectionId,
+        collections: collectionId ? { connect: { id: collectionId } } : undefined,
         mediaUrls: images || [],
         variants: variantsData ? {
           create: variantsData.map((v: any) => ({
@@ -97,6 +97,9 @@ export class AdminCatalogService {
       where: { id },
       data: {
         ...productData,
+        categoryId,
+        dropId,
+        collections: collectionId ? { set: [{ id: collectionId }] } : undefined,
         mediaUrls: images ? images : undefined,
       },
     });

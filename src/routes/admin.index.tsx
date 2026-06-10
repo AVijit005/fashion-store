@@ -38,24 +38,32 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function OverviewPage() {
-  const { data: kpisData } = useQuery<KpisData>({
+  const { data: kpisData, isLoading: kpisLoading, isError: kpisError } = useQuery<KpisData>({
     queryKey: ["admin-kpis"],
     queryFn: () => apiClient.get("/admin/dashboard/kpis"),
   });
-  const { data: activityData = [] } = useQuery<ActivityItem[]>({
+  const { data: activityData = [], isLoading: activityLoading } = useQuery<ActivityItem[]>({
     queryKey: ["admin-activity"],
     queryFn: () => apiClient.get("/admin/dashboard/activity"),
     refetchInterval: 5000,
   });
-  const { data: products = [] } = useQuery<Product[]>({
+  const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
     queryKey: ["admin-products"],
     queryFn: () => apiClient.get("/admin/catalog/products"),
   });
-  const { data: apiOrdersRes } = useQuery<{ data: Order[] }>({
+  const { data: apiOrdersRes, isLoading: ordersLoading } = useQuery<{ data: Order[] }>({
     queryKey: ["admin-orders"],
     queryFn: () => apiClient.get("/admin/orders?limit=50"),
   });
   const apiOrders = apiOrdersRes?.data || [];
+
+  if (kpisLoading || productsLoading || ordersLoading) {
+    return <div className="flex h-96 items-center justify-center text-mute">Loading dashboard data...</div>;
+  }
+
+  if (kpisError) {
+    return <div className="flex h-96 items-center justify-center text-red-500">Failed to load dashboard data. Please try again.</div>;
+  }
 
   const recent = apiOrders.slice(0, 6);
   const lowStock = products.filter((p: Product) => p.stock > 0 && p.stock <= p.lowStockAt).slice(0, 5);

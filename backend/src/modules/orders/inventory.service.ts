@@ -47,7 +47,7 @@ export class InventoryService {
       await tx.productVariant.update({
         where: { id: item.variantId },
         data: {
-          stockQuantity: variant.stockQuantity - item.quantity,
+          stockQuantity: { decrement: item.quantity },
         },
       });
     }
@@ -85,7 +85,7 @@ export class InventoryService {
         await tx.productVariant.update({
           where: { id: item.productVariantId },
           data: {
-            stockQuantity: variant.stockQuantity + item.quantity,
+            stockQuantity: { increment: item.quantity },
           },
         });
       }

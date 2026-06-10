@@ -10,75 +10,73 @@ export class AdminCustomersService {
     if (q) {
       where.email = { contains: q, mode: 'insensitive' };
     }
+    const { Prisma } = require('@prisma/client');
     const skip = (page - 1) * limit;
 
-    const users = await this.prisma.user.findMany({
-      where,
-      include: {
-        orders: {
-          select: {
-            totalAmount: true,
-            createdAt: true,
-            status: true,
-          },
-          where: {
-            status: { notIn: ['PAYMENT_PENDING', 'CANCELLED'] }
-          }
-        },
-        addresses: {
-          take: 1,
-          orderBy: { createdAt: 'desc' }
-        }
-      },
-    });
+    const baseSql = Prisma.sql`
+      WITH UserStats AS (
+        SELECT 
+          u.id, u.email, u.created_at as joined_at,
+          COALESCE(SUM(o.total_amount), 0) as total_spend,
+          COUNT(o.id) as orders_count,
+          MAX(o.created_at) as last_order_at,
+          (SELECT city FROM addresses a WHERE a.user_id = u.id ORDER BY a.created_at DESC LIMIT 1) as city
+        FROM users u
+        LEFT JOIN orders o ON o.user_id = u.id AND o.status NOT IN ('PAYMENT_PENDING', 'CANCELLED')
+        WHERE u.role = 'CUSTOMER' AND u.is_deleted = false
+        ${q ? Prisma.sql`AND u.email ILIKE ${'%' + q + '%'}` : Prisma.empty}
+        GROUP BY u.id
+      ),
+      SegmentedUsers AS (
+        SELECT *,
+          CASE 
+            WHEN orders_count = 0 THEN 'new'
+            WHEN total_spend > 50000 THEN 'vip'
+            WHEN orders_count = 1 THEN 'returning'
+            WHEN EXTRACT(EPOCH FROM (NOW() - last_order_at))/86400 > 180 THEN 'lapsed'
+            ELSE 'returning'
+          END as segment,
+          CASE
+            WHEN total_spend > 100000 THEN 'Platinum'
+            WHEN total_spend > 50000 THEN 'Gold'
+            WHEN total_spend > 10000 THEN 'Silver'
+            ELSE 'Bronze'
+          END as loyalty
+        FROM UserStats
+      )
+      SELECT * FROM SegmentedUsers
+      ${segmentFilter && segmentFilter !== 'all' ? Prisma.sql`WHERE segment = ${segmentFilter}` : Prisma.empty}
+    `;
 
-    const mapped = users.map((user) => {
-      const ordersCount = user.orders.length;
-      const totalSpend = user.orders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
-      
-      let segment = 'new';
-      if (ordersCount === 0) segment = 'new';
-      else if (ordersCount === 1) segment = 'returning';
-      else if (totalSpend > 50000) segment = 'vip'; // Assuming >50k INR is VIP
-      else {
-        const lastOrder = user.orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
-        const daysSinceLastOrder = (new Date().getTime() - lastOrder.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-        if (daysSinceLastOrder > 180) segment = 'lapsed';
-        else segment = 'returning';
-      }
+    const countSql = Prisma.sql`SELECT COUNT(*) as count FROM (${baseSql}) as sub`;
+    const paginatedSql = Prisma.sql`${baseSql} ORDER BY joined_at DESC LIMIT ${limit} OFFSET ${skip}`;
 
-      let loyalty = 'Bronze';
-      if (totalSpend > 100000) loyalty = 'Platinum';
-      else if (totalSpend > 50000) loyalty = 'Gold';
-      else if (totalSpend > 10000) loyalty = 'Silver';
+    const [totalRows, rawUsers]: [any[], any[]] = await Promise.all([
+      this.prisma.$queryRaw(countSql),
+      this.prisma.$queryRaw(paginatedSql),
+    ]);
 
-      const lastOrderAt = user.orders.length > 0 
-        ? user.orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0].createdAt.toISOString()
-        : user.createdAt.toISOString();
+    const total = Number(totalRows[0]?.count || 0);
 
-      return {
-        id: user.id,
-        name: user.email.split('@')[0], // Fallback name
-        email: user.email,
-        phone: 'N/A',
-        city: user.addresses[0]?.city || 'Unknown',
-        segment,
-        loyalty,
-        orders: ordersCount,
-        spend: totalSpend,
-        joinedAt: user.createdAt.toISOString(),
-        lastOrderAt,
-        vip: segment === 'vip',
-        notes: null,
-        supportTickets: Math.floor(Math.random() * 3), // Mock for now
-      };
-    }).filter(c => !segmentFilter || segmentFilter === 'all' || c.segment === segmentFilter);
-
-    const total = mapped.length;
-    const paginated = mapped.slice(skip, skip + limit);
+    const mapped = rawUsers.map(user => ({
+      id: user.id,
+      name: user.email.split('@')[0],
+      email: user.email,
+      phone: 'N/A',
+      city: user.city || 'Unknown',
+      segment: user.segment,
+      loyalty: user.loyalty,
+      orders: Number(user.orders_count),
+      spend: Number(user.total_spend),
+      joinedAt: user.joined_at.toISOString(),
+      lastOrderAt: user.last_order_at ? user.last_order_at.toISOString() : user.joined_at.toISOString(),
+      vip: user.segment === 'vip',
+      notes: null,
+      supportTickets: Math.floor(Math.random() * 3), // Mock
+    }));
 
     return {
-      data: paginated,
+      data: mapped,
       meta: {
         total,
         page,
