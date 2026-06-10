@@ -25,158 +25,93 @@ const CATEGORIES = [
   { name: 'Posters', slug: 'posters' },
 ];
 
-const PRODUCTS_MOCK = [
-  {
-    slug: 'monolith-oversized-hoodie',
-    title: 'Monolith Oversized Hoodie',
-    categorySlug: 'hoodies',
-    description: 'Heavyweight 400gsm brushed fleece. Dropped shoulders, boxy fit, tonal embroidery.',
-    price: 3299,
-    imgIds: ['photo-1550614000-4b95d466f2fb', 'photo-1523398002811-999aa8d9511e'],
-    tags: ['oversized', 'bestseller', 'trending'],
-    isFeatured: true,
-  },
-  {
-    slug: 'void-heavyweight-tee',
-    title: 'Void Heavyweight Tee',
-    categorySlug: 'oversized-tees',
-    description: '240gsm combed cotton. Garment-dyed for a lived-in feel and ultimate drape.',
-    price: 1499,
-    imgIds: ['photo-1539109136881-3be0616acf4b', 'photo-1512436991641-6745cdb1723f'],
-    tags: ['oversized', 'new'],
-    isFeatured: true,
-  },
-  {
-    slug: 'shogun-bomber-jacket',
-    title: 'Shogun Bomber Jacket',
-    categorySlug: 'jackets',
-    description: 'Satin finish with intricate back embroidery. Premium hardware and ribbed trims.',
-    price: 5499,
-    imgIds: ['photo-1492288991661-058aa541ff43', 'photo-1552374196-1ab2a1c593e8'],
-    tags: ['anime', 'limited', 'trending'],
-    isFeatured: true,
-  },
-  {
-    slug: 'crimson-denim-jacket',
-    title: 'Crimson Denim Jacket',
-    categorySlug: 'jackets',
-    description: 'Overdyed 12oz denim. Cropped fit with raw hem detailing and silver hardware.',
-    price: 4299,
-    imgIds: ['photo-1529139574466-a303027c1d8b', 'photo-1487222477894-8943e31ef7b2'],
-    tags: ['limited', 'new'],
-    isFeatured: false,
-  },
-  {
-    slug: 'phantom-graphic-tee',
-    title: 'Phantom Graphic Tee',
-    categorySlug: 'graphic-tees',
-    description: 'Screen-printed vintage artwork on our signature washed cotton canvas.',
-    price: 1699,
-    imgIds: ['photo-1483985988355-763728e1935b', 'photo-1503342217505-b0a15ec3261c'],
-    tags: ['bestseller'],
-    isFeatured: false,
-  },
-  {
-    slug: 'yurei-oversized-hoodie',
-    title: 'Yurei Oversized Hoodie',
-    categorySlug: 'hoodies',
-    description: 'Cocoon silhouette in ultra-soft fleece. Features elongated drawstrings and hidden pockets.',
-    price: 3499,
-    imgIds: ['photo-1507680434267-3236ca9eece4', 'photo-1620799140408-edc6dcb6d633'],
-    tags: ['oversized', 'new'],
-    isFeatured: false,
-  },
-  {
-    slug: 'noir-trench-coat',
-    title: 'Noir Trench Coat',
-    categorySlug: 'jackets',
-    description: 'A modern, draped take on the classic trench. Water-resistant and incredibly sharp.',
-    price: 6499,
-    imgIds: ['photo-1515886657613-9f3515b0c78f', 'photo-1551028719-00167b16eac5'],
-    tags: ['limited'],
-    isFeatured: true,
-  },
-  {
-    slug: 'ronin-vintage-tee',
-    title: 'Ronin Vintage Tee',
-    categorySlug: 'graphic-tees',
-    description: 'Faded and distressed by hand. Features washed-out typography and dropped shoulders.',
-    price: 1599,
-    imgIds: ['photo-1517841905240-472988babdf9', 'photo-1521572163474-6864f9cf17ab'],
-    tags: ['trending'],
-    isFeatured: false,
-  },
-  {
-    slug: 'strata-fleece-crew',
-    title: 'Strata Fleece Crew',
-    categorySlug: 'sweatshirts',
-    description: 'Textured loopback fleece with a structured collar and paneled sleeves.',
-    price: 2899,
-    imgIds: ['photo-1556821840-3a63f95609a7', 'photo-1445205170230-053b83016050'],
-    tags: ['new', 'bestseller'],
-    isFeatured: false,
-  },
-  {
-    slug: 'echo-windbreaker',
-    title: 'Echo Windbreaker',
-    categorySlug: 'jackets',
-    description: 'Lightweight nylon shell. Technical design featuring utility pockets and mesh lining.',
-    price: 3999,
-    imgIds: ['photo-1520975954732-57dd22299614', 'photo-1544441893-675973e31985'],
-    tags: ['limited'],
-    isFeatured: false,
-  },
-  {
-    slug: 'horizon-heavy-tee',
-    title: 'Horizon Heavy Tee',
-    categorySlug: 'oversized-tees',
-    description: 'Minimalist aesthetic. Premium weight cotton cut in an ultra-relaxed proportion.',
-    price: 1299,
-    imgIds: ['photo-1485231183945-fffde7cecebe', 'photo-1581655353564-df123a1eb820'],
-    tags: ['trending'],
-    isFeatured: true,
-  },
-  {
-    slug: 'akira-capsule-jacket',
-    title: 'Akira Capsule Jacket',
-    categorySlug: 'anime',
-    description: 'Neo-Tokyo inspired. High-collar mock neck jacket in technical water-repellent fabric.',
-    price: 5999,
-    imgIds: ['photo-1583743814966-8936f5b7be1a', 'photo-1554568218-0f1715e72254'],
-    tags: ['anime', 'bestseller'],
-    isFeatured: true,
-  },
-  {
-    slug: 'vortex-distressed-hoodie',
-    title: 'Vortex Distressed Hoodie',
-    categorySlug: 'hoodies',
-    description: 'Sun-faded wash with hand-distressed edges. A vintage look that gets better with wear.',
-    price: 3799,
-    imgIds: ['photo-1611312449408-fcece27cdbb1', 'photo-1578587018452-892bace03574'],
-    tags: ['limited', 'new'],
-    isFeatured: false,
-  },
-  {
-    slug: 'nebula-graphic-tee',
-    title: 'Nebula Graphic Tee',
-    categorySlug: 'graphic-tees',
-    description: 'Psychedelic back graphic print on washed black cotton.',
-    price: 1599,
-    imgIds: ['photo-1618354691373-d851c5c3a990', 'photo-1529374255404-311a2a4f1fd9'],
-    tags: ['new'],
-    isFeatured: false,
-  },
-  {
-    slug: 'urban-utility-vest',
-    title: 'Urban Utility Vest',
-    categorySlug: 'jackets',
-    description: 'Tactical multi-pocket vest designed for layering over hoodies and tees.',
-    price: 4599,
-    imgIds: ['photo-1469334031218-e382a71b716b', 'photo-1503341504253-dff4815485f1'],
-    tags: ['bestseller'],
-    isFeatured: true,
-  }
+const PHOTO_IDS = [
+  'photo-1550614000-4b95d466f2fb', 'photo-1523398002811-999aa8d9511e', 'photo-1539109136881-3be0616acf4b',
+  'photo-1512436991641-6745cdb1723f', 'photo-1492288991661-058aa541ff43', 'photo-1552374196-1ab2a1c593e8',
+  'photo-1529139574466-a303027c1d8b', 'photo-1487222477894-8943e31ef7b2', 'photo-1483985988355-763728e1935b',
+  'photo-1503342217505-b0a15ec3261c', 'photo-1507680434267-3236ca9eece4', 'photo-1620799140408-edc6dcb6d633',
+  'photo-1515886657613-9f3515b0c78f', 'photo-1551028719-00167b16eac5', 'photo-1517841905240-472988babdf9',
+  'photo-1521572163474-6864f9cf17ab', 'photo-1556821840-3a63f95609a7', 'photo-1445205170230-053b83016050',
+  'photo-1520975954732-57dd22299614', 'photo-1544441893-675973e31985', 'photo-1485231183945-fffde7cecebe',
+  'photo-1581655353564-df123a1eb820', 'photo-1583743814966-8936f5b7be1a', 'photo-1554568218-0f1715e72254',
+  'photo-1611312449408-fcece27cdbb1', 'photo-1578587018452-892bace03574', 'photo-1618354691373-d851c5c3a990',
+  'photo-1529374255404-311a2a4f1fd9', 'photo-1469334031218-e382a71b716b', 'photo-1503341504253-dff4815485f1'
 ];
+
+const NOUNS = [
+  { term: 'Oversized Hoodie', cat: 'hoodies' },
+  { term: 'Heavyweight Tee', cat: 'oversized-tees' },
+  { term: 'Bomber Jacket', cat: 'jackets' },
+  { term: 'Denim Jacket', cat: 'jackets' },
+  { term: 'Graphic Tee', cat: 'graphic-tees' },
+  { term: 'Trench Coat', cat: 'jackets' },
+  { term: 'Vintage Tee', cat: 'graphic-tees' },
+  { term: 'Fleece Crew', cat: 'sweatshirts' },
+  { term: 'Windbreaker', cat: 'jackets' },
+  { term: 'Capsule Jacket', cat: 'anime' },
+  { term: 'Distressed Hoodie', cat: 'hoodies' },
+  { term: 'Utility Vest', cat: 'jackets' },
+  { term: 'Boxy Tee', cat: 'oversized-tees' },
+  { term: 'Zip-Up Hoodie', cat: 'hoodies' }
+];
+
+const ADJECTIVES = ['Monolith', 'Void', 'Shogun', 'Crimson', 'Phantom', 'Yurei', 'Noir', 'Ronin', 'Strata', 'Echo', 'Horizon', 'Akira', 'Vortex', 'Nebula', 'Urban', 'Onyx', 'Cobalt', 'Apex', 'Nomad', 'Zenith', 'Kinetics', 'Aura', 'Ethereal', 'Paradox', 'Nova'];
+
+const DESCRIPTIONS = [
+  'Heavyweight 400gsm brushed fleece. Dropped shoulders, boxy fit, tonal embroidery.',
+  '240gsm combed cotton. Garment-dyed for a lived-in feel and ultimate drape.',
+  'Satin finish with intricate back embroidery. Premium hardware and ribbed trims.',
+  'Overdyed 12oz denim. Cropped fit with raw hem detailing and silver hardware.',
+  'Screen-printed vintage artwork on our signature washed cotton canvas.',
+  'Cocoon silhouette in ultra-soft fleece. Features elongated drawstrings and hidden pockets.',
+  'A modern, draped take on the classic trench. Water-resistant and incredibly sharp.',
+  'Faded and distressed by hand. Features washed-out typography and dropped shoulders.',
+  'Textured loopback fleece with a structured collar and paneled sleeves.',
+  'Lightweight nylon shell. Technical design featuring utility pockets and mesh lining.',
+  'Minimalist aesthetic. Premium weight cotton cut in an ultra-relaxed proportion.',
+  'Neo-Tokyo inspired. High-collar mock neck jacket in technical water-repellent fabric.',
+  'Sun-faded wash with hand-distressed edges. A vintage look that gets better with wear.',
+  'Psychedelic back graphic print on washed black cotton.',
+  'Tactical multi-pocket vest designed for layering over hoodies and tees.',
+  'Garment washed for a vintage feel. Built to last through countless wears.',
+  'Ultra-premium Japanese cotton blended with a touch of stretch for mobility.',
+  'Architecturally structured with raw edges and subtle tonal branding.'
+];
+
+const TAGS_POOL = ['oversized', 'bestseller', 'trending', 'new', 'limited', 'anime'];
+
+const PRODUCTS_MOCK: any[] = [];
+
+for (let i = 0; i < 95; i++) {
+  const adj = ADJECTIVES[i % ADJECTIVES.length];
+  const nounObj = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  const title = `${adj} ${nounObj.term}`;
+  const slug = title.toLowerCase().replace(/ /g, '-').replace(/[^a-z0-9-]/g, '') + '-' + i;
+  
+  const desc = DESCRIPTIONS[Math.floor(Math.random() * DESCRIPTIONS.length)];
+  const price = Math.floor(Math.random() * (7000 - 1200 + 1) + 1200);
+  
+  const img1 = PHOTO_IDS[Math.floor(Math.random() * PHOTO_IDS.length)];
+  let img2 = PHOTO_IDS[Math.floor(Math.random() * PHOTO_IDS.length)];
+  while(img2 === img1) { img2 = PHOTO_IDS[Math.floor(Math.random() * PHOTO_IDS.length)]; }
+
+  const numTags = Math.floor(Math.random() * 3) + 1;
+  const tags = [];
+  for(let j=0; j<numTags; j++) {
+    tags.push(TAGS_POOL[Math.floor(Math.random() * TAGS_POOL.length)]);
+  }
+
+  PRODUCTS_MOCK.push({
+    slug,
+    title,
+    categorySlug: nounObj.cat,
+    description: desc,
+    price,
+    imgIds: [img1, img2],
+    tags: [...new Set(tags)],
+    isFeatured: Math.random() > 0.8
+  });
+}
 
 async function main() {
   console.log('🌱 Seeding DB...');
