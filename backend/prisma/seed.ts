@@ -52,10 +52,16 @@ const NOUNS = [
   { term: 'Distressed Hoodie', cat: 'hoodies' },
   { term: 'Utility Vest', cat: 'jackets' },
   { term: 'Boxy Tee', cat: 'oversized-tees' },
-  { term: 'Zip-Up Hoodie', cat: 'hoodies' }
+  { term: 'Zip-Up Hoodie', cat: 'hoodies' },
+  { term: 'Varsity Jacket', cat: 'jackets' },
+  { term: 'Cargo Jacket', cat: 'jackets' },
+  { term: 'Mock Neck Crew', cat: 'sweatshirts' },
+  { term: 'Anime Collab Tee', cat: 'anime' },
+  { term: 'Essential Tee', cat: 'oversized-tees' },
+  { term: 'Washed Hoodie', cat: 'hoodies' }
 ];
 
-const ADJECTIVES = ['Monolith', 'Void', 'Shogun', 'Crimson', 'Phantom', 'Yurei', 'Noir', 'Ronin', 'Strata', 'Echo', 'Horizon', 'Akira', 'Vortex', 'Nebula', 'Urban', 'Onyx', 'Cobalt', 'Apex', 'Nomad', 'Zenith', 'Kinetics', 'Aura', 'Ethereal', 'Paradox', 'Nova'];
+const ADJECTIVES = ['Monolith', 'Void', 'Shogun', 'Crimson', 'Phantom', 'Yurei', 'Noir', 'Ronin', 'Strata', 'Echo', 'Horizon', 'Akira', 'Vortex', 'Nebula', 'Urban', 'Onyx', 'Cobalt', 'Apex', 'Nomad', 'Zenith', 'Kinetics', 'Aura', 'Ethereal', 'Paradox', 'Nova', 'Cyber', 'Neon', 'Lunar', 'Solstice', 'Eclipse', 'Vector', 'Quantum', 'Glitch', 'Kitsune', 'Mecha', 'Samurai', 'Drift', 'Ascent', 'Rebel', 'Rogue'];
 
 const DESCRIPTIONS = [
   'Heavyweight 400gsm brushed fleece. Dropped shoulders, boxy fit, tonal embroidery.',
@@ -82,7 +88,7 @@ const TAGS_POOL = ['oversized', 'bestseller', 'trending', 'new', 'limited', 'ani
 
 const PRODUCTS_MOCK: any[] = [];
 
-for (let i = 0; i < 95; i++) {
+for (let i = 0; i < 225; i++) {
   const adj = ADJECTIVES[i % ADJECTIVES.length];
   const nounObj = NOUNS[Math.floor(Math.random() * NOUNS.length)];
   const title = `${adj} ${nounObj.term}`;
