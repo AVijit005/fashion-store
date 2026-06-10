@@ -58,7 +58,7 @@ jobs:
       working-directory: ./backend
       env:
         DATABASE_URL: postgresql://aura_user:aura_password@localhost:5432/aura_db
-      run: npx prisma migrate dev --name init
+      run: npx prisma db push --accept-data-loss && npx prisma generate
 
     - name: Run Backend Unit Tests
       working-directory: ./backend

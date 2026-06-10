@@ -400,24 +400,25 @@ function Studio() {
                   </>
                 )}
                 {sel.type === "image" && (
-                  <div>
-                    <p className="mb-1 text-[11px] uppercase tracking-[0.22em] text-mute">
-                      Size · {sel.size}
-                    </p>
-                    <input
-                      type="range"
-                      min={10}
-                      max={80}
-                      value={sel.size}
-                      onChange={(e) => update(sel.id, { size: +e.target.value })}
-                      className="w-full accent-ink"
-                    />
-                  </div>
-                  <div>
-                    <p className="mb-1 text-[11px] uppercase tracking-[0.22em] text-mute">
-                      Position (X, Y)
-                    </p>
-                    <div className="flex gap-2">
+                  <>
+                    <div>
+                      <p className="mb-1 text-[11px] uppercase tracking-[0.22em] text-mute">
+                        Size · {sel.size}
+                      </p>
+                      <input
+                        type="range"
+                        min={10}
+                        max={80}
+                        value={sel.size}
+                        onChange={(e) => update(sel.id, { size: +e.target.value })}
+                        className="w-full accent-ink"
+                      />
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[11px] uppercase tracking-[0.22em] text-mute">
+                        Position (X, Y)
+                      </p>
+                      <div className="flex gap-2">
                       <input
                         type="number"
                         value={Math.round(sel.x)}
@@ -436,6 +437,7 @@ function Studio() {
                       />
                     </div>
                   </div>
+                  </>
                 )}
                 <button
                   onClick={() => remove(sel.id)}
