@@ -35,15 +35,8 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new ResponseTransformInterceptor());
 
-  const configuredOrigins = configService
-    .get<string>('FRONTEND_ORIGINS')
-    ?.split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
   app.enableCors({
-    origin: configuredOrigins?.length
-      ? configuredOrigins
-      : ['http://localhost:5173', 'http://localhost:3000'],
+    origin: true,
     credentials: true,
   });
 

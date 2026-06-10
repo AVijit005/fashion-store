@@ -2,7 +2,7 @@
 // Communicates with NestJS API running on http://localhost:3000.
 
 const isVercelPreview = typeof window !== "undefined" && window.location.hostname.includes("vercel.app") && !window.location.hostname.startsWith("fashion-store");
-const BASE_URL = (import.meta.env.VITE_API_URL as string) || (import.meta.env.PROD && !isVercelPreview ? "https://fashion-store-duva.onrender.com" : "http://localhost:3000");
+const BASE_URL = (import.meta.env.VITE_API_URL as string) || (import.meta.env.PROD && !isVercelPreview ? "https://fashion-store-duya.onrender.com" : "http://localhost:3000");
 
 import { toast } from "sonner";
 
