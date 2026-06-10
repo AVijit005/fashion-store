@@ -47,10 +47,11 @@ function OverviewPage() {
     queryFn: () => apiClient.get("/admin/dashboard/activity"),
     refetchInterval: 5000,
   });
-  const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
+  const { data: productsRes, isLoading: productsLoading } = useQuery<{ data: Product[] }>({
     queryKey: ["admin-products"],
     queryFn: () => apiClient.get("/admin/catalog/products"),
   });
+  const products = productsRes?.data || [];
   const { data: apiOrdersRes, isLoading: ordersLoading } = useQuery<{ data: Order[] }>({
     queryKey: ["admin-orders"],
     queryFn: () => apiClient.get("/admin/orders?limit=50"),
