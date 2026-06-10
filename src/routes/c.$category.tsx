@@ -23,13 +23,33 @@ export const Route = createFileRoute("/c/$category")({
 
 function CategoryPage() {
   const { category } = Route.useParams();
-  const cat = categories.find((c) => c.slug === category);
 
   const [list, setList] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [catName, setCatName] = useState("");
+  const [catBlurb, setCatBlurb] = useState("");
 
   useEffect(() => {
     setLoading(true);
+    
+    // Normalize category slug if it contains spaces
+    const normalizedCategory = category.replace(/ /g, '-');
+
+    catalogApi.getCategories().then((cats) => {
+      const found = cats.find((c: any) => c.slug === normalizedCategory || c.slug === category);
+      if (found) {
+        setCatName(found.name);
+        setCatBlurb(found.description || "Premium streetwear piece.");
+      } else {
+        // Fallback formatting
+        setCatName(category.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()));
+        setCatBlurb("Explore our collection.");
+      }
+    }).catch(() => {
+      setCatName(category.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()));
+      setCatBlurb("Explore our collection.");
+    });
+
     if (category === "new") {
       catalogApi
         .getProducts({ limit: 100 })
@@ -56,7 +76,7 @@ function CategoryPage() {
         });
     } else {
       catalogApi
-        .getProducts({ category, limit: 100 })
+        .getProducts({ category: normalizedCategory, limit: 100 })
         .then((res) => {
           setList(res.products);
           setLoading(false);
@@ -92,17 +112,13 @@ function CategoryPage() {
     );
   }
 
-  if (!cat) throw notFound();
-
-  if (loading) return <LoadingState label={`Loading ${cat.name}`} />;
+  if (loading) return <LoadingState label="Loading" />;
 
   return (
     <ProductGridShell
-      eyebrow={
-        cat.group === "apparel" ? "Apparel" : cat.group === "print" ? "Print shop" : "Accessories"
-      }
-      title={cat.name + "."}
-      description={cat.blurb}
+      eyebrow="Category"
+      title={catName ? catName + "." : ""}
+      description={catBlurb}
       base={list}
     />
   );
