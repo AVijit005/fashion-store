@@ -15,12 +15,12 @@ export function FreeShippingBar({ subtotal }: { subtotal: number }) {
         <Truck className="h-3.5 w-3.5" />
         {qualified ? (
           <p>
-            You unlocked <span className="font-medium">free shipping</span> ✓
+            You unlocked <span className="font-medium">free shipping (India Only)</span> ✓
           </p>
         ) : (
           <p>
             Add <span className="font-medium tabular-nums">{inr(remaining)}</span> more for{" "}
-            <span className="font-medium">free shipping</span>
+            <span className="font-medium">free shipping (India Only)</span>
           </p>
         )}
       </div>

@@ -25,3 +25,14 @@ export class CreatePosOrderDto {
   @Type(() => OrderItemDto)
   items!: OrderItemDto[];
 }
+
+import { OrderStatus } from '@prisma/client';
+
+export class UpdateBulkStatusDto {
+  @IsArray()
+  @IsString({ each: true })
+  orderIds!: string[];
+
+  @IsString()
+  status!: OrderStatus;
+}

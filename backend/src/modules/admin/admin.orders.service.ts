@@ -141,4 +141,24 @@ export class AdminOrdersService {
       'Order refunded manually by admin'
     );
   }
+
+  async updateBulkOrderStatus(orderIds: string[], status: OrderStatus) {
+    if (!orderIds || orderIds.length === 0) {
+      throw new BadRequestException('No order IDs provided');
+    }
+
+    const results = { success: 0, failed: 0, errors: [] as any[] };
+
+    for (const id of orderIds) {
+      try {
+        await this.updateOrderStatus(id, status);
+        results.success++;
+      } catch (error: any) {
+        results.failed++;
+        results.errors.push({ id, message: error.message });
+      }
+    }
+
+    return results;
+  }
 }

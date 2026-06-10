@@ -94,6 +94,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Heavyweight cotton tees, anime drops, hoodies, jackets, and a print studio for one-of-one pieces.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://raw.githubusercontent.com/AVijit005/fashion-store/main/public/og-image.jpg" },
+      { name: "twitter:image", content: "https://raw.githubusercontent.com/AVijit005/fashion-store/main/public/og-image.jpg" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [

@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Type, Image as ImageIcon, Trash2, Plus, ShoppingBag, LayoutTemplate } from "lucide-react";
+import { Type, Image as ImageIcon, Trash2, Plus, ShoppingBag, LayoutTemplate, Save } from "lucide-react";
 import { useCart } from "@/lib/store/cart";
 import { inr } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/studio")({
   head: () => ({
@@ -75,6 +76,7 @@ function Studio() {
   const [activeTab, setActiveTab] = useState<"product" | "templates">("product");
   const canvasRef = useRef<HTMLDivElement>(null);
   const add = useCart((s) => s.add);
+  const [isSaving, setIsSaving] = useState(false);
 
   const { data: templates = [] } = useQuery<any[]>({
     queryKey: ["creator-templates"],
@@ -135,6 +137,26 @@ function Studio() {
         layers,
       },
     });
+  };
+
+  const saveDraft = async () => {
+    setIsSaving(true);
+    try {
+      await apiClient.post("/studio/designs", {
+        title: `Draft: ${product.name}`,
+        category: "Drafts",
+        designJson: {
+          productId,
+          color,
+          layers,
+        },
+      });
+      toast.success("Draft saved to your account");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to save draft. Please log in.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -342,6 +364,29 @@ function Studio() {
                         className="w-full accent-ink"
                       />
                     </div>
+                    <div>
+                      <p className="mb-1 text-[11px] uppercase tracking-[0.22em] text-mute">
+                        Position (X, Y)
+                      </p>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={Math.round(sel.x)}
+                          onChange={(e) => update(sel.id, { x: +e.target.value })}
+                          className="w-full border-b border-line bg-transparent py-1 text-sm outline-none focus:border-ink"
+                          min={0}
+                          max={100}
+                        />
+                        <input
+                          type="number"
+                          value={Math.round(sel.y)}
+                          onChange={(e) => update(sel.id, { y: +e.target.value })}
+                          className="w-full border-b border-line bg-transparent py-1 text-sm outline-none focus:border-ink"
+                          min={0}
+                          max={100}
+                        />
+                      </div>
+                    </div>
                     <div className="flex gap-2">
                       {["#0d0d0d", "#f5f3ee", "#c84b1e", "#2f4a3a"].map((c) => (
                         <button
@@ -368,6 +413,29 @@ function Studio() {
                       className="w-full accent-ink"
                     />
                   </div>
+                  <div>
+                    <p className="mb-1 text-[11px] uppercase tracking-[0.22em] text-mute">
+                      Position (X, Y)
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={Math.round(sel.x)}
+                        onChange={(e) => update(sel.id, { x: +e.target.value })}
+                        className="w-full border-b border-line bg-transparent py-1 text-sm outline-none focus:border-ink"
+                        min={0}
+                        max={100}
+                      />
+                      <input
+                        type="number"
+                        value={Math.round(sel.y)}
+                        onChange={(e) => update(sel.id, { y: +e.target.value })}
+                        className="w-full border-b border-line bg-transparent py-1 text-sm outline-none focus:border-ink"
+                        min={0}
+                        max={100}
+                      />
+                    </div>
+                  </div>
                 )}
                 <button
                   onClick={() => remove(sel.id)}
@@ -391,12 +459,21 @@ function Studio() {
               <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Total</p>
               <p className="font-display text-3xl tabular-nums">{inr(product.price + 200)}</p>
             </div>
-            <button
-              onClick={addToCart}
-              className="mt-4 flex w-full items-center justify-center gap-2 bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-paper"
-            >
-              <Plus className="h-4 w-4" /> Add to bag
-            </button>
+            <div className="flex gap-4 mt-4">
+              <button
+                onClick={saveDraft}
+                disabled={isSaving}
+                className="flex-1 flex items-center justify-center gap-2 border border-ink py-4 text-[12px] uppercase tracking-[0.22em] text-ink hover:bg-fog disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" /> {isSaving ? "Saving..." : "Save Draft"}
+              </button>
+              <button
+                onClick={addToCart}
+                className="flex flex-1 items-center justify-center gap-2 bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-paper"
+              >
+                <Plus className="h-4 w-4" /> Add to bag
+              </button>
+            </div>
             <p className="mt-2 text-[11px] text-mute">
               Includes ₹200 custom print fee. Ships in 48h.
             </p>

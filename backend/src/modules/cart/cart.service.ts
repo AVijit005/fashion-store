@@ -57,17 +57,18 @@ export class CartService {
   // Retrieve minimal cached array of variant IDs and quantities
   async getCartItems(userId?: string, sessionId?: string): Promise<CachedCartItem[]> {
     const cacheKey = this.getCacheKey(userId, sessionId);
-    const cached = await this.redis.get(cacheKey);
+    let cached = null;
 
-    if (cached) {
-      try {
+    try {
+      cached = await this.redis.get(cacheKey);
+      if (cached) {
         return JSON.parse(cached) as CachedCartItem[];
-      } catch {
-        await this.redis.del(cacheKey);
       }
+    } catch (error) {
+      console.warn(`Redis GET failed for ${cacheKey}`, error);
     }
 
-    // Cache miss, load from DB
+    // Cache miss or Redis failure, load from DB
     const cart = await this.prisma.cart.findFirst({
       where: userId ? { userId } : { sessionId },
       include: {
@@ -86,7 +87,11 @@ export class CartService {
       customData: item.customData,
     }));
 
-    await this.redis.set(cacheKey, JSON.stringify(items), 'EX', this.cacheTtl);
+    try {
+      await this.redis.set(cacheKey, JSON.stringify(items), 'EX', this.cacheTtl);
+    } catch (error) {
+      console.warn(`Redis SET failed for ${cacheKey}`, error);
+    }
     return items;
   }
 
@@ -443,8 +448,12 @@ export class CartService {
   }
 
   private async invalidateCache(userId?: string, sessionId?: string) {
-    const cacheKey = this.getCacheKey(userId, sessionId);
-    await this.redis.del(cacheKey);
+    try {
+      const cacheKey = this.getCacheKey(userId, sessionId);
+      await this.redis.del(cacheKey);
+    } catch (error) {
+      console.warn(`Redis DEL failed`, error);
+    }
   }
 
   private async getOrCreateCart(tx: Prisma.TransactionClient, userId?: string, sessionId?: string) {

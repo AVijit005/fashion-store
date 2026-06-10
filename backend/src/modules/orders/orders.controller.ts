@@ -14,7 +14,7 @@ import {
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Request } from 'express';
 import { OrdersService } from './orders.service';
-import { CheckoutDto, VerifyPaymentDto } from './dto/orders.dto';
+import { CheckoutDto, VerifyPaymentDto, ApplyCouponDto } from './dto/orders.dto';
 import { OptionalAuthGuard } from '../../common/guards/optional-auth.guard';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -44,6 +44,12 @@ export class OrdersController {
       );
     }
     return this.ordersService.checkout(dto, user?.id);
+  }
+
+  @Post('apply-coupon')
+  @ApiOperation({ summary: 'Validate and calculate discount for a coupon code' })
+  async applyCoupon(@Body() dto: ApplyCouponDto) {
+    return this.ordersService.applyCoupon(dto.code, dto.subtotal);
   }
 
   @Post(':id/retry-payment')

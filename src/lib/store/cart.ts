@@ -164,3 +164,11 @@ export const useCart = create<CartState>()(
 );
 
 export const itemKey = keyFor;
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === "ink-cart") {
+      useCart.persist.rehydrate();
+    }
+  });
+}

@@ -235,7 +235,7 @@ export function CartDrawer() {
                   Checkout →
                 </Link>
                 <p className="mt-2 text-center text-[11px] text-mute">
-                  Free shipping over ₹999 · 15-day returns
+                  Free shipping over ₹999 (India Only) · 15-day returns
                 </p>
               </div>
             )}

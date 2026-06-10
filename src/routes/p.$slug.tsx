@@ -89,12 +89,7 @@ export const Route = createFileRoute("/p/$slug")({
   component: ProductPage,
 });
 
-// deterministic low-stock pseudo-value, so it doesn't shimmer every render
-function lowStockFor(id: string): number | null {
-  const n = id.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
-  const stock = n % 14; // 0..13
-  return stock <= 6 ? Math.max(2, stock) : null;
-}
+// Real stock computation handled in component
 
 function ProductPage() {
   const { product } = Route.useLoaderData();
@@ -136,14 +131,11 @@ function ProductPage() {
   }, [product]);
 
   const discount = pct(product.price, product.mrp);
-  const lowStock = lowStockFor(product.id);
+  
+  const totalStock = product.variants?.reduce((s: number, v: any) => s + (v.stockQuantity || 0), 0) || 0;
+  const lowStock = totalStock > 0 && totalStock <= 10 ? totalStock : null;
 
-  const gallery = [
-    product.images[0],
-    product.images[1] ?? product.images[0],
-    product.images[0],
-    product.images[1] ?? product.images[0],
-  ];
+  const gallery = product.images && product.images.length > 0 ? product.images : ["https://placehold.co/800x1000/f5f3ee/0d0d0d?text=No+Image"];
 
   const handleAdd = () => {
     const rect = addBtnRef.current?.getBoundingClientRect();
@@ -347,7 +339,15 @@ function ProductPage() {
             </button>
             <span className="text-line">·</span>
             <button
-              onClick={() => toast("Hint sent — link copied to clipboard")}
+              onClick={() => {
+                const hintText = `Hey! I've been eyeing the ${product.name} at Ink Studio. Hint hint 😉: ${window.location.href}`;
+                if (navigator.share) {
+                  navigator.share({ title: "Gift hint", text: hintText, url: window.location.href }).catch(() => {});
+                } else {
+                  navigator.clipboard.writeText(hintText);
+                  toast.success("Hint text & link copied to clipboard");
+                }
+              }}
               className="flex items-center gap-1.5 hover:text-ink"
             >
               <Gift className="h-3.5 w-3.5" /> Drop a hint
@@ -367,8 +367,9 @@ function ProductPage() {
               Fabric & care
             </summary>
             <p className="mt-3 text-sm text-graphite">
-              100% combed cotton, 240gsm. Machine wash cold, inside out. Tumble dry low. Iron
-              reverse only.
+              {product.tags && product.tags.includes("heavyweight") 
+                ? "100% combed cotton, 240gsm. Machine wash cold, inside out. Tumble dry low. Iron reverse only." 
+                : "Premium materials. Follow label instructions for care."}
             </p>
           </details>
           <details className="border-b border-line py-4">
@@ -376,7 +377,7 @@ function ProductPage() {
               Origin
             </summary>
             <p className="mt-3 text-sm text-graphite">
-              Cut and sewn in Tirupur, India. Garment-dyed in small batches by hand.
+              Cut and sewn in Tirupur, India.
             </p>
           </details>
           <details className="border-b border-line py-4">

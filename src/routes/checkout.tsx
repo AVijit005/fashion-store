@@ -124,11 +124,41 @@ function CheckoutPage() {
   const [errors, setErrors] = useState<Errors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
+  const [idempotencyKey] = useState(() => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2));
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{code: string, discount: number} | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
   const sub = subtotal();
-  const ship = sub === 0 ? 0 : 100;
-  const tax = Math.round(sub * 0.18);
-  const total = sub + ship + tax;
+  const ship = sub > 999 || sub === 0 ? 0 : 79;
+  const total = sub + ship - (appliedCoupon?.discount || 0);
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setIsApplyingCoupon(true);
+    setCouponError("");
+    try {
+      const res = await apiClient.post<{code: string, discount: number}>("/orders/apply-coupon", {
+        code: couponCode,
+        subtotal: sub,
+      });
+      setAppliedCoupon(res);
+      setCouponCode("");
+    } catch (e: any) {
+      let msg = e.message || "Invalid coupon";
+      if (msg.includes("P2002") || msg.toLowerCase().includes("internal server") || msg.includes("unexpected")) {
+        msg = "An unexpected error occurred while processing your request. Please try again.";
+      }
+      setCouponError(msg);
+    } finally {
+      setIsApplyingCoupon(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+  };
 
   const setField = (k: keyof Address) => (v: string) => {
     setAddr((a) => ({ ...a, [k]: v }));
@@ -182,6 +212,8 @@ function CheckoutPage() {
         shippingCountry: "IN",
         guestSessionId,
         paymentMethod: pay,
+        idempotencyKey,
+        couponCode: appliedCoupon?.code,
       });
 
       // Persist guest token so order confirmation page can look up the order
@@ -255,7 +287,11 @@ function CheckoutPage() {
 
       rzp.open();
     } catch (err: any) {
-      toast.error(err.message || "Failed to initiate payment");
+      let msg = err.message || "Failed to initiate payment";
+      if (msg.includes("P2002") || msg.toLowerCase().includes("internal server") || msg.includes("unexpected")) {
+        msg = "An unexpected error occurred while processing your request. Please try again.";
+      }
+      toast.error(msg);
       setIsSubmitting(false);
     }
   };
@@ -423,7 +459,7 @@ function CheckoutPage() {
                 role="radiogroup"
                 aria-label="Shipping method"
               >
-                {[{ id: "standard", t: "Standard", d: "3–5 business days", p: 100 }].map((o) => (
+                {[{ id: "standard", t: "Standard (India Only)", d: "3–5 business days", p: subtotal > 999 ? 0 : 79 }].map((o) => (
                   <label
                     key={o.id}
                     className={`flex cursor-pointer items-center justify-between gap-4 border p-5 transition ${shipping === o.id ? "border-ink" : "border-line hover:border-graphite"}`}
@@ -582,6 +618,34 @@ function CheckoutPage() {
               </li>
             ))}
           </ul>
+          
+          <div className="p-5 border-b border-line space-y-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={couponCode}
+                onChange={e => { setCouponCode(e.target.value); setCouponError(""); }}
+                placeholder="Discount code"
+                className="h-10 w-full border border-line bg-paper px-3 text-[12px] uppercase outline-none focus:border-ink"
+                disabled={!!appliedCoupon}
+              />
+              <button
+                onClick={applyCoupon}
+                disabled={isApplyingCoupon || !!appliedCoupon || !couponCode}
+                className="bg-ink px-4 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50 transition"
+              >
+                {isApplyingCoupon ? "..." : "Apply"}
+              </button>
+            </div>
+            {couponError && <p className="text-[11px] text-accent">{couponError}</p>}
+            {appliedCoupon && (
+              <div className="flex items-center justify-between bg-fog/30 px-3 py-2 text-[12px]">
+                <span className="font-mono text-ink tracking-[0.1em]">{appliedCoupon.code}</span>
+                <button onClick={removeCoupon} className="text-mute hover:text-ink">✕</button>
+              </div>
+            )}
+          </div>
+
           <dl className="space-y-1.5 p-5 text-sm">
             <div className="flex justify-between">
               <dt className="text-mute">Subtotal</dt>
@@ -589,13 +653,19 @@ function CheckoutPage() {
             </div>
             {savings() > 0 && (
               <div className="flex justify-between text-accent">
-                <dt>Discount</dt>
+                <dt>Savings</dt>
                 <dd className="tabular-nums">−{inr(savings())}</dd>
+              </div>
+            )}
+            {appliedCoupon && (
+              <div className="flex justify-between text-accent">
+                <dt>Discount ({appliedCoupon.code})</dt>
+                <dd className="tabular-nums">−{inr(appliedCoupon.discount)}</dd>
               </div>
             )}
             <div className="flex justify-between">
               <dt className="text-mute">Shipping</dt>
-              <dd className="tabular-nums">{ship === 0 ? "Free" : inr(ship)}</dd>
+              <dd className="tabular-nums">{ship === 0 ? "Free (India Only)" : inr(ship)}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-mute">GST</dt>

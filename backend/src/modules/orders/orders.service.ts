@@ -39,9 +39,81 @@ export class OrdersService {
     @InjectQueue('order-expiry') private readonly orderExpiryQueue: Queue,
   ) {}
 
+  async applyCoupon(code: string, subtotal: number) {
+    const coupon = await this.prisma.coupon.findUnique({
+      where: { code: code.toUpperCase() }
+    });
+
+    if (!coupon) {
+      throw new NotFoundException('Invalid coupon code');
+    }
+
+    if (!coupon.isActive) {
+      throw new BadRequestException('This coupon is no longer active');
+    }
+
+    const now = new Date();
+    if (now < coupon.validFrom || (coupon.validUntil && now > coupon.validUntil)) {
+      throw new BadRequestException('This coupon is expired or not yet valid');
+    }
+
+    if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) {
+      throw new BadRequestException('This coupon has reached its usage limit');
+    }
+
+    if (coupon.minOrderValue && subtotal < coupon.minOrderValue) {
+      throw new BadRequestException(`Order value must be at least ₹${coupon.minOrderValue} to use this coupon`);
+    }
+
+    let discount = 0;
+    if (coupon.type === 'PERCENTAGE') {
+      discount = (subtotal * coupon.value) / 100;
+      if (coupon.maxDiscount && discount > coupon.maxDiscount) {
+        discount = coupon.maxDiscount;
+      }
+    } else {
+      discount = coupon.value;
+    }
+
+    if (discount > subtotal) discount = subtotal;
+
+    return {
+      code: coupon.code,
+      discount: Math.round(discount),
+    };
+  }
+
   // Checkout and reserve inventory
   async checkout(dto: CheckoutDto, userId?: string) {
-    const { guestSessionId } = dto;
+    const { guestSessionId, idempotencyKey } = dto;
+    
+    if (idempotencyKey) {
+      const existingKey = await this.prisma.idempotencyKey.findUnique({
+        where: { key: idempotencyKey },
+      });
+      if (existingKey) {
+        if (existingKey.response) {
+          return existingKey.response;
+        } else {
+          throw new BadRequestException('Checkout is already in progress for this request.');
+        }
+      }
+      
+      try {
+        await this.prisma.idempotencyKey.create({
+          data: {
+            key: idempotencyKey,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours expiry
+          }
+        });
+      } catch (err: any) {
+        if (err.code === 'P2002') {
+          throw new BadRequestException('Checkout is already in progress for this request.');
+        }
+        throw err;
+      }
+    }
+
     const activeUserId = userId || undefined;
     const activeSessionId = activeUserId ? undefined : guestSessionId;
 
@@ -60,11 +132,23 @@ export class OrdersService {
 
     // Variant IDs are extracted inside the transaction for sorted locking.
 
-    // Flat shipping fee of ₹100 and dynamic GST calculation of 18%
-    const shippingFee = new Prisma.Decimal(100.0);
+    let discountAmount = new Prisma.Decimal(0);
+    if (dto.couponCode) {
+      try {
+        const couponRes = await this.applyCoupon(dto.couponCode, cart.totalAmount);
+        discountAmount = new Prisma.Decimal(couponRes.discount);
+      } catch (e: any) {
+        throw new BadRequestException(`Coupon error: ${e.message}`);
+      }
+    }
+
+    // Dynamic inclusive GST calculation of 18%
+    const shippingFee = new Prisma.Decimal(cart.totalAmount > 999 || cart.totalAmount === 0 ? 0 : 79);
     const totalAmountBase = new Prisma.Decimal(cart.totalAmount);
-    const tax = totalAmountBase.mul(new Prisma.Decimal(0.18));
-    const totalAmount = totalAmountBase.add(shippingFee).add(tax);
+    const discountedBase = totalAmountBase.sub(discountAmount);
+    // Inclusive tax = Base * (18 / 118)
+    const tax = discountedBase.mul(18).div(118);
+    const totalAmount = discountedBase.add(shippingFee);
 
     const guestToken = activeUserId ? null : (guestSessionId || crypto.randomBytes(16).toString('hex'));
 
@@ -102,6 +186,13 @@ export class OrdersService {
 
         // 1. Reserve inventory
         await this.inventoryService.reserveInventory(inventoryItems, tx);
+      }
+
+      if (dto.couponCode) {
+        await tx.coupon.update({
+          where: { code: dto.couponCode.toUpperCase() },
+          data: { usageCount: { increment: 1 } },
+        });
       }
 
       // Create Order
@@ -252,13 +343,22 @@ export class OrdersService {
 
 
 
-    return {
+    const responseObj = {
       orderId: createdOrder.id,
       razorpayOrderId,
       amount: totalAmount.toNumber(),
       currency: 'INR',
       guestToken,
     };
+
+    if (idempotencyKey) {
+      await this.prisma.idempotencyKey.update({
+        where: { key: idempotencyKey },
+        data: { response: responseObj as any },
+      }).catch(() => null);
+    }
+
+    return responseObj;
   }
 
   // Retry Payment

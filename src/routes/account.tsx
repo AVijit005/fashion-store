@@ -12,9 +12,9 @@ import {
   Check,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useAuthStore } from "@/lib/store/auth";
-import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
+import { useAddresses, useDeleteAddress, useUpdatePreferences } from "@/lib/api/users";
+import { AddressForm } from "@/components/account/address-form";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -41,7 +41,35 @@ function Account() {
   const [openOrder, setOpenOrder] = useState<string | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [isRetrying, setIsRetrying] = useState<string | null>(null);
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
+  
+  const { data: addresses = [], isLoading: loadingAddresses } = useAddresses();
+  const deleteAddress = useDeleteAddress();
+  const updatePreferences = useUpdatePreferences();
   const { isAuthenticated, user, logout, setAuthModalOpen, isLoading } = useAuthStore();
+  
+  const prefs = (user as any)?.preferences || {};
+  const notifs = prefs.notifications || { orderUpdates: true, dropAlerts: true, restocks: true, sales: false };
+
+  const handlePrefChange = (key: string, val: any) => {
+    const newPrefs = { ...prefs, [key]: val };
+    updatePreferences.mutate(newPrefs, {
+      onSuccess: (updatedUser) => {
+        useAuthStore.setState({ user: updatedUser });
+        toast.success("Preferences updated");
+      }
+    });
+  };
+
+  const handleNotifChange = (key: string, checked: boolean) => {
+    const newPrefs = { ...prefs, notifications: { ...notifs, [key]: checked } };
+    updatePreferences.mutate(newPrefs, {
+      onSuccess: (updatedUser) => {
+        useAuthStore.setState({ user: updatedUser });
+        toast.success("Notifications updated");
+      }
+    });
+  };
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -245,68 +273,92 @@ function Account() {
 
         {/* Returns */}
         <TabsContent value="returns" className="mt-8">
-          <div className="border border-line bg-paper p-8 text-center">
-            <p className="font-display text-3xl">No active returns.</p>
-            <p className="mt-2 text-mute">
-              Start one from any delivered order in three quick steps.
-            </p>
-            <ol className="mx-auto mt-8 grid max-w-2xl grid-cols-3 gap-4 text-left text-[12px]">
-              {["1. Select item", "2. Reason & pickup", "3. Refund confirmed"].map((s) => (
-                <li key={s} className="border border-line p-4 uppercase tracking-[0.18em]">
-                  {s}
-                </li>
+          {orders.filter(o => o.status === "DELIVERED").length > 0 ? (
+            <div className="grid gap-4">
+              <p className="text-mute mb-2">Select a delivered order to initiate a return:</p>
+              {orders.filter(o => o.status === "DELIVERED").map((o) => (
+                <div key={o.id} className="border border-line p-6 flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-[14px]">INK-{o.id.substring(0, 8).toUpperCase()}</p>
+                    <p className="text-[12px] text-mute">Delivered on {new Date(o.updatedAt).toLocaleDateString()}</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      window.location.href = `mailto:support@inkstudio.com?subject=Return Request for Order INK-${o.id.substring(0, 8).toUpperCase()}&body=Please provide the reason for return:%0A%0A`;
+                    }}
+                    className="border border-line px-4 py-2 text-[12px] uppercase tracking-[0.18em] hover:border-ink hover:text-ink transition-colors"
+                  >
+                    Request Return
+                  </button>
+                </div>
               ))}
-            </ol>
-          </div>
+            </div>
+          ) : (
+            <div className="border border-line bg-paper p-8 text-center">
+              <p className="font-display text-3xl">No eligible returns.</p>
+              <p className="mt-2 text-mute">
+                You can only return items from orders that have been delivered.
+              </p>
+            </div>
+          )}
         </TabsContent>
 
         {/* Addresses */}
         <TabsContent value="addresses" className="mt-8">
-          <div className="grid gap-4 md:grid-cols-2">
-            {[
-              {
-                tag: "Home",
-                name: "Arjun Mehta",
-                addr: "B-204, Skyline Heights, Bandra West, Mumbai 400050",
-                phone: "+91 98765 43210",
-              },
-              {
-                tag: "Office",
-                name: "Arjun Mehta",
-                addr: "Floor 7, BKC One, Bandra Kurla Complex, Mumbai 400051",
-                phone: "+91 98765 43210",
-              },
-            ].map((a) => (
-              <div key={a.tag} className="border border-line p-6">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-mute">{a.tag}</p>
-                <p className="mt-2 font-medium">{a.name}</p>
-                <p className="mt-1 text-sm text-mute">{a.addr}</p>
-                <p className="mt-1 text-sm text-mute">{a.phone}</p>
-                <div className="mt-4 flex gap-3 text-[12px] uppercase tracking-[0.18em]">
-                  <button className="underline-offset-4 hover:underline">Edit</button>
-                  <button className="text-mute hover:text-ink">Remove</button>
+          {isAddingAddress ? (
+            <div className="border border-line p-6 max-w-xl">
+              <h3 className="font-display text-2xl mb-4">Add new address</h3>
+              <AddressForm onCancel={() => setIsAddingAddress(false)} onSuccess={() => setIsAddingAddress(false)} />
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {loadingAddresses ? (
+                <div className="col-span-2 text-mute text-center py-10">Loading addresses...</div>
+              ) : addresses.length === 0 ? (
+                <div className="col-span-2 text-center py-10 border border-dashed border-line">
+                  <p className="text-mute">You have no saved addresses.</p>
                 </div>
-              </div>
-            ))}
-            <button className="flex min-h-[160px] items-center justify-center border border-dashed border-line text-[12px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink">
-              + Add address
-            </button>
-          </div>
+              ) : (
+                addresses.map((a) => (
+                  <div key={a.id} className="border border-line p-6">
+                    {a.isDefault && (
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-mute mb-2">Default</p>
+                    )}
+                    <p className="font-medium">{a.street}</p>
+                    <p className="mt-1 text-sm text-mute">{a.city}, {a.state} {a.postalCode}</p>
+                    <p className="mt-1 text-sm text-mute">{a.country}</p>
+                    <div className="mt-4 flex gap-3 text-[12px] uppercase tracking-[0.18em]">
+                      <button 
+                        onClick={() => deleteAddress.mutate(a.id)}
+                        className="text-mute hover:text-red-500 transition-colors"
+                        disabled={deleteAddress.isPending}
+                      >
+                        {deleteAddress.isPending ? "Removing..." : "Remove"}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+              {!isAddingAddress && (
+                <button 
+                  onClick={() => setIsAddingAddress(true)}
+                  className="flex min-h-[160px] items-center justify-center border border-dashed border-line text-[12px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink transition-colors"
+                >
+                  + Add address
+                </button>
+              )}
+            </div>
+          )}
         </TabsContent>
 
         {/* Payment */}
         <TabsContent value="payment" className="mt-8">
-          <div className="grid gap-4 md:grid-cols-2">
-            {[
-              { l: "HDFC Debit", v: "•••• 4221", e: "08/27" },
-              { l: "UPI", v: "arjun@ybl", e: "Verified" },
-            ].map((c) => (
-              <div key={c.v} className="border border-line p-6">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-mute">{c.l}</p>
-                <p className="mt-2 font-display text-2xl tracking-widest">{c.v}</p>
-                <p className="mt-1 text-[12px] text-mute">{c.e}</p>
-              </div>
-            ))}
+          <div className="border border-line p-10 text-center">
+            <CreditCard className="mx-auto h-8 w-8 text-mute mb-4" />
+            <p className="font-display text-2xl">No saved payments</p>
+            <p className="mt-2 text-mute max-w-sm mx-auto">
+              Your securely saved cards and payment methods will appear here after your next checkout.
+            </p>
           </div>
         </TabsContent>
 
@@ -314,20 +366,21 @@ function Account() {
         <TabsContent value="notifications" className="mt-8">
           <ul className="divide-y divide-line border-y border-line">
             {[
-              ["Order updates", "Shipping, tracking and delivery."],
-              ["Drop alerts", "Be first to know when a drop goes live."],
-              ["Restocks", "Get pinged when something you saved is back."],
-              ["Sale & offers", "Quarterly only. No spam."],
-            ].map(([t, d], i) => (
-              <li key={t} className="flex items-center justify-between py-5">
+              { id: "orderUpdates", t: "Order updates", d: "Shipping, tracking and delivery." },
+              { id: "dropAlerts", t: "Drop alerts", d: "Be first to know when a drop goes live." },
+              { id: "restocks", t: "Restocks", d: "Get pinged when something you saved is back." },
+              { id: "sales", t: "Sale & offers", d: "Quarterly only. No spam." },
+            ].map(({ id, t, d }) => (
+              <li key={id} className="flex items-center justify-between py-5">
                 <div>
                   <p>{t}</p>
                   <p className="text-[12px] text-mute">{d}</p>
                 </div>
                 <input
                   type="checkbox"
-                  defaultChecked={i < 3}
-                  className="h-5 w-9 cursor-pointer appearance-none rounded-full bg-line transition checked:bg-ink"
+                  checked={notifs[id as keyof typeof notifs] ?? false}
+                  onChange={(e) => handleNotifChange(id, e.target.checked)}
+                  className="h-5 w-9 cursor-pointer appearance-none rounded-full bg-line transition checked:bg-ink relative before:absolute before:inset-y-0.5 before:left-0.5 before:h-4 before:w-4 before:rounded-full before:bg-paper before:transition-transform checked:before:translate-x-4"
                 />
               </li>
             ))}
@@ -338,18 +391,19 @@ function Account() {
         <TabsContent value="preferences" className="mt-8">
           <div className="grid gap-6 md:grid-cols-2">
             {[
-              { l: "Language", v: ["English", "हिंदी"] },
-              { l: "Currency", v: ["INR ₹", "USD $", "EUR €"] },
-              { l: "Default size", v: ["S", "M", "L", "XL"] },
-              { l: "Fit", v: ["Regular", "Oversized"] },
+              { key: "language", l: "Language", v: ["English", "हिंदी"] },
+              { key: "currency", l: "Currency", v: ["INR ₹", "USD $", "EUR €"] },
+              { key: "defaultSize", l: "Default size", v: ["S", "M", "L", "XL"] },
+              { key: "fit", l: "Fit", v: ["Regular", "Oversized"] },
             ].map((p) => (
               <div key={p.l}>
                 <p className="text-[11px] uppercase tracking-[0.22em] text-mute">{p.l}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {p.v.map((opt, i) => (
+                  {p.v.map((opt) => (
                     <button
                       key={opt}
-                      className={`border px-4 py-2 text-[12px] uppercase tracking-[0.18em] ${i === 0 ? "border-ink bg-ink text-paper" : "border-line"}`}
+                      onClick={() => handlePrefChange(p.key, opt)}
+                      className={`border px-4 py-2 text-[12px] uppercase tracking-[0.18em] transition-colors ${prefs[p.key] === opt || (!prefs[p.key] && p.v[0] === opt) ? "border-ink bg-ink text-paper" : "border-line hover:border-graphite"}`}
                     >
                       {opt}
                     </button>

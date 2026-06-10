@@ -116,7 +116,7 @@ function OrdersPage() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ ids, status }: { ids: string[], status: string }) => {
-      return Promise.all(ids.map(id => apiClient.put(`/admin/orders/${id}/status`, { status })));
+      return apiClient.patch(`/admin/orders/bulk-status`, { orderIds: ids, status });
     },
     onSuccess: (_, variables) => {
       toast.success(`Marked ${variables.ids.length} orders as ${variables.status.toLowerCase()}`);

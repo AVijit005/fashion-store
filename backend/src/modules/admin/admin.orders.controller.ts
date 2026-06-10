@@ -1,6 +1,6 @@
-import { Controller, Get, Put, Post, Param, Body, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Put, Post, Patch, Param, Body, UseGuards, Query } from '@nestjs/common';
 import { AdminOrdersService } from './admin.orders.service';
-import { CreatePosOrderDto } from './dto/admin.orders.dto';
+import { CreatePosOrderDto, UpdateBulkStatusDto } from './dto/admin.orders.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -37,5 +37,10 @@ export class AdminOrdersController {
   @Post(':id/refund')
   async processRefund(@Param('id') id: string) {
     return this.ordersService.processRefund(id);
+  }
+
+  @Patch('bulk-status')
+  async updateBulkOrderStatus(@Body() dto: UpdateBulkStatusDto) {
+    return this.ordersService.updateBulkOrderStatus(dto.orderIds, dto.status);
   }
 }

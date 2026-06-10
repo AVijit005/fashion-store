@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsNotEmpty, IsOptional, IsUUID } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, IsOptional, IsUUID, IsNumber } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CheckoutDto {
@@ -51,6 +51,16 @@ export class CheckoutDto {
   @IsString()
   @IsOptional()
   paymentMethod?: string;
+
+  @ApiProperty({ description: 'Idempotency key to prevent duplicate orders', required: false })
+  @IsString()
+  @IsOptional()
+  idempotencyKey?: string;
+
+  @ApiProperty({ description: 'Applied coupon code', required: false })
+  @IsString()
+  @IsOptional()
+  couponCode?: string;
 }
 
 export class VerifyPaymentDto {
@@ -68,4 +78,16 @@ export class VerifyPaymentDto {
   @IsString()
   @IsNotEmpty()
   razorpaySignature!: string;
+}
+
+export class ApplyCouponDto {
+  @ApiProperty({ description: 'Coupon code' })
+  @IsString()
+  @IsNotEmpty()
+  code!: string;
+
+  @ApiProperty({ description: 'Cart subtotal amount' })
+  @IsNumber()
+  @IsNotEmpty()
+  subtotal!: number;
 }

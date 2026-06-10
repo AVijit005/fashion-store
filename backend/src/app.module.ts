@@ -17,6 +17,7 @@ import { StudioModule } from './modules/studio/studio.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { APP_GUARD } from '@nestjs/core';
     StudioModule,
     WishlistModule,
     AdminModule,
+    MaintenanceModule,
   ],
   providers: [
     {
