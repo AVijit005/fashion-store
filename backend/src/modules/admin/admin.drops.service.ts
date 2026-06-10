@@ -38,7 +38,7 @@ export class AdminDropsService {
             if (item.order.status !== 'PAYMENT_PENDING' && item.order.status !== 'CANCELLED') {
               sold += item.quantity;
               units += item.quantity;
-              revenue += Number(item.price) * item.quantity;
+              revenue += Number(item.priceAtPurchase) * item.quantity;
             }
           });
         });

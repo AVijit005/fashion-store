@@ -9,6 +9,8 @@ import { AdminCustomersController } from './admin.customers.controller';
 import { AdminCustomersService } from './admin.customers.service';
 import { AdminDropsController } from './admin.drops.controller';
 import { AdminDropsService } from './admin.drops.service';
+import { AdminStudioController } from './admin.studio.controller';
+import { AdminStudioService } from './admin.studio.service';
 import { PrismaService } from '../../config/prisma.service';
 import { AuthModule } from '../auth/auth.module';
 
@@ -20,6 +22,7 @@ import { AuthModule } from '../auth/auth.module';
     AdminDashboardController,
     AdminCustomersController,
     AdminDropsController,
+    AdminStudioController,
   ],
   providers: [
     AdminCatalogService,
@@ -27,6 +30,7 @@ import { AuthModule } from '../auth/auth.module';
     AdminDashboardService,
     AdminCustomersService,
     AdminDropsService,
+    AdminStudioService,
     PrismaService,
   ],
 })

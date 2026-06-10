@@ -13,21 +13,21 @@ export class UpdateProfileDto {
 export class UpdateAddressDto {
   @IsString()
   @IsNotEmpty()
-  street: string;
+  street!: string;
 
   @IsString()
   @IsNotEmpty()
-  city: string;
+  city!: string;
 
   @IsString()
   @IsNotEmpty()
-  state: string;
+  state!: string;
 
   @IsString()
   @IsNotEmpty()
-  zip: string;
+  zip!: string;
 
   @IsString()
   @IsNotEmpty()
-  country: string;
+  country!: string;
 }

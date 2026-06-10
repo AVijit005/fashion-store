@@ -14,7 +14,26 @@ function AdminLayout() {
   const isLoading = useAuthStore((s) => s.isLoading);
 
   if (isLoading) {
-    return null;
+    return (
+      <div className="flex min-h-screen flex-col bg-paper">
+        <header className="flex h-14 items-center border-b border-line bg-paper px-4">
+          <div className="h-4 w-32 animate-pulse bg-fog/80" />
+        </header>
+        <div className="flex flex-1">
+          <aside className="w-64 border-r border-line bg-paper p-4 hidden md:block">
+            <div className="space-y-4">
+              <div className="h-4 w-24 animate-pulse bg-fog/80" />
+              <div className="h-4 w-32 animate-pulse bg-fog/80" />
+              <div className="h-4 w-20 animate-pulse bg-fog/80" />
+            </div>
+          </aside>
+          <main className="flex-1 p-6">
+             <div className="h-8 w-48 animate-pulse bg-fog/80 mb-6" />
+             <div className="h-64 w-full animate-pulse bg-fog/80" />
+          </main>
+        </div>
+      </div>
+    );
   }
 
   if (user?.role !== "ADMIN") {

@@ -8,6 +8,24 @@ import { compactInr, relTime } from "@/lib/admin/format";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/store/auth";
+import type { Product, Order, KPI } from "@/lib/admin/data";
+
+interface ActivityItem {
+  id: number;
+  time: string;
+  text: string;
+  meta: string;
+  kind: "order" | "stock" | "studio" | "fulfillment" | "customer" | "refund" | "wishlist";
+}
+
+interface KpisData {
+  totalRevenue: number;
+  totalOrders: number;
+  series: { day: number; revenue: number; orders: number }[];
+  conversion: number;
+  topCategories: { name: string; revenue: number; orders: number }[];
+  trafficSources: { source: string; percentage: number }[];
+}
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({
@@ -20,28 +38,28 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function OverviewPage() {
-  const { data: kpisData } = useQuery<any>({
+  const { data: kpisData } = useQuery<KpisData>({
     queryKey: ["admin-kpis"],
     queryFn: () => apiClient.get("/admin/dashboard/kpis"),
   });
-  const { data: activityData = [] } = useQuery<any[]>({
+  const { data: activityData = [] } = useQuery<ActivityItem[]>({
     queryKey: ["admin-activity"],
     queryFn: () => apiClient.get("/admin/dashboard/activity"),
     refetchInterval: 5000,
   });
-  const { data: products = [] } = useQuery<any[]>({
+  const { data: products = [] } = useQuery<Product[]>({
     queryKey: ["admin-products"],
     queryFn: () => apiClient.get("/admin/catalog/products"),
   });
-  const { data: apiOrdersRes } = useQuery<any>({
+  const { data: apiOrdersRes } = useQuery<{ data: Order[] }>({
     queryKey: ["admin-orders"],
     queryFn: () => apiClient.get("/admin/orders?limit=50"),
   });
   const apiOrders = apiOrdersRes?.data || [];
 
   const recent = apiOrders.slice(0, 6);
-  const lowStock = products.filter((p: any) => p.stock > 0 && p.stock <= p.lowStockAt).slice(0, 5);
-  const trending = [...products].sort((a: any, b: any) => (b.views7d || 0) - (a.views7d || 0)).slice(0, 5);
+  const lowStock = products.filter((p: Product) => p.stock > 0 && p.stock <= p.lowStockAt).slice(0, 5);
+  const trending = [...products].sort((a: Product, b: Product) => (b.views7d || 0) - (a.views7d || 0)).slice(0, 5);
   const liveActivity = activityData;
 
   const adminName = useAuthStore((s) => s.user?.email?.split('@')[0] ?? 'Admin');
@@ -75,11 +93,11 @@ function OverviewPage() {
       {/* KPI grid */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: 'Revenue', value: compactInr(realRevenue), delta: 0, spark: chartSeries.map((d: any) => d.revenue), hint: "Last 14 days" },
-          { label: 'Orders', value: String(realOrders), delta: 0, spark: chartSeries.map((d: any) => d.orders), hint: "Last 14 days" },
+          { label: 'Revenue', value: compactInr(realRevenue), delta: 0, spark: chartSeries.map((d: { revenue: number }) => d.revenue), hint: "Last 14 days" },
+          { label: 'Orders', value: String(realOrders), delta: 0, spark: chartSeries.map((d: { orders: number }) => d.orders), hint: "Last 14 days" },
           { label: 'AOV', value: compactInr(realAov), delta: 0, spark: [], hint: "Last 14 days" },
-          { label: 'Conversion', value: "—", delta: 0, spark: [], hint: "Not enough data" }
-        ].map((k: any) => (
+          { label: 'Conversion', value: `${kpisData?.conversion || 0}%`, delta: 0, spark: [], hint: "Storefront" }
+        ].map((k) => (
           <KpiCard key={k.label} {...k} />
         ))}
       </div>
@@ -140,10 +158,21 @@ function OverviewPage() {
         </Panel>
 
         <Panel title="Traffic · Sources">
-          <div className="flex flex-col items-center justify-center py-12 text-mute">
-            <Activity className="mb-4 h-8 w-8 opacity-20" />
-            <p className="text-[13px]">Analytics tracking not yet connected.</p>
-          </div>
+          {kpisData?.trafficSources && kpisData.trafficSources.length > 0 ? (
+            <div className="space-y-4">
+              {kpisData.trafficSources.map(ts => (
+                <div key={ts.source} className="flex items-center justify-between border-b border-line pb-2 text-[13px]">
+                  <span>{ts.source}</span>
+                  <span className="font-mono tabular-nums">{ts.percentage}%</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-mute">
+              <Activity className="mb-4 h-8 w-8 opacity-20" />
+              <p className="text-[13px]">Analytics tracking not yet connected.</p>
+            </div>
+          )}
         </Panel>
       </div>
 
@@ -235,9 +264,23 @@ function OverviewPage() {
       {/* Categories + Low stock + Trending */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         <Panel title="Top categories">
-          <div className="flex flex-col items-center justify-center py-12 text-mute">
-            <p className="text-[13px]">Not enough order data to categorize.</p>
-          </div>
+          {kpisData?.topCategories && kpisData.topCategories.length > 0 ? (
+            <ul className="space-y-3">
+              {kpisData.topCategories.map(cat => (
+                <li key={cat.name} className="flex items-center justify-between border-b border-line pb-2 text-[13px]">
+                  <span>{cat.name}</span>
+                  <div className="text-right">
+                    <p className="font-mono tabular-nums text-ink">{compactInr(cat.revenue)}</p>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-mute">{cat.orders} orders</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-mute">
+              <p className="text-[13px]">Not enough order data to categorize.</p>
+            </div>
+          )}
         </Panel>
 
         <Panel

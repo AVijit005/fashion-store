@@ -67,6 +67,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                sku: item.sku,
                name: item.productTitle,
                price: item.unitPrice,
+               mrp: item.unitPrice,
                image: item.thumbnailUrl || "",
                color: item.color,
                size: item.size,

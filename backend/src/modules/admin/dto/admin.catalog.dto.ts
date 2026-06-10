@@ -7,10 +7,10 @@ export class ProductVariantDto {
   id?: string;
 
   @IsString()
-  sku: string;
+  sku!: string;
 
   @IsString()
-  size: string;
+  size!: string;
 
   @IsOptional()
   @IsString()
@@ -18,15 +18,15 @@ export class ProductVariantDto {
 
   @IsNumber()
   @Min(0)
-  stock: number;
+  stock!: number;
 }
 
 export class CreateProductDto {
   @IsString()
-  name: string;
+  name!: string;
 
   @IsString()
-  slug: string;
+  slug!: string;
 
   @IsOptional()
   @IsString()
@@ -34,7 +34,7 @@ export class CreateProductDto {
 
   @IsNumber()
   @Min(0)
-  price: number;
+  price!: number;
 
   @IsOptional()
   @IsNumber()

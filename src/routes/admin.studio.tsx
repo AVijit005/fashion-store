@@ -6,8 +6,9 @@ import { StatusChip, studioTone } from "@/components/admin/status-chip";
 import { AdminDrawer } from "@/components/admin/drawer";
 import { type StudioRequest } from "@/lib/admin/data";
 import { longDate, relTime } from "@/lib/admin/format";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/studio")({
   head: () => ({
@@ -57,6 +58,19 @@ function StudioPage() {
       }),
     [baseList, status, q],
   );
+
+  const queryClient = useQueryClient();
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, action, payload }: { id: string, action: 'approve' | 'reject' | 'revise', payload?: any }) => {
+      return apiClient.post(`/admin/studio/${id}/${action}`, payload);
+    },
+    onSuccess: (_, variables) => {
+      toast.success(`Request ${variables.action}d successfully`);
+      queryClient.invalidateQueries({ queryKey: ["admin-studio"] });
+      setActive(null);
+    }
+  });
 
   if (isLoading) {
     return (
@@ -161,14 +175,26 @@ function StudioPage() {
         width={600}
         footer={
           <div className="flex justify-between gap-2">
-            <button className="press flex items-center gap-1.5 border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-accent hover:border-accent">
+            <button 
+              disabled={statusMutation.isPending}
+              onClick={() => statusMutation.mutate({ id: active!.id, action: 'reject' })}
+              className="press flex items-center gap-1.5 border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-accent hover:border-accent disabled:opacity-50"
+            >
               <X className="h-3.5 w-3.5" /> Reject
             </button>
             <div className="flex gap-2">
-              <button className="press flex items-center gap-1.5 border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink">
+              <button 
+                disabled={statusMutation.isPending}
+                onClick={() => statusMutation.mutate({ id: active!.id, action: 'revise', payload: { notes: "Revision requested" } })}
+                className="press flex items-center gap-1.5 border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
+              >
                 <MessageCircle className="h-3.5 w-3.5" /> Request revision
               </button>
-              <button className="press flex items-center gap-1.5 bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper">
+              <button 
+                disabled={statusMutation.isPending}
+                onClick={() => statusMutation.mutate({ id: active!.id, action: 'approve' })}
+                className="press flex items-center gap-1.5 bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
+              >
                 <Check className="h-3.5 w-3.5" /> Approve
               </button>
             </div>

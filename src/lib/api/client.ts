@@ -4,6 +4,8 @@
 const isVercelPreview = typeof window !== "undefined" && window.location.hostname.includes("vercel.app") && !window.location.hostname.startsWith("fashion-store");
 const BASE_URL = (import.meta.env.VITE_API_URL as string) || (import.meta.env.PROD && !isVercelPreview ? "https://fashion-store-duva.onrender.com" : "http://localhost:3000");
 
+import { toast } from "sonner";
+
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
   validate?: (data: unknown) => boolean;
@@ -88,15 +90,7 @@ export const apiClient = {
                   credentials: "include",
                 });
 
-                if (refreshRes.ok) {
-                  const tokens = unwrapApiData<{ accessToken: string }>(
-                    await refreshRes.json(),
-                    (d) => !!d && typeof d === "object" && "accessToken" in d && typeof (d as any).accessToken === "string"
-                  );
-                  setMemoryAccessToken(tokens.accessToken);
-                } else {
-                  // If refresh fails, clear tokens to force login
-                  setMemoryAccessToken(null);
+                if (!refreshRes.ok) {
                   if (typeof window !== "undefined") {
                     localStorage.removeItem("ink_logged_in");
                   }
@@ -113,15 +107,12 @@ export const apiClient = {
 
             try {
               await refreshPromise;
-              if (memoryAccessToken) {
-                headers.set("Authorization", `Bearer ${memoryAccessToken}`);
-                const retryResponse = await fetch(url.toString(), { ...config, headers });
-                if (retryResponse.ok) {
-                  if (retryResponse.status === 204) {
-                    return null as unknown as T;
-                  }
-                  return unwrapApiData<T>(await retryResponse.json(), options.validate);
+              const retryResponse = await fetch(url.toString(), config);
+              if (retryResponse.ok) {
+                if (retryResponse.status === 204) {
+                  return null as unknown as T;
                 }
+                return unwrapApiData<T>(await retryResponse.json(), options.validate);
               }
             } catch (err) {
               console.error("Token rotation failed inside interceptor:", err);
@@ -144,6 +135,15 @@ export const apiClient = {
       if (errorData && typeof errorData === "object" && "message" in errorData) {
         errorMessage = String((errorData as Record<string, unknown>).message);
       }
+      
+      if (typeof window !== "undefined") {
+        if (response.status === 403) {
+          toast.error("Access denied. You do not have permission.");
+        } else if (response.status >= 500) {
+          toast.error("Server error: " + errorMessage);
+        }
+      }
+      
       throw new APIError(errorMessage, response.status, errorData);
     }
 

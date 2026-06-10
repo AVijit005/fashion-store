@@ -21,6 +21,14 @@ import { type Product } from "@/lib/admin/data";
 import { compactInr, inr } from "@/lib/admin/format";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
+import { z } from "zod";
+
+const productSchema = z.object({
+  name: z.string().min(3, "Name must be at least 3 characters"),
+  sku: z.string().min(3, "SKU must be at least 3 characters"),
+  price: z.number().min(1, "Price must be greater than 0"),
+  stock: z.number().min(0, "Stock cannot be negative"),
+});
 
 export const Route = createFileRoute("/admin/products")({
   head: () => ({
@@ -45,6 +53,7 @@ function ProductsPage() {
   const [active, setActive] = useState<Product | null>(null);
   const [edits, setEdits] = useState<Partial<Product>>({});
   const [isCreating, setIsCreating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [newProduct, setNewProduct] = useState<Partial<Product>>({ status: 'draft', visible: false, variants: 0, stock: 0 });
   const [page, setPage] = useState(1);
   const pageSize = 15;
@@ -54,23 +63,44 @@ function ProductsPage() {
   }, [active]);
 
   const queryClient = useQueryClient();
-  const { data: ALL = [], isLoading } = useQuery<Product[]>({
-    queryKey: ["admin-products"],
-    queryFn: async () => {
-      const res = await apiClient.get<Product[]>("/admin/catalog/products");
-      return res;
-    },
+  const { data: response, isLoading } = useQuery<{ data: Product[]; meta: { total: number; totalPages: number } }>({
+    queryKey: ["admin-products", page, q],
+    queryFn: async () => apiClient.get(`/admin/catalog/products?page=${page}&limit=${pageSize}&q=${encodeURIComponent(q)}`),
   });
+  const ALL = response?.data || [];
+  const meta = response?.meta || { total: 0, totalPages: 1 };
 
   const updateProductMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Product> }) => {
       return apiClient.put(`/admin/catalog/products/${id}`, data);
     },
     onSuccess: () => {
+      toast.success("Product updated successfully");
       queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      setEdits({});
+      setIsSaving(false);
       setActive(null);
     },
+    onError: () => {
+      setIsSaving(false);
+      toast.error("Failed to update product");
+    }
   });
+
+  const handleSave = () => {
+    if (!active) return;
+    try {
+      productSchema.parse({ ...active, ...edits });
+      setIsSaving(true);
+      updateProductMutation.mutate({ id: active.id, data: edits });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        toast.error(err.errors[0].message);
+      } else {
+        toast.error("Validation failed");
+      }
+    }
+  };
 
   const createProductMutation = useMutation({
     mutationFn: async (data: Partial<Product>) => {
@@ -88,17 +118,7 @@ function ProductsPage() {
     setPage(1);
   }, [q]);
 
-  const list = useMemo(
-    () => {
-      return ALL.filter(
-        (p) =>
-          !q ||
-          (p.name || "").toLowerCase().includes(q.toLowerCase()) ||
-          (p.sku || "").toLowerCase().includes(q.toLowerCase()),
-      );
-    },
-    [ALL, q],
-  );
+  const list = ALL;
 
   if (isLoading) {
     return (
@@ -113,7 +133,7 @@ function ProductsPage() {
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow={`${ALL.length} products · ${ALL.filter((p) => p.status === "active").length} active`}
+        eyebrow={`${meta.total} products`}
         title="Products"
         description="Catalog, inventory, variants, scheduling and merchandising."
         actions={
@@ -197,7 +217,7 @@ function ProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {list.slice((page - 1) * pageSize, page * pageSize).map((p) => {
+              {list.map((p) => {
                 const low = p.stock > 0 && p.stock <= (p.lowStockAt || 0);
                 const oos = p.stock === 0 && p.status === "active";
                 return (
@@ -288,7 +308,7 @@ function ProductsPage() {
 
           {/* Mobile Layout */}
           <div className="flex flex-col md:hidden">
-            {list.slice((page - 1) * pageSize, page * pageSize).map((p) => {
+            {list.map((p) => {
               const low = p.stock > 0 && p.stock <= (p.lowStockAt || 0);
               const oos = p.stock === 0 && p.status === "active";
               return (
@@ -348,7 +368,7 @@ function ProductsPage() {
         </Panel>
       ) : (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-          {list.slice((page - 1) * pageSize, page * pageSize).map((p) => (
+          {list.map((p) => (
             <button
               key={p.id}
               onClick={() => setActive(p)}
@@ -363,15 +383,15 @@ function ProductsPage() {
                 <div className="absolute left-2 top-2 flex flex-col gap-1">
                   <StatusChip label={p.status} tone={STATUS_TONE[p.status]} />
                   {p.featured && <StatusChip label="Featured" tone="warn" />}
-                  {oos && <StatusChip label="Sold out" tone="negative" />}
-                  {low && <StatusChip label="Low stock" tone="warn" />}
+                  {p.stock === 0 && p.status === "active" && <StatusChip label="Sold out" tone="negative" />}
+                  {p.stock > 0 && p.stock <= (p.lowStockAt || 0) && <StatusChip label="Low stock" tone="warn" />}
                 </div>
               </div>
               <div className="p-3">
                 <p className="truncate text-[13px] text-ink">{p.name}</p>
                 <div className="mt-1 flex items-baseline justify-between font-mono text-[11px]">
                   <span className="tabular-nums text-ink">{inr(p.price)}</span>
-                  <span className={`tabular-nums ${oos ? "text-accent" : low ? "text-accent" : "text-mute"}`}>{p.stock} stock</span>
+                  <span className={`tabular-nums ${(p.stock === 0 && p.status === "active") || (p.stock > 0 && p.stock <= (p.lowStockAt || 0)) ? "text-accent" : "text-mute"}`}>{p.stock} stock</span>
                 </div>
               </div>
             </button>
@@ -379,10 +399,10 @@ function ProductsPage() {
         </div>
       )}
 
-      {list.length > pageSize && (
+      {meta.total > pageSize && (
         <div className="flex items-center justify-between border-t border-line bg-fog/20 px-4 py-3 text-[12px]">
           <p className="text-mute">
-            Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, list.length)} of {list.length} products
+            Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, meta.total)} of {meta.total} products
           </p>
           <div className="flex gap-2">
             <button
@@ -393,7 +413,7 @@ function ProductsPage() {
               Previous
             </button>
             <button
-              disabled={page * pageSize >= list.length}
+              disabled={page >= meta.totalPages}
               onClick={() => setPage(p => p + 1)}
               className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
             >
@@ -425,28 +445,11 @@ function ProductsPage() {
             </button>
             <div className="flex gap-2">
               <button 
-                disabled={updateProductMutation.isPending && updateProductMutation.variables?.data.status === 'draft'}
-                onClick={() => {
-                  updateProductMutation.mutate(
-                    { id: active?.id as string, data: { ...edits, status: 'draft' } },
-                    { onSuccess: () => toast.success('Saved as draft') }
-                  );
-                }}
-                className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
-              >
-                {updateProductMutation.isPending && updateProductMutation.variables?.data.status === 'draft' ? "Saving..." : "Save draft"}
-              </button>
-              <button 
-                disabled={updateProductMutation.isPending && updateProductMutation.variables?.data.status === 'active'}
-                onClick={() => {
-                  updateProductMutation.mutate(
-                    { id: active?.id as string, data: { ...edits, status: 'active' } },
-                    { onSuccess: () => toast.success('Product published') }
-                  );
-                }}
+                disabled={isSaving}
+                onClick={handleSave} 
                 className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
               >
-                {updateProductMutation.isPending && updateProductMutation.variables?.data.status === 'active' ? "Saving..." : "Save changes"}
+                {isSaving ? "Saving..." : "Save changes"}
               </button>
             </div>
           </div>
@@ -489,14 +492,14 @@ function ProductsPage() {
   );
 }
 
-function ProductDetail({ product, edits, onChange }: { product: Product, edits: Partial<Product>, onChange: (key: string, value: any) => void }) {
+function ProductDetail({ product, edits, onChange }: { product: Product, edits: Partial<Product>, onChange: (key: string, value: unknown) => void }) {
   const [tab, setTab] = useState<"general" | "media" | "variants" | "seo" | "schedule">("general");
   const [isUploading, setIsUploading] = useState(false);
 
   const handleUpload = async (file: File) => {
     try {
       setIsUploading(true);
-      const { uploadUrl, asset, publicUrl } = await apiClient.post("/assets/upload-url", {
+      const { uploadUrl, asset, publicUrl } = await apiClient.post<{uploadUrl: string, asset: { id: string }, publicUrl: string}>("/assets/upload-url", {
         filename: file.name,
         mimeType: file.type,
         size: file.size,
@@ -510,9 +513,9 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
 
       await apiClient.patch(`/assets/${asset.id}/confirm`);
 
-      const newImages = [...((edits as any).images || [product.image].filter(Boolean)), publicUrl];
+      const newImages = [...(edits.images || [product.image].filter(Boolean)), publicUrl];
       onChange("images", newImages);
-      if (!product.image && !(edits as any).image) onChange("image", publicUrl);
+      if (!product.image && !edits.image) onChange("image", publicUrl);
     } catch (err) {
       console.error("Upload failed", err);
       alert("Failed to upload image. Check console for details.");
@@ -524,7 +527,7 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-3 gap-2">
-        {((edits as any).images || [product.image].filter(Boolean)).slice(0, 3).map((src: string, i: number) => (
+        {(edits.images || [product.image].filter(Boolean)).slice(0, 3).map((src: string, i: number) => (
           <div
             key={i}
             className={`relative aspect-[4/5] overflow-hidden border ${i === 0 ? "border-ink" : "border-line"}`}
@@ -553,9 +556,9 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
 
       {tab === "general" && (
         <div className="space-y-4">
-          <FieldRow label="Name" value={edits.name ?? product.name} onChange={e => onChange("name", e.target.value)} />
+          <FieldRow label="Name" value={edits.name ?? product.name ?? ""} onChange={e => onChange("name", e.target.value)} />
           <div className="grid grid-cols-2 gap-3">
-            <FieldRow label="Price" prefix="₹" type="number" value={edits.price ?? product.price} onChange={e => onChange("price", e.target.value ? Number(e.target.value) : 0)} />
+            <FieldRow label="Price" prefix="₹" type="number" value={edits.price ?? product.price ?? 0} onChange={e => onChange("price", e.target.value ? Number(e.target.value) : 0)} />
             <FieldRow
               label="Compare at"
               prefix="₹"
@@ -566,13 +569,13 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <FieldRow label="SKU" value={edits.sku ?? product.sku} onChange={e => onChange("sku", e.target.value)} />
-            <FieldRow label="Stock" type="number" value={edits.stock ?? product.stock} onChange={e => onChange("stock", e.target.value ? Number(e.target.value) : 0)} />
+            <FieldRow label="SKU" value={edits.sku ?? product.sku ?? ""} onChange={e => onChange("sku", e.target.value)} />
+            <FieldRow label="Stock" type="number" value={edits.stock ?? product.stock ?? 0} onChange={e => onChange("stock", e.target.value ? Number(e.target.value) : 0)} />
           </div>
-          <ToggleRow label="Visible on storefront" checked={edits.visible ?? product.visible} onChange={v => onChange("visible", v)} />
+          <ToggleRow label="Visible on storefront" checked={edits.visible ?? product.visible ?? false} onChange={v => onChange("visible", v)} />
           <ToggleRow
             label="Featured"
-            checked={edits.featured ?? product.featured}
+            checked={edits.featured ?? product.featured ?? false}
             onChange={v => onChange("featured", v)}
             hint="Surfaces on home and category pages"
           />
@@ -581,10 +584,10 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
 
       {tab === "media" && (
         <div className="grid grid-cols-3 gap-2">
-          {((edits as any).images || [product.image].filter(Boolean)).map((src: string, i: number) => (
+          {(edits.images || [product.image].filter(Boolean)).map((src: string, i: number) => (
              <div key={i} className="relative aspect-[4/5] overflow-hidden border border-line group">
                <img src={src} alt="" className="h-full w-full object-cover" />
-               <button onClick={() => onChange("images", ((edits as any).images || [product.image]).filter((_: any, idx: number) => idx !== i))} className="absolute top-1 right-1 bg-paper/90 p-1 text-accent opacity-0 transition group-hover:opacity-100 hover:bg-paper">
+               <button onClick={() => onChange("images", (edits.images || [product.image].filter(Boolean)).filter((_: string, idx: number) => idx !== i))} className="absolute top-1 right-1 bg-paper/90 p-1 text-accent opacity-0 transition group-hover:opacity-100 hover:bg-paper">
                  <X className="h-3 w-3" />
                </button>
              </div>
@@ -602,15 +605,10 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
       )}
 
       {tab === "variants" && (() => {
-        const variants = (edits as any).variantsData || [
-            { size: "S", color: "Bone", stock: 24, sku: `${product.sku || 'SKU'}-S-BNE` },
-            { size: "M", color: "Bone", stock: 48, sku: `${product.sku || 'SKU'}-M-BNE` },
-            { size: "L", color: "Bone", stock: 38, sku: `${product.sku || 'SKU'}-L-BNE` },
-            { size: "XL", color: "Bone", stock: 32, sku: `${product.sku || 'SKU'}-XL-BNE` },
-        ];
+        const variants = edits.variantsData || product.variantsData || [];
         return (
         <div className="space-y-3">
-          {variants.map((v: any, i: number) => (
+          {variants.map((v: { size: string; color: string; stock: number; sku: string }, i: number) => (
             <div
               key={i}
               className="grid grid-cols-[1fr_1fr_80px_120px_auto] items-center gap-3 border border-line bg-paper p-3 text-[12px]"
@@ -619,7 +617,7 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
               <input value={v.color} onChange={(e) => { onChange("variantsData", variants.map((it, idx) => idx === i ? { ...it, color: e.target.value } : it)); }} className="w-full bg-transparent outline-none text-mute" placeholder="Color" />
               <input type="number" value={v.stock} onChange={(e) => { onChange("variantsData", variants.map((it, idx) => idx === i ? { ...it, stock: e.target.value ? Number(e.target.value) : 0 } : it)); }} className="w-full bg-transparent outline-none text-right font-mono tabular-nums" />
               <input value={v.sku} onChange={(e) => { onChange("variantsData", variants.map((it, idx) => idx === i ? { ...it, sku: e.target.value } : it)); }} className="w-full bg-transparent outline-none text-right font-mono text-[10px] uppercase tracking-[0.18em] text-mute" placeholder="SKU" />
-              <button onClick={() => onChange("variantsData", variants.filter((_: any, idx: number) => idx !== i))} className="text-accent hover:opacity-70"><X className="h-3 w-3"/></button>
+              <button onClick={() => onChange("variantsData", variants.filter((_: unknown, idx: number) => idx !== i))} className="text-accent hover:opacity-70"><X className="h-3 w-3"/></button>
             </div>
           ))}
           <button 
@@ -633,26 +631,26 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
 
       {tab === "seo" && (
         <div className="space-y-4">
-          <FieldRow label="Meta title" value={(edits as any).metaTitle ?? `${edits.name ?? product.name ?? ''} — Ink Studio`} onChange={(e) => onChange("metaTitle", e.target.value)} />
+          <FieldRow label="Meta title" value={edits.metaTitle ?? `${edits.name ?? product.name ?? ''} — Ink Studio`} onChange={(e) => onChange("metaTitle", e.target.value)} />
           <FieldRow
             label="Meta description"
-            value={(edits as any).metaDesc ?? `${edits.name ?? product.name ?? ''} — heavyweight cotton.`}
+            value={edits.metaDesc ?? `${edits.name ?? product.name ?? ''} — heavyweight cotton.`}
             onChange={(e) => onChange("metaDesc", e.target.value)}
           />
           <FieldRow
             label="URL slug"
             prefix="/p/"
-            value={(edits as any).slug ?? (edits.sku ?? product.sku ?? '').toLowerCase().replace(/[^a-z0-9]+/g, "-")}
+            value={edits.slug ?? (edits.sku ?? product.sku ?? '').toLowerCase().replace(/[^a-z0-9]+/g, "-")}
             onChange={(e) => onChange("slug", e.target.value)}
           />
           <div className="border border-line bg-fog/40 p-3">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-mute">Preview</p>
-            <p className="mt-1 text-[14px] text-ink">{(edits as any).metaTitle ?? `${edits.name ?? product.name ?? 'Untitled'} — Ink Studio`}</p>
+            <p className="mt-1 text-[14px] text-ink">{edits.metaTitle ?? `${edits.name ?? product.name ?? 'Untitled'} — Ink Studio`}</p>
             <p className="font-mono text-[11px] text-mute">
-              inkstudio.cc/p/{(edits as any).slug ?? (edits.sku ?? product.sku ?? 'slug').toLowerCase().replace(/[^a-z0-9]+/g, "-")}
+              inkstudio.cc/p/{edits.slug ?? (edits.sku ?? product.sku ?? 'slug').toLowerCase().replace(/[^a-z0-9]+/g, "-")}
             </p>
             <p className="mt-1 text-[12px] text-mute">
-              {(edits as any).metaDesc ?? `${edits.name ?? product.name ?? 'Untitled'} — heavyweight cotton.`}
+              {edits.metaDesc ?? `${edits.name ?? product.name ?? 'Untitled'} — heavyweight cotton.`}
             </p>
           </div>
         </div>

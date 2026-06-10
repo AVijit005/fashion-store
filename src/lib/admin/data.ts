@@ -23,13 +23,18 @@ export type Order = {
   number: string;
   createdAt: string; // ISO
   customer: { name: string; email: string; id: string };
-  status: OrderStatus;
-  payment: PaymentMethod;
+  user?: { name: string; email: string };
+  shippingName?: string;
+  shippingEmail?: string;
+  shippingCity?: string;
+  paymentProvider?: string;
+  status: string;
+  payment: string;
   total: number;
   itemsCount: number;
   city: string;
   channel: "web" | "instagram" | "store";
-  fulfillment: FulfillmentStage;
+  fulfillment: string;
   refundRequested?: boolean;
   returnRequested?: boolean;
   items: { name: string; sku: string; qty: number; price: number; image: string }[];
@@ -52,6 +57,11 @@ export type Product = {
   variants: number;
   scheduledFor?: string;
   image: string;
+  images?: string[];
+  variantsData?: { size: string; color: string; stock: number; sku: string }[];
+  metaTitle?: string;
+  metaDesc?: string;
+  slug?: string;
   views7d: number;
   units7d: number;
   conversion: number; // %

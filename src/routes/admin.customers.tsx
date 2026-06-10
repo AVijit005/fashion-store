@@ -7,8 +7,9 @@ import { AdminDrawer } from "@/components/admin/drawer";
 import { exportToCSV } from "@/lib/admin/export";
 import { type Customer } from "@/lib/admin/data";
 import { compactInr, longDate, relTime } from "@/lib/admin/format";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/customers")({
   head: () => ({
@@ -27,24 +28,21 @@ function CustomersPage() {
   const [q, setQ] = useState("");
   const [active, setActive] = useState<Customer | null>(null);
 
-  const { data: apiCustomers = [], isLoading } = useQuery<Customer[]>({
-    queryKey: ["admin-customers"],
-    queryFn: () => apiClient.get("/admin/customers"),
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
+
+  const { data: response, isLoading } = useQuery<{ data: Customer[]; meta: { total: number; totalPages: number } }>({
+    queryKey: ["admin-customers", page, q, seg],
+    queryFn: () => apiClient.get(`/admin/customers?page=${page}&limit=${pageSize}&q=${encodeURIComponent(q)}&segment=${seg}`),
   });
 
-  const baseList = apiCustomers;
+  const baseList = response?.data || [];
+  const meta = response?.meta || { total: 0, totalPages: 1 };
 
-  const list = useMemo(
-    () =>
-      baseList.filter((c) => {
-        if (seg !== "all" && c.segment !== seg) return false;
-        if (q && !`${c.name} ${c.email}`.toLowerCase().includes(q.toLowerCase())) return false;
-        return true;
-      }),
-    [baseList, seg, q],
-  );
+  const list = baseList;
+  const totalSpend = baseList.reduce((s, c) => s + (c.spend || 0), 0); // Note: This will only be current page spend.
 
-  const totalSpend = baseList.reduce((s, c) => s + (c.spend || 0), 0);
+  const queryClient = useQueryClient();
 
   if (isLoading) {
     return (
@@ -59,7 +57,7 @@ function CustomersPage() {
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow={`${baseList.length} customers · ${baseList.filter((c) => c.vip).length} VIP`}
+        eyebrow={`${meta.total} customers`}
         title="Customers"
         description="Lifetime value, segments, support history and loyalty tiers."
         actions={
@@ -175,6 +173,29 @@ function CustomersPage() {
           </tbody>
         </table>
         </div>
+        {meta.total > pageSize && (
+          <div className="flex items-center justify-between border-t border-line bg-fog/20 px-4 py-3 text-[12px]">
+            <p className="text-mute">
+              Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, meta.total)} of {meta.total} customers
+            </p>
+            <div className="flex gap-2">
+              <button
+                disabled={page === 1}
+                onClick={() => setPage(p => p - 1)}
+                className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                disabled={page >= meta.totalPages}
+                onClick={() => setPage(p => p + 1)}
+                className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </Panel>
 
       <AdminDrawer
@@ -191,6 +212,15 @@ function CustomersPage() {
 }
 
 function CustomerDetail({ customer }: { customer: Customer }) {
+  const queryClient = useQueryClient();
+  const notesMutation = useMutation({
+    mutationFn: async ({ id, note }: { id: string, note: string }) => apiClient.post(`/admin/customers/${id}/notes`, { note }),
+    onSuccess: () => {
+      toast.success("Note added successfully");
+      queryClient.invalidateQueries({ queryKey: ["admin-customers"] });
+    }
+  });
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2">
@@ -217,13 +247,32 @@ function CustomerDetail({ customer }: { customer: Customer }) {
 
       <section>
         <p className="flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.22em] text-mute">
-          Notes
-          <button className="text-ink hover:underline normal-case">Add note</button>
+          Internal Notes
         </p>
-        <p className="mt-2 border border-line bg-fog/40 p-3 text-[13px] text-ink">
-          {customer.notes ??
-            "No notes yet. Add internal observations, sizing preferences, or stylist references."}
-        </p>
+        <div className="mt-2 space-y-3">
+          <p className="border border-line bg-fog/40 p-3 text-[13px] text-ink">
+            {customer.notes ?? "No notes yet. Add internal observations, sizing preferences, or stylist references."}
+          </p>
+          <div>
+            <textarea
+              placeholder="Add a new note…"
+              rows={3}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  const note = e.currentTarget.value;
+                  if (note.trim()) {
+                    notesMutation.mutate({ id: customer.id, note });
+                    e.currentTarget.value = '';
+                  }
+                }
+              }}
+              disabled={notesMutation.isPending}
+              className="w-full resize-none border border-line bg-paper p-3 text-[13px] outline-none focus:border-ink disabled:opacity-50"
+            />
+            <p className="text-[10px] text-mute mt-1">Press Enter to save.</p>
+          </div>
+        </div>
       </section>
 
       <section>

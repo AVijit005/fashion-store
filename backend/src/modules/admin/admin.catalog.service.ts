@@ -6,16 +6,40 @@ import { Prisma } from '@prisma/client';
 export class AdminCatalogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getProducts() {
-    return this.prisma.product.findMany({
-      where: { isDeleted: false },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        category: true,
-        collections: true,
-        variants: true,
+  async getProducts(page: number = 1, limit: number = 15, q?: string) {
+    const where: Prisma.ProductWhereInput = { isDeleted: false };
+    if (q) {
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { variants: { some: { sku: { contains: q, mode: 'insensitive' } } } },
+      ];
+    }
+    const skip = (page - 1) * limit;
+    
+    const [data, total] = await Promise.all([
+      this.prisma.product.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          category: true,
+          collections: true,
+          variants: true,
+        },
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
       },
-    });
+    };
   }
 
   async createProduct(data: any) {

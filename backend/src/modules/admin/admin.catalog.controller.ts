@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
 import { AdminCatalogService } from './admin.catalog.service';
 import { CreateProductDto, UpdateProductDto } from './dto/admin.catalog.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
@@ -13,8 +13,12 @@ export class AdminCatalogController {
   constructor(private readonly catalogService: AdminCatalogService) {}
 
   @Get('products')
-  async getProducts() {
-    return this.catalogService.getProducts();
+  async getProducts(
+    @Query('page') page = '1',
+    @Query('limit') limit = '15',
+    @Query('q') q?: string,
+  ) {
+    return this.catalogService.getProducts(Number(page), Number(limit), q);
   }
 
   @Post('products')

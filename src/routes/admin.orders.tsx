@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   Check,
@@ -21,6 +21,16 @@ import type { Order, OrderStatus } from "@/lib/admin/data";
 import { compactInr, inr, longDate, relTime } from "@/lib/admin/format";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
+
+interface PaginatedResponse<T> {
+  data: T[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
 
 export const Route = createFileRoute("/admin/orders")({
   head: () => ({
@@ -64,7 +74,12 @@ function OrdersPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [active, setActive] = useState<Order | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [manualOrder, setManualOrder] = useState({ email: '', items: [] as { id: string, qty: number }[], total: 0 });
+  const [manualOrder, setManualOrder] = useState({ email: '', items: [] as { id: string, qty: number, price: number }[], total: 0 });
+
+  useEffect(() => {
+    const sum = manualOrder.items.reduce((acc, item) => acc + (item.qty * (item.price || 0)), 0);
+    setManualOrder(m => ({ ...m, total: sum }));
+  }, [manualOrder.items]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 15;
@@ -79,7 +94,7 @@ function OrdersPage() {
   } = useInfiniteQuery({
     queryKey: ["admin-orders", q, status],
     queryFn: async ({ pageParam = 1 }) => {
-      return apiClient.get<any>(`/admin/orders?page=${pageParam}&limit=${pageSize}&q=${encodeURIComponent(q)}&status=${status}`);
+      return apiClient.get<PaginatedResponse<Order>>(`/admin/orders?page=${pageParam}&limit=${pageSize}&q=${encodeURIComponent(q)}&status=${status}`);
     },
     getNextPageParam: (lastPage, allPages) => {
       const totalPages = lastPage.meta?.totalPages || 1;
@@ -90,7 +105,7 @@ function OrdersPage() {
   });
 
   const createOrderMutation = useMutation({
-    mutationFn: async (data: any) => apiClient.post('/admin/orders', data),
+    mutationFn: async (data: { email: string; items: { id: string; qty: number; price?: number }[]; total: number }) => apiClient.post('/admin/orders', data),
     onSuccess: () => {
       toast.success('Order created successfully');
       queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
@@ -234,7 +249,7 @@ function OrdersPage() {
             </tr>
           </thead>
           <tbody>
-              {list.map((o: any) => (
+              {list.map((o: Order) => (
                 <tr
                   key={o.id}
                   onClick={() => setActive(o)}
@@ -282,7 +297,7 @@ function OrdersPage() {
 
         {/* Mobile Layout */}
         <div className="flex flex-col md:hidden">
-          {list.map((o: any) => (
+          {list.map((o: Order) => (
             <div 
               key={o.id}
               onClick={() => setActive(o)}
@@ -346,9 +361,9 @@ function OrdersPage() {
               <button 
                 disabled={updateStatusMutation.isPending && updateStatusMutation.variables?.status === 'CANCELLED'}
                 onClick={() => {
-                   if (!window.confirm("Are you sure you want to cancel this order? This action cannot be undone.")) return;
+                   if (!active || !window.confirm("Are you sure you want to cancel this order? This action cannot be undone.")) return;
                    updateStatusMutation.mutate(
-                     { ids: [active?.id as string], status: 'CANCELLED' },
+                     { ids: [active.id as string], status: 'CANCELLED' },
                      { onSuccess: () => setActive(null) }
                    );
                 }}
@@ -364,7 +379,53 @@ function OrdersPage() {
             </div>
             <div className="flex items-center gap-2">
               <button 
-                onClick={() => window.print()}
+                onClick={() => {
+                  const invoiceWindow = window.open('', '_blank');
+                  if (!invoiceWindow) return;
+                  invoiceWindow.document.write(`
+                    <html>
+                    <head>
+                      <title>Invoice ${active?.id}</title>
+                      <style>
+                        body { font-family: sans-serif; padding: 40px; color: #111; }
+                        h1 { font-size: 24px; margin-bottom: 5px; }
+                        .header { display: flex; justify-content: space-between; margin-bottom: 40px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; }
+                        .total { text-align: right; font-weight: bold; font-size: 18px; margin-top: 20px; }
+                      </style>
+                    </head>
+                    <body onload="window.print(); window.close();">
+                      <div class="header">
+                        <div>
+                          <h1>INK STUDIO</h1>
+                          <p>Order #${active?.id?.substring(0,8).toUpperCase()}</p>
+                          <p>${active?.createdAt ? longDate(active.createdAt) : ''}</p>
+                        </div>
+                        <div style="text-align: right;">
+                          <p><strong>Billed To:</strong></p>
+                          <p>${active?.user?.name || active?.shippingName || ''}</p>
+                          <p>${active?.user?.email || active?.shippingEmail || ''}</p>
+                          <p>${active?.shippingCity || active?.city}, IN</p>
+                        </div>
+                      </div>
+                      <table>
+                        <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>
+                        ${active?.items?.map(it => `
+                          <tr>
+                            <td>${it.name}<br/><small style="color: #666">${it.sku}</small></td>
+                            <td>${it.qty}</td>
+                            <td>${inr(it.price)}</td>
+                            <td>${inr(it.price * it.qty)}</td>
+                          </tr>
+                        `).join('') || ''}
+                      </table>
+                      <div class="total">Total: ${inr(active?.total || 0)}</div>
+                    </body>
+                    </html>
+                  `);
+                  invoiceWindow.document.close();
+                }}
                 className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
               >
                 Print invoice
@@ -372,8 +433,9 @@ function OrdersPage() {
               <button 
                 disabled={updateStatusMutation.isPending && updateStatusMutation.variables?.status === 'SHIPPED'}
                 onClick={() => {
+                   if (!active) return;
                    updateStatusMutation.mutate(
-                     { ids: [active?.id as string], status: 'SHIPPED' },
+                     { ids: [active.id as string], status: 'SHIPPED' },
                      { onSuccess: () => setActive(null) }
                    );
                 }}
@@ -427,14 +489,15 @@ function OrdersPage() {
           <div>
             <label className="text-[12px] text-mute">Items</label>
             <div className="space-y-2 mt-1">
-              {manualOrder.items.map((item: any, i: number) => (
+              {manualOrder.items.map((item: { id: string; qty: number; price: number }, i: number) => (
                 <div key={i} className="flex gap-2">
                   <input value={item.id} onChange={e => { setManualOrder(m => ({...m, items: m.items.map((it, idx) => idx === i ? { ...it, id: e.target.value } : it)}))}} placeholder="Product ID / SKU" className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" />
-                  <input type="number" value={item.qty} onChange={e => { setManualOrder(m => ({...m, items: m.items.map((it, idx) => idx === i ? { ...it, qty: Number(e.target.value) } : it)}))}} placeholder="Qty" className="h-9 w-24 border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums" />
+                  <input type="number" value={item.price || ''} onChange={e => { setManualOrder(m => ({...m, items: m.items.map((it, idx) => idx === i ? { ...it, price: Number(e.target.value) } : it)}))}} placeholder="Price" className="h-9 w-24 border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums" />
+                  <input type="number" value={item.qty} onChange={e => { setManualOrder(m => ({...m, items: m.items.map((it, idx) => idx === i ? { ...it, qty: Number(e.target.value) } : it)}))}} placeholder="Qty" className="h-9 w-16 border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums" />
                   <button onClick={() => setManualOrder(m => ({...m, items: m.items.filter((_, idx) => idx !== i)}))} className="text-accent hover:opacity-70 px-2">✕</button>
                 </div>
               ))}
-              <button onClick={() => setManualOrder(m => ({...m, items: [...m.items, { id: "", qty: 1 }]}))} className="press border border-dashed border-line bg-fog/20 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink w-full">+ Add Item</button>
+              <button onClick={() => setManualOrder(m => ({...m, items: [...m.items, { id: "", qty: 1, price: 0 }]}))} className="press border border-dashed border-line bg-fog/20 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink w-full">+ Add Item</button>
             </div>
           </div>
           <div>
@@ -453,7 +516,7 @@ function OrdersPage() {
 }
 
 function OrderDetail({ order }: { order: Order }) {
-  const currentStep = FULFILL_STEPS.indexOf(order.fulfillment);
+  const currentStep = FULFILL_STEPS.indexOf(order.fulfillment as typeof FULFILL_STEPS[number]);
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
@@ -522,7 +585,7 @@ function OrderDetail({ order }: { order: Order }) {
             <p className="text-[12px] text-mute">{order.user?.email || order.shippingEmail}</p>
           </div>
           <p className="mt-3 text-[12px] text-mute">
-            Ships to <span className="text-ink">{order.shippingCity}, IN</span>
+            Ships to <span className="text-ink">{order.shippingCity || order.city}, IN</span>
           </p>
         </div>
         <div className="border border-line p-4">

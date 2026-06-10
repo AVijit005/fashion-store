@@ -27,8 +27,6 @@ const TABS = [
   { id: "domain", label: "Domain", icon: Globe },
 ] as const;
 
-const SettingsContext = createContext<any>(null);
-
 const DEFAULT_SETTINGS = {
   brandName: "Ink Studio",
   tagline: "Heavyweight cotton, custom prints, anime drops.",
@@ -67,6 +65,8 @@ const DEFAULT_SETTINGS = {
     auditLog: true
   }
 };
+
+const SettingsContext = createContext<[typeof DEFAULT_SETTINGS, React.Dispatch<React.SetStateAction<typeof DEFAULT_SETTINGS>>]>([DEFAULT_SETTINGS, () => {}]);
 
 function SettingsPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("branding");
@@ -145,7 +145,7 @@ function SettingsPage() {
         <div className="block lg:hidden border border-line bg-paper px-3 py-2">
           <select 
             value={tab} 
-            onChange={(e) => setTab(e.target.value as any)} 
+            onChange={(e) => setTab(e.target.value as (typeof TABS)[number]["id"])}
             className="w-full bg-transparent outline-none text-[12px] uppercase tracking-[0.18em] text-ink"
           >
             {TABS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
@@ -243,7 +243,7 @@ function ShippingPanel() {
   return (
     <Panel title="Shipping zones & rates">
       <div className="space-y-2">
-        {settings.shipping.map((z: any) => (
+        {settings.shipping.map((z: (typeof DEFAULT_SETTINGS)["shipping"][number]) => (
           <div
             key={z.zone}
             className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] items-center gap-4 border border-line bg-paper px-4 py-3 text-[13px]"
@@ -263,7 +263,7 @@ function PaymentsPanel() {
   return (
     <Panel title="Payment methods">
       <div className="space-y-3">
-        {settings.payments.map((p: any, idx: number) => (
+        {settings.payments.map((p: (typeof DEFAULT_SETTINGS)["payments"][number], idx: number) => (
           <ToggleRow 
             key={p.label} 
             {...p} 

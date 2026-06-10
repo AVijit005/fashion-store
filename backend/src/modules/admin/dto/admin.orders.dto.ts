@@ -8,7 +8,7 @@ export class OrderItemDto {
 
   @IsNumber()
   @Min(1)
-  qty: number;
+  qty!: number;
 }
 
 export class CreatePosOrderDto {
@@ -18,10 +18,10 @@ export class CreatePosOrderDto {
 
   @IsNumber()
   @Min(0)
-  total: number;
+  total!: number;
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
-  items: OrderItemDto[];
+  items!: OrderItemDto[];
 }

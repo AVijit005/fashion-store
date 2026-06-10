@@ -15,7 +15,6 @@ import { useRecentSearches } from "@/lib/store/recent-searches";
 import { type Product, catalogApi } from "@/lib/api/catalog";
 import { useQuery } from "@tanstack/react-query";
 import { inr } from "@/lib/format";
-import { catalogApi } from "@/lib/api/catalog";
 
 const trending = [
   "Anime drops",

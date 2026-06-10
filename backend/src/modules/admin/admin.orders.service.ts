@@ -81,7 +81,7 @@ export class AdminOrdersService {
         });
       }
 
-      const calculatedTotal = orderItemsData.reduce((acc, item) => acc + (item.quantity * item.priceAtPurchase), 0);
+      const calculatedTotal = orderItemsData.reduce((acc, item) => acc + (item.quantity * Number(item.priceAtPurchase)), 0);
 
       return tx.order.create({
         data: {
@@ -96,7 +96,7 @@ export class AdminOrdersService {
           shippingCountry: '',
           status: 'PAID', // POS orders are considered paid
           paymentStatus: 'COMPLETED',
-          paymentMethod: 'POS',
+          paymentProvider: 'POS',
           items: {
             create: orderItemsData,
           },

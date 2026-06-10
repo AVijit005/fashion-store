@@ -14,6 +14,7 @@ import {
 import { z } from "zod";
 import { useCart } from "@/lib/store/cart";
 import { apiClient } from "@/lib/api/client";
+import { toast } from "sonner";
 import { getOrCreateCartSessionId } from "@/lib/api/cart";
 import { inr } from "@/lib/format";
 
@@ -234,10 +235,9 @@ function CheckoutPage() {
             clear();
 
             // 4. Navigate to success
-            await navigate({
-              to: "/checkout/success",
-              search: { orderId: checkoutRes.orderId },
-            });
+                setTimeout(() => {
+                  navigate({ to: "/checkout/success", search: { orderId: checkoutRes.orderId, cod: false } });
+                }, 1000);
           } catch (err) {
             toast.error("Payment failed. Please try a different card, UPI app, or select Cash on Delivery.");
             setIsSubmitting(false);

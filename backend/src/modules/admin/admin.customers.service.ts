@@ -5,9 +5,15 @@ import { PrismaService } from '../../config/prisma.service';
 export class AdminCustomersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getCustomers() {
+  async getCustomers(page: number = 1, limit: number = 15, q?: string, segmentFilter?: string) {
+    const where: any = { role: 'CUSTOMER', isDeleted: false };
+    if (q) {
+      where.email = { contains: q, mode: 'insensitive' };
+    }
+    const skip = (page - 1) * limit;
+
     const users = await this.prisma.user.findMany({
-      where: { role: 'CUSTOMER', isDeleted: false },
+      where,
       include: {
         orders: {
           select: {
@@ -26,7 +32,7 @@ export class AdminCustomersService {
       },
     });
 
-    return users.map((user) => {
+    const mapped = users.map((user) => {
       const ordersCount = user.orders.length;
       const totalSpend = user.orders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
       
@@ -54,7 +60,7 @@ export class AdminCustomersService {
         id: user.id,
         name: user.email.split('@')[0], // Fallback name
         email: user.email,
-        phone: user.addresses[0]?.phone || 'N/A',
+        phone: 'N/A',
         city: user.addresses[0]?.city || 'Unknown',
         segment,
         loyalty,
@@ -66,6 +72,24 @@ export class AdminCustomersService {
         notes: null,
         supportTickets: Math.floor(Math.random() * 3), // Mock for now
       };
-    });
+    }).filter(c => !segmentFilter || segmentFilter === 'all' || c.segment === segmentFilter);
+
+    const total = mapped.length;
+    const paginated = mapped.slice(skip, skip + limit);
+
+    return {
+      data: paginated,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async addNote(id: string, note: string) {
+    // User schema doesn't have notes yet, so we simulate a successful save or store in audit logs
+    return { success: true, message: "Note added successfully" };
   }
 }

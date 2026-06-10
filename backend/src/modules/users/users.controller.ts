@@ -3,7 +3,6 @@ import {
   Get,
   Put,
   Body,
-  Body,
   Req,
   UseGuards,
   NotFoundException,
@@ -43,7 +42,7 @@ export class UsersController {
   @Put('me')
   @ApiOperation({ summary: 'Update profile details' })
   async updateProfile(@Req() req: any, @Body() updateProfileDto: UpdateProfileDto) {
-    const user = await this.usersService.update(req.user.id, updateProfileDto);
+    const user = await this.usersService.update(req.user.id, updateProfileDto as any);
     const { passwordHash, ...safeUser } = user;
     return safeUser;
   }
@@ -65,7 +64,11 @@ export class UsersController {
       } else {
         return tx.address.create({
           data: {
-            ...updateAddressDto,
+            street: updateAddressDto.street,
+            city: updateAddressDto.city,
+            state: updateAddressDto.state,
+            postalCode: updateAddressDto.zip,
+            country: updateAddressDto.country,
             userId: req.user.id,
             isDefault: true,
           },
