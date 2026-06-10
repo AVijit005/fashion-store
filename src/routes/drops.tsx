@@ -39,7 +39,7 @@ import { apiClient } from "@/lib/api/client";
 function DropsPage() {
   const { data: dynamicDrops } = useQuery({
     queryKey: ["drops"],
-    queryFn: () => apiClient.get("/catalog/drops").then((res) => res.data),
+    queryFn: () => apiClient.get("/catalog/drops").then((res: any) => res.data),
   });
 
   const [target, setTarget] = useState<number | null>(null);
@@ -90,7 +90,7 @@ function DropsPage() {
 
       <div className="mx-auto max-w-[1480px] px-5 py-20 lg:px-10 lg:py-28">
         <ul className="space-y-12 lg:space-y-20">
-          {activeDrops.map((d, i) => (
+          {activeDrops.map((d: any, i: number) => (
             <Reveal key={d.slug}>
               <li className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-16">
                 <div

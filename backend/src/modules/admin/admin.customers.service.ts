@@ -51,9 +51,9 @@ export class AdminCustomersService {
     const countSql = Prisma.sql`SELECT COUNT(*) as count FROM (${baseSql}) as sub`;
     const paginatedSql = Prisma.sql`${baseSql} ORDER BY joined_at DESC LIMIT ${limit} OFFSET ${skip}`;
 
-    const [totalRows, rawUsers]: [any[], any[]] = await Promise.all([
-      this.prisma.$queryRaw(countSql),
-      this.prisma.$queryRaw(paginatedSql),
+    const [totalRows, rawUsers] = await Promise.all([
+      this.prisma.$queryRaw<any[]>(countSql),
+      this.prisma.$queryRaw<any[]>(paginatedSql),
     ]);
 
     const total = Number(totalRows[0]?.count || 0);
