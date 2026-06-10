@@ -38,6 +38,8 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function OverviewPage() {
+  const adminName = useAuthStore((s) => s.user?.email?.split('@')[0] ?? 'Admin');
+
   const { data: kpisData, isLoading: kpisLoading, isError: kpisError } = useQuery<KpisData>({
     queryKey: ["admin-kpis"],
     queryFn: () => apiClient.get("/admin/dashboard/kpis"),
@@ -71,7 +73,6 @@ function OverviewPage() {
   const trending = [...products].sort((a: Product, b: Product) => (b.views7d || 0) - (a.views7d || 0)).slice(0, 5);
   const liveActivity = activityData;
 
-  const adminName = useAuthStore((s) => s.user?.email?.split('@')[0] ?? 'Admin');
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
