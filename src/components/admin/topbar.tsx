@@ -75,10 +75,10 @@ export function AdminTopbar({ onMenu }: { onMenu: () => void }) {
         </button>
         <div className="flex h-9 items-center gap-2 border border-line bg-paper px-2">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink text-[10px] font-medium text-paper">
-            AM
+            AP
           </span>
           <div className="hidden leading-tight md:block">
-            <p className="text-[11px] text-ink">Aanya M.</p>
+            <p className="text-[11px] text-ink">Avijit Pal</p>
             <p className="text-[9px] font-mono uppercase tracking-[0.18em] text-mute">Founder</p>
           </div>
         </div>
