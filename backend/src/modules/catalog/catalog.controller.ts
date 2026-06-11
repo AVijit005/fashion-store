@@ -16,7 +16,8 @@ export class CatalogController {
   async triggerSeed() {
     const { execSync } = require('child_process');
     try {
-      const output = execSync('npx ts-node prisma/seed.ts').toString();
+      execSync('npx tsc prisma/seed.ts --esModuleInterop --skipLibCheck');
+      const output = execSync('node prisma/seed.js').toString();
       return { success: true, output };
     } catch (error) {
       return { success: false, error: error.toString(), stdout: error.stdout?.toString(), stderr: error.stderr?.toString() };
