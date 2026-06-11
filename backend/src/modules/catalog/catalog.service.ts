@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import { ProductStatus, Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class CatalogService {
@@ -30,7 +31,6 @@ export class CatalogService {
     const offset = Math.min(Math.max(filters.offset || 0, 0), 10000);
     const now = new Date();
 
-    // Visibility boundary: must be PUBLISHED, not deleted, and if linked to a drop, the drop must be released/active
     const where: Prisma.ProductWhereInput = {
       status: ProductStatus.PUBLISHED,
       isDeleted: false,
@@ -83,10 +83,7 @@ export class CatalogService {
       this.prisma.product.count({ where }),
     ]);
 
-    return {
-      products,
-      total,
-    };
+    return { products, total };
   }
 
   async getProductBySlug(slug: string) {
@@ -235,11 +232,20 @@ export class CatalogService {
     }
 
     console.log('🌱 Seeding DB Natively...');
-    await this.prisma.productVariant.deleteMany({});
-    await this.prisma.product.deleteMany({});
-    await this.prisma.category.deleteMany({});
-    await this.prisma.collection.deleteMany({});
-    await this.prisma.drop.deleteMany({});
+    // Explicitly delete related records to prevent foreign key constraint violations
+    try {
+      await this.prisma.$executeRawUnsafe(`DELETE FROM "cart_items"`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM "order_items"`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM "wishlist_items"`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM "reviews"`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM "product_variants"`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM "products"`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM "categories"`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM "collections"`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM "drops"`);
+    } catch (e) {
+      console.error('Error wiping db:', e);
+    }
 
     const categoryMap = new Map<string, string>();
     for (const cat of CATEGORIES) {
@@ -253,29 +259,37 @@ export class CatalogService {
       data: { name: 'Anime Capsule Vol. 03', slug: 'anime-capsule-03', releaseDate: new Date(), isActive: true },
     });
 
+    const productsToInsert = [];
+    const variantsToInsert = [];
+
     for (const p of PRODUCTS_MOCK) {
       const categoryId = categoryMap.get(p.categorySlug);
       if (!categoryId) continue;
       const imageUrls = p.imgIds.map((id: string) => `https://images.unsplash.com/${id}?w=1200&q=80&auto=format&fit=crop`);
-      const productRecord = await this.prisma.product.create({
-        data: {
-          title: p.title, slug: p.slug, description: p.description, basePrice: p.price, isFeatured: p.isFeatured,
-          mediaUrls: imageUrls, status: ProductStatus.PUBLISHED, categoryId, tags: p.tags,
-          dropId: p.categorySlug === 'anime' ? drop.id : null,
-        },
+      const productId = randomUUID();
+      productsToInsert.push({
+        id: productId,
+        title: p.title, slug: p.slug, description: p.description, basePrice: p.price, isFeatured: p.isFeatured,
+        mediaUrls: imageUrls, status: ProductStatus.PUBLISHED, categoryId, tags: p.tags,
+        dropId: p.categorySlug === 'anime' ? drop.id : null,
       });
+
       const colors = COLORS.slice(0, 3);
       for (const color of colors) {
         for (const size of SIZES) {
-          await this.prisma.productVariant.create({
-            data: {
-              productId: productRecord.id, sku: `${p.slug.toUpperCase().slice(0, 10)}-${color.name.toUpperCase().slice(0, 3)}-${size}`,
-              size, color: color.name, stockQuantity: 50, mediaUrls: imageUrls, thumbnailUrl: imageUrls[0],
-            },
+          variantsToInsert.push({
+            id: randomUUID(),
+            productId: productId,
+            sku: `${p.slug.toUpperCase().slice(0, 10)}-${color.name.toUpperCase().slice(0, 3)}-${size}-${randomUUID().slice(0,4)}`,
+            size, color: color.name, stockQuantity: 50, mediaUrls: imageUrls, thumbnailUrl: imageUrls[0],
           });
         }
       }
     }
-    return { success: true, count: PRODUCTS_MOCK.length };
+
+    await this.prisma.product.createMany({ data: productsToInsert });
+    await this.prisma.productVariant.createMany({ data: variantsToInsert });
+    
+    return { success: true, count: productsToInsert.length, variants: variantsToInsert.length };
   }
 }
