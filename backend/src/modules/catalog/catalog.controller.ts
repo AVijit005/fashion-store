@@ -12,15 +12,13 @@ export class CatalogController {
   ) {}
 
   @Get('trigger-seed')
-  @ApiOperation({ summary: 'Trigger DB seed' })
+  @ApiOperation({ summary: 'Trigger DB seed natively' })
   async triggerSeed() {
-    const { execSync } = require('child_process');
     try {
-      execSync('npx tsc prisma/seed.ts --esModuleInterop --skipLibCheck --target es2018 --downlevelIteration');
-      const output = execSync('node prisma/seed.js').toString();
-      return { success: true, output };
+      const result = await this.catalogService.runSeed();
+      return result;
     } catch (error) {
-      return { success: false, error: error.toString(), stdout: error.stdout?.toString(), stderr: error.stderr?.toString() };
+      return { success: false, error: error.message };
     }
   }
 
