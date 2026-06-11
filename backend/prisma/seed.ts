@@ -182,7 +182,7 @@ async function main() {
     }
 
     const imageUrls = p.imgIds.map(
-      (id) => `https://images.unsplash.com/${id}?w=1200&q=80&auto=format&fit=crop`,
+      (id: string) => `https://images.unsplash.com/${id}?w=1200&q=80&auto=format&fit=crop`,
     );
 
     const productRecord = await prisma.product.create({
