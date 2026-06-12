@@ -4,7 +4,10 @@ import { CatalogService } from './catalog.service';
 import { SearchService } from './search.service';
 import { PostgresSearchService } from './postgres-search.service';
 
+import { AuthModule } from '../auth/auth.module';
+
 @Module({
+  imports: [AuthModule],
   controllers: [CatalogController],
   providers: [
     CatalogService,
