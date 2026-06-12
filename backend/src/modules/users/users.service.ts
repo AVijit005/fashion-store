@@ -34,7 +34,7 @@ export class UsersService {
   ): Promise<User> {
     return this.prisma.user.update({
       where: { id },
-      data,
+      data: data as any,
     });
   }
 

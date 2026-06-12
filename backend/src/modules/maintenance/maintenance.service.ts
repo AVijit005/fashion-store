@@ -54,13 +54,10 @@ export class MaintenanceService {
       
       const orphanedAssets = await this.prisma.asset.findMany({
         where: {
-          status: 'UPLOADED',
+          status: 'PENDING',
           createdAt: {
             lt: twentyFourHoursAgo,
           },
-          product: null,
-          productVariant: null,
-          user: null,
         },
       });
 

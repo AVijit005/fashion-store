@@ -22,7 +22,7 @@ export class CatalogController {
     try {
       const result = await this.catalogService.runSeed();
       return result;
-    } catch (error) {
+    } catch (error: any) {
       return { success: false, error: error.message };
     }
   }

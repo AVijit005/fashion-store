@@ -112,6 +112,8 @@ export class OrdersService {
         }
         throw err;
       }
+    }
+
     const activeUserId = userId || undefined;
     const activeSessionId = activeUserId ? undefined : guestSessionId;
 
@@ -305,8 +307,8 @@ export class OrdersService {
         const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
         const idempotencyKeyReq = `req_${crypto.randomUUID()}`;
         
-        let response;
-        let lastErr;
+        let response: Response | undefined;
+        let lastErr: any;
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
             response = await fetch('https://api.razorpay.com/v1/orders', {

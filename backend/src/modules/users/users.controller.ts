@@ -56,7 +56,7 @@ export class UsersController {
   async updatePreferences(@Req() req: any, @Body() body: UpdatePreferencesDto) {
     const user = await this.prisma.user.update({
       where: { id: req.user.id },
-      data: { preferences: body },
+      data: { preferences: body as any },
     });
     const { passwordHash, ...safeUser } = user;
     return safeUser;
