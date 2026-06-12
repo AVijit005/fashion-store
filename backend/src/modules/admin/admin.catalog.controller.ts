@@ -18,7 +18,9 @@ export class AdminCatalogController {
     @Query('limit') limit = '15',
     @Query('q') q?: string,
   ) {
-    return this.catalogService.getProducts(Number(page), Number(limit), q);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 15));
+    return this.catalogService.getProducts(pageNum, limitNum, q);
   }
 
   @Post('products')

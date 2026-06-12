@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { ChevronRight, Heart, Plus, Share2, Gift, Flame, Star } from "lucide-react";
 import { toast } from "sonner";
 import type { Product } from "@/lib/api/catalog";
@@ -115,19 +115,22 @@ function ProductPage() {
   const [look, setLook] = useState<Product[]>([]);
 
   useEffect(() => {
+    let active = true;
     catalogApi
       .getProducts({ category: product.category, limit: 5 })
       .then((res) => {
-        setRelated(res.products.filter((p: Product) => p.id !== product.id).slice(0, 4));
+        if (active) setRelated(res.products.filter((p: Product) => p.id !== product.id).slice(0, 4));
       })
       .catch((err) => console.error(err));
 
     catalogApi
       .getProducts({ limit: 4 })
       .then((res) => {
-        setLook(res.products.filter((p: Product) => p.id !== product.id).slice(0, 3));
+        if (active) setLook(res.products.filter((p: Product) => p.id !== product.id).slice(0, 3));
       })
       .catch((err) => console.error(err));
+      
+    return () => { active = false; };
   }, [product]);
 
   const discount = pct(product.price, product.mrp);
@@ -135,7 +138,7 @@ function ProductPage() {
   const totalStock = product.variants?.reduce((s: number, v: any) => s + (v.stockQuantity || 0), 0) || 0;
   const lowStock = totalStock > 0 && totalStock <= 10 ? totalStock : null;
 
-  const gallery = product.images && product.images.length > 0 ? product.images : ["https://placehold.co/800x1000/f5f3ee/0d0d0d?text=No+Image"];
+  const gallery = useMemo(() => product.images && product.images.length > 0 ? product.images : ["https://placehold.co/800x1000/f5f3ee/0d0d0d?text=No+Image"], [product.images]);
 
   const handleAdd = () => {
     const rect = addBtnRef.current?.getBoundingClientRect();
@@ -407,7 +410,7 @@ function ProductPage() {
           <div className="aspect-[4/3] overflow-hidden bg-paper">
             <img
               src={product.images[1] ?? product.images[0]}
-              alt=""
+              alt={`Lifestyle shot of ${product.name}`}
               className="h-full w-full object-cover"
             />
           </div>

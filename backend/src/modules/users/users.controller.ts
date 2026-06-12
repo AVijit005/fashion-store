@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { UpdateProfileDto, CreateAddressDto, UpdateAddressDto } from './dto/users.dto';
+import { UpdateProfileDto, CreateAddressDto, UpdateAddressDto, UpdatePreferencesDto } from './dto/users.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { PrismaService } from '../../config/prisma.service';
 
@@ -53,7 +53,7 @@ export class UsersController {
 
   @Put('me/preferences')
   @ApiOperation({ summary: 'Update user preferences' })
-  async updatePreferences(@Req() req: any, @Body() body: any) {
+  async updatePreferences(@Req() req: any, @Body() body: UpdatePreferencesDto) {
     const user = await this.prisma.user.update({
       where: { id: req.user.id },
       data: { preferences: body },
@@ -127,10 +127,11 @@ export class UsersController {
       if (updateDto.country !== undefined) data.country = updateDto.country;
       if (updateDto.isDefault !== undefined) data.isDefault = updateDto.isDefault;
 
-      return tx.address.update({
-        where: { id },
+      await tx.address.updateMany({
+        where: { id, userId: req.user.id },
         data,
       });
+      return tx.address.findUnique({ where: { id } });
     });
   }
 
@@ -142,7 +143,7 @@ export class UsersController {
     });
     if (!address) throw new NotFoundException('Address not found');
 
-    await this.prisma.address.delete({ where: { id } });
+    await this.prisma.address.deleteMany({ where: { id, userId: req.user.id } });
     return { success: true };
   }
 }

@@ -1,4 +1,5 @@
-FROM oven/bun:1-alpine
+# Build stage
+FROM oven/bun:1-alpine AS builder
 WORKDIR /app
 
 # Copy package and lockfile
@@ -7,11 +8,12 @@ COPY package.json bun.lock ./
 # Install dependencies
 RUN bun install --frozen-lockfile
 
-# Copy project source
+# Copy project source and build
 COPY . .
+RUN bun run build
 
-# Expose Vite dev server port
-EXPOSE 8080
-
-# Start the development server
-CMD ["bun", "run", "dev", "--host", "0.0.0.0", "--port", "8080"]
+# Serve stage
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

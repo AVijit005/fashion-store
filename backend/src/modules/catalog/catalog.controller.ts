@@ -1,8 +1,11 @@
-import { Controller, Get, Query, Param, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query, Param, BadRequestException, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { CatalogService } from './catalog.service';
 import { SearchService } from './search.service';
-
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 @ApiTags('Catalog')
 @Controller('catalog')
 export class CatalogController {
@@ -12,6 +15,8 @@ export class CatalogController {
   ) {}
 
   @Get('trigger-seed')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Trigger DB seed natively' })
   async triggerSeed() {
     try {

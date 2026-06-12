@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { AdminAuthMiddleware } from './common/middleware/admin-auth.middleware';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { validateEnv } from './config/env.config';
@@ -70,4 +71,10 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(AdminAuthMiddleware)
+      .forRoutes('admin/*');
+  }
+}

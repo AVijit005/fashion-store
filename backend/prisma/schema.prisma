@@ -95,6 +95,7 @@ model Session {
   updatedAt DateTime @updatedAt @map("updated_at")
 
     @@index([userId])
+    @@index([expiresAt])
 
   @@map("sessions")
 }
@@ -160,7 +161,7 @@ model Drop {
 model Product {
   id              String           @id @default(uuid())
   categoryId      String           @map("category_id")
-  category        Category         @relation(fields: [categoryId], references: [id])
+  category        Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   dropId          String?          @map("drop_id")
   drop            Drop?            @relation(fields: [dropId], references: [id])
   title           String
@@ -179,9 +180,12 @@ model Product {
   updatedAt       DateTime         @updatedAt @map("updated_at")
   variants        ProductVariant[]
   wishlistItems   WishlistItem[]
+  reviews         Review[]
 
     @@index([categoryId])
   @@index([dropId])
+  @@index([status])
+  @@index([isDeleted])
 
   @@map("products")
 }
@@ -202,6 +206,7 @@ model ProductVariant {
   cartItems     CartItem[]
 
     @@index([productId])
+    @@index([isDeleted])
 
   @@map("product_variants")
 }
@@ -209,7 +214,7 @@ model ProductVariant {
 model Order {
   id                  String               @id @default(uuid())
   userId              String?              @map("user_id")
-  user                User?                @relation(fields: [userId], references: [id])
+  user                User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
   totalAmount         Decimal              @map("total_amount") @db.Decimal(10, 2)
   shippingFee         Decimal              @default(0.00) @map("shipping_fee") @db.Decimal(10, 2)
   tax                 Decimal              @default(0.00) @map("tax") @db.Decimal(10, 2)
@@ -228,6 +233,7 @@ model Order {
   razorpayPaymentId   String?              @unique @map("razorpay_payment_id")
   razorpaySignature   String?              @map("razorpay_signature")
   guestToken          String?              @map("guest_token")
+  couponCode          String?              @map("coupon_code")
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
   items               OrderItem[]
@@ -258,7 +264,7 @@ model OrderItem {
 model Asset {
   id         String      @id @default(uuid())
   userId     String      @map("user_id")
-  user       User        @relation(fields: [userId], references: [id])
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   filename   String
   mimeType   String      @map("mime_type")
   size       Int
@@ -277,7 +283,7 @@ model Asset {
 model StudioDesign {
   id              String            @id @default(uuid())
   userId          String            @map("user_id")
-  user            User              @relation(fields: [userId], references: [id])
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   title           String
   description     String?
   status          DesignStatus      @default(DRAFT)
@@ -289,6 +295,7 @@ model StudioDesign {
   submissions     StudioSubmission[]
 
     @@index([userId])
+    @@index([status])
 
   @@map("studio_designs")
 }
@@ -344,6 +351,7 @@ model StudioSubmission {
 
     @@index([designId])
   @@index([reviewerId])
+  @@index([status])
 
   @@map("studio_submissions")
 }
@@ -370,6 +378,7 @@ model Review {
   userId     String   @map("user_id")
   user       User     @relation(fields: [userId], references: [id])
   productId  String   @map("product_id")
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   rating     Int
   comment    String
   mediaUrls  String[] @map("media_urls")
@@ -378,6 +387,7 @@ model Review {
 
     @@index([userId])
   @@index([productId])
+  @@index([isApproved])
 
   @@map("reviews")
 }

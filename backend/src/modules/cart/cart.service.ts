@@ -36,6 +36,7 @@ export interface HydratedCart {
 export class CartService {
   private readonly redisPrefix = 'cart:';
   private readonly cacheTtl = 1209600; // 14 days in seconds
+  private readonly promiseMap = new Map<string, Promise<CachedCartItem[]>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -57,42 +58,54 @@ export class CartService {
   // Retrieve minimal cached array of variant IDs and quantities
   async getCartItems(userId?: string, sessionId?: string): Promise<CachedCartItem[]> {
     const cacheKey = this.getCacheKey(userId, sessionId);
-    let cached = null;
-
-    try {
-      cached = await this.redis.get(cacheKey);
-      if (cached) {
-        return JSON.parse(cached) as CachedCartItem[];
-      }
-    } catch (error) {
-      console.warn(`Redis GET failed for ${cacheKey}`, error);
+    
+    if (this.promiseMap.has(cacheKey)) {
+      return this.promiseMap.get(cacheKey)!;
     }
 
-    // Cache miss or Redis failure, load from DB
-    const cart = await this.prisma.cart.findFirst({
-      where: userId ? { userId } : { sessionId },
-      include: {
-        items: true,
-      },
+    const promise = (async () => {
+      let cached = null;
+
+      try {
+        cached = await this.redis.get(cacheKey);
+        if (cached) {
+          return JSON.parse(cached) as CachedCartItem[];
+        }
+      } catch (error) {
+        console.warn(`Redis GET failed for ${cacheKey}`, error);
+      }
+
+      // Cache miss or Redis failure, load from DB
+      const cart = await this.prisma.cart.findFirst({
+        where: userId ? { userId } : { sessionId },
+        include: {
+          items: true,
+        },
+      });
+
+      if (!cart) {
+        return [];
+      }
+
+      const items: CachedCartItem[] = cart.items.map((item) => ({
+        id: item.id,
+        variantId: item.productVariantId,
+        quantity: item.quantity,
+        customData: item.customData,
+      }));
+
+      try {
+        await this.redis.set(cacheKey, JSON.stringify(items), 'EX', this.cacheTtl);
+      } catch (error) {
+        console.warn(`Redis SET failed for ${cacheKey}`, error);
+      }
+      return items;
+    })().finally(() => {
+      this.promiseMap.delete(cacheKey);
     });
 
-    if (!cart) {
-      return [];
-    }
-
-    const items: CachedCartItem[] = cart.items.map((item) => ({
-      id: item.id,
-      variantId: item.productVariantId,
-      quantity: item.quantity,
-      customData: item.customData,
-    }));
-
-    try {
-      await this.redis.set(cacheKey, JSON.stringify(items), 'EX', this.cacheTtl);
-    } catch (error) {
-      console.warn(`Redis SET failed for ${cacheKey}`, error);
-    }
-    return items;
+    this.promiseMap.set(cacheKey, promise);
+    return promise;
   }
 
   // Retrieve fully hydrated cart with live prices and stock availability
@@ -202,6 +215,9 @@ export class CartService {
   }
 
   async addItem(itemId: string, quantity: number, userId?: string, sessionId?: string, customData?: any) {
+    if (quantity <= 0) {
+      throw new BadRequestException('Quantity must be greater than zero');
+    }
     if (customData) {
       await this.prisma.$transaction(async (tx) => {
         const cart = await this.getOrCreateCart(tx, userId, sessionId);
@@ -342,8 +358,8 @@ export class CartService {
           where: { id: item.id },
         });
       }
-    } catch {
-      // Item might not exist, ignore
+    } catch (error) {
+      console.error(`Failed to remove item ${itemId} from cart`, error);
     }
 
     await this.invalidateCache(userId, sessionId);
@@ -386,6 +402,11 @@ export class CartService {
         variants.map((variant) => [variant.id, variant.stockQuantity]),
       );
 
+      const existingUserItems = await tx.cartItem.findMany({
+        where: { cartId: userCart.id },
+      });
+      const existingUserItemMap = new Map(existingUserItems.map(i => [i.productVariantId, i]));
+
       for (const guestItem of guestCart.items) {
         if (!guestItem.productVariantId) {
           // It's a custom item, just copy it over
@@ -399,14 +420,7 @@ export class CartService {
           continue;
         }
 
-        const existing = await tx.cartItem.findUnique({
-          where: {
-            cartId_productVariantId: {
-              cartId: userCart.id,
-              productVariantId: guestItem.productVariantId,
-            },
-          },
-        });
+        const existing = existingUserItemMap.get(guestItem.productVariantId);
         const stock = stockByVariant.get(guestItem.productVariantId) ?? 0;
         const mergedQuantity = Math.min(stock, (existing?.quantity || 0) + guestItem.quantity);
         if (mergedQuantity <= 0) {
@@ -452,7 +466,7 @@ export class CartService {
       const cacheKey = this.getCacheKey(userId, sessionId);
       await this.redis.del(cacheKey);
     } catch (error) {
-      console.warn(`Redis DEL failed`, error);
+      console.warn(`Redis DEL failed for cacheKey: ${userId || sessionId}`, error);
     }
   }
 

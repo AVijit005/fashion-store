@@ -10,9 +10,12 @@ import {
   BadRequestException,
   UnauthorizedException,
   Query,
+  ParseUUIDPipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from './orders.service';
 import { CheckoutDto, VerifyPaymentDto, ApplyCouponDto } from './dto/orders.dto';
 import { OptionalAuthGuard } from '../../common/guards/optional-auth.guard';
@@ -47,6 +50,7 @@ export class OrdersController {
   }
 
   @Post('apply-coupon')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Validate and calculate discount for a coupon code' })
   async applyCoupon(@Body() dto: ApplyCouponDto) {
     return this.ordersService.applyCoupon(dto.code, dto.subtotal);
@@ -55,7 +59,7 @@ export class OrdersController {
   @Post(':id/retry-payment')
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Retry payment for a failed or pending order' })
-  async retryPayment(@Param('id') id: string, @Req() req: any) {
+  async retryPayment(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
     return this.ordersService.retryPayment(id, req.user.id);
   }
 
@@ -83,15 +87,21 @@ export class OrdersController {
   @Get('me')
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Get order history for authenticated user' })
-  async getMyOrders(@CurrentUser() user: RequestUser) {
-    return this.ordersService.getMyOrders(user.id);
+  async getMyOrders(
+    @CurrentUser() user: RequestUser,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
+  ) {
+    const safeLimit = Math.max(1, Math.min(100, limit || 10));
+    const safeOffset = Math.max(0, offset || 0);
+    return this.ordersService.getMyOrders(user.id, safeLimit, safeOffset);
   }
 
   @Get(':id')
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Get details of a single order by ID' })
   async getOrderById(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Headers('x-guest-token') guestToken?: string,
     @CurrentUser() user?: RequestUser,
   ) {

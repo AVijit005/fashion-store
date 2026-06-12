@@ -9,6 +9,7 @@ import {
   type S3ClientConfig,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 
 @Injectable()
 export class StorageService {
@@ -44,17 +45,22 @@ export class StorageService {
     key: string,
     mimeType: string,
     expiresInSeconds: number = 900,
-  ): Promise<string> {
+  ): Promise<{ url: string; fields: Record<string, string> }> {
     try {
-      const command = new PutObjectCommand({
+      const { url, fields } = await createPresignedPost(this.s3Client, {
         Bucket: this.bucket,
         Key: key,
-        ContentType: mimeType,
-        ServerSideEncryption: 'AES256',
+        Conditions: [
+          ['content-length-range', 0, 10485760], // 10 MB limit
+          ['eq', '$Content-Type', mimeType],
+        ],
+        Fields: {
+          'Content-Type': mimeType,
+        },
+        Expires: expiresInSeconds,
       });
 
-      // 5 minutes by default
-      return await getSignedUrl(this.s3Client, command, { expiresIn: expiresInSeconds });
+      return { url, fields };
     } catch (error) {
       this.logger.error(`Failed to generate upload presigned URL for key: ${key}`, error);
       throw new InternalServerErrorException('Failed to generate upload URL');

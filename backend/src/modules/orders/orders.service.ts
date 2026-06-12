@@ -112,10 +112,10 @@ export class OrdersService {
         }
         throw err;
       }
-    }
-
     const activeUserId = userId || undefined;
     const activeSessionId = activeUserId ? undefined : guestSessionId;
+
+    try {
 
     // 1. Fetch current cart
     const cart = await this.cartService.getCart(activeUserId, activeSessionId);
@@ -164,26 +164,37 @@ export class OrdersService {
           sku: item.sku as string,
         }));
         
-      if (inventoryItems.length > 0) {
-        // Fix Inventory DoS: Cancel any existing PAYMENT_PENDING orders for this user/guest
-        // to prevent them from locking up all inventory by spamming checkout.
-        const existingPendingOrders = await tx.order.findMany({
-          where: {
-            status: OrderStatus.PAYMENT_PENDING,
-            ...(activeUserId ? { userId: activeUserId } : { shippingEmail: dto.shippingEmail }),
-          },
+      const existingPendingOrders = await tx.order.findMany({
+        where: {
+          status: OrderStatus.PAYMENT_PENDING,
+          ...(activeUserId ? { userId: activeUserId } : { shippingEmail: dto.shippingEmail }),
+        },
+      });
+
+      if (existingPendingOrders.length > 0) {
+        // Bulk cancel to avoid N+1 queries
+        await tx.order.updateMany({
+          where: { id: { in: existingPendingOrders.map((o) => o.id) } },
+          data: { status: OrderStatus.CANCELLED },
+        });
+        
+        await tx.orderStatusHistory.createMany({
+          data: existingPendingOrders.map((o) => ({
+            orderId: o.id,
+            oldStatus: OrderStatus.PAYMENT_PENDING,
+            newStatus: OrderStatus.CANCELLED,
+            changedBy: 'SYSTEM',
+            reason: 'Auto-cancelled due to new checkout initiation',
+          })),
         });
 
-        for (const pendingOrder of existingPendingOrders) {
-          await this.transitionStatus(
-            pendingOrder.id,
-            OrderStatus.CANCELLED,
-            'SYSTEM',
-            'Auto-cancelled due to new checkout initiation',
-            tx,
-          );
+        // Restore inventory for all cancelled orders sequentially to prevent Prisma connection pool starvation
+        for (const o of existingPendingOrders) {
+          await this.inventoryService.restoreInventory(o.id, tx);
         }
+      }
 
+      if (inventoryItems.length > 0) {
         // 1. Reserve inventory
         await this.inventoryService.reserveInventory(inventoryItems, tx);
       }
@@ -200,6 +211,7 @@ export class OrdersService {
         data: {
           userId: activeUserId || null,
           guestToken,
+          couponCode: dto.couponCode ? dto.couponCode.toUpperCase() : null,
           status: dto.paymentMethod === 'cod' ? OrderStatus.PROCESSING : OrderStatus.PAYMENT_PENDING,
           totalAmount,
           shippingFee,
@@ -291,26 +303,38 @@ export class OrdersService {
 
       try {
         const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-        const idempotencyKey = `req_${crypto.randomUUID()}`;
-        const response = await fetch('https://api.razorpay.com/v1/orders', {
-          method: 'POST',
-          headers: {
-            Authorization: `Basic ${auth}`,
-            'Content-Type': 'application/json',
-            'Idempotency-Key': idempotencyKey,
-          },
-          body: JSON.stringify({
-            amount: totalAmount.mul(100).round().toNumber(), // convert to paise precisely using Decimal
-            currency: 'INR',
-            receipt: createdOrder.id,
-          }),
-          signal: controller.signal,
-        });
+        const idempotencyKeyReq = `req_${crypto.randomUUID()}`;
+        
+        let response;
+        let lastErr;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            response = await fetch('https://api.razorpay.com/v1/orders', {
+              method: 'POST',
+              headers: {
+                Authorization: `Basic ${auth}`,
+                'Content-Type': 'application/json',
+                'Idempotency-Key': idempotencyKeyReq,
+              },
+              body: JSON.stringify({
+                amount: totalAmount.mul(100).round().toNumber(), // convert to paise precisely using Decimal
+                currency: 'INR',
+                receipt: createdOrder.id,
+              }),
+              signal: controller.signal,
+            });
+            break;
+          } catch (e) {
+            lastErr = e;
+            if (attempt === 3) throw e;
+            await new Promise((res) => setTimeout(res, attempt * 1000));
+          }
+        }
 
         clearTimeout(timeoutId);
 
-        if (!response.ok) {
-          const errBody = await response.text();
+        if (!response || !response.ok) {
+          const errBody = response ? await response.text() : String(lastErr);
           throw new Error(`Razorpay API error: ${errBody}`);
         }
 
@@ -359,6 +383,12 @@ export class OrdersService {
     }
 
     return responseObj;
+    } catch (error) {
+      if (idempotencyKey) {
+        await this.prisma.idempotencyKey.delete({ where: { key: idempotencyKey } }).catch(() => null);
+      }
+      throw error;
+    }
   }
 
   // Retry Payment
@@ -590,7 +620,7 @@ export class OrdersService {
 
   // Fetch orders for a user
   async getMyOrders(userId: string, limit = 10, offset = 0) {
-    return this.prisma.order.findMany({
+    const orders = await this.prisma.order.findMany({
       where: { userId },
       include: {
         items: {
@@ -607,6 +637,28 @@ export class OrdersService {
       take: limit,
       skip: offset,
     });
+    
+    // Map out sensitive internal database fields
+    return orders.map(order => ({
+      id: order.id,
+      userId: order.userId,
+      totalAmount: order.totalAmount,
+      shippingFee: order.shippingFee,
+      tax: order.tax,
+      status: order.status,
+      shippingName: order.shippingName,
+      shippingEmail: order.shippingEmail,
+      shippingPhone: order.shippingPhone,
+      shippingStreet: order.shippingStreet,
+      shippingCity: order.shippingCity,
+      shippingState: order.shippingState,
+      shippingPostalCode: order.shippingPostalCode,
+      shippingCountry: order.shippingCountry,
+      paymentProvider: order.paymentProvider,
+      paymentStatus: order.paymentStatus,
+      createdAt: order.createdAt,
+      items: order.items,
+    }));
   }
 
   // Get order by ID
@@ -643,7 +695,27 @@ export class OrdersService {
       }
     }
 
-    return order;
+    return {
+      id: order.id,
+      userId: order.userId,
+      totalAmount: order.totalAmount,
+      shippingFee: order.shippingFee,
+      tax: order.tax,
+      status: order.status,
+      shippingName: order.shippingName,
+      shippingEmail: order.shippingEmail,
+      shippingPhone: order.shippingPhone,
+      shippingStreet: order.shippingStreet,
+      shippingCity: order.shippingCity,
+      shippingState: order.shippingState,
+      shippingPostalCode: order.shippingPostalCode,
+      shippingCountry: order.shippingCountry,
+      paymentProvider: order.paymentProvider,
+      paymentStatus: order.paymentStatus,
+      createdAt: order.createdAt,
+      items: order.items,
+      statusHistory: order.statusHistory,
+    };
   }
 
   // Explicit, validated transition state machine
@@ -681,6 +753,12 @@ export class OrdersService {
       // If order transitions to FAILED or CANCELLED, return stock to inventory
       if (newStatus === OrderStatus.FAILED || newStatus === OrderStatus.CANCELLED) {
         await this.inventoryService.restoreInventory(orderId, client);
+        if (order.couponCode) {
+          await client.coupon.update({
+            where: { code: order.couponCode },
+            data: { usageCount: { decrement: 1 } },
+          }).catch(() => null);
+        }
       }
 
       if ((newStatus === OrderStatus.PAID || newStatus === OrderStatus.PAYMENT_PENDING) && (currentStatus === OrderStatus.FAILED || currentStatus === OrderStatus.CANCELLED)) {

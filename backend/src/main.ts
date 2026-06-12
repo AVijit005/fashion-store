@@ -36,7 +36,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseTransformInterceptor());
 
   app.enableCors({
-    origin: true,
+    origin: configService.get<string>('FRONTEND_ORIGINS')?.split(',') || false,
     credentials: true,
   });
 

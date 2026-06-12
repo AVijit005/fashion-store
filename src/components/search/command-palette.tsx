@@ -52,11 +52,12 @@ export function CommandPalette() {
   const [loading, setLoading] = useState(false);
 
   const { data: dynamicCategories = [] } = useQuery({
-    queryKey: ["command-palette-categories"],
+    queryKey: ["categories"],
     queryFn: async () => {
       const res = await catalogApi.getCategories();
       return Array.isArray(res) ? res : [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   // Global hotkey
@@ -83,21 +84,29 @@ export function CommandPalette() {
       return;
     }
 
+    let active = true;
     setLoading(true);
     const timer = setTimeout(() => {
       catalogApi
         .search(q, { limit: 6 })
         .then((res) => {
-          setResults(res);
-          setLoading(false);
+          if (active) {
+            setResults(res);
+            setLoading(false);
+          }
         })
         .catch((err) => {
-          console.error(err);
-          setLoading(false);
+          if (active) {
+            console.error(err);
+            setLoading(false);
+          }
         });
     }, 250); // Debounce
 
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [query]);
 
   const go = (to: string, label?: string) => {
@@ -115,12 +124,20 @@ export function CommandPalette() {
         onValueChange={setQuery}
       />
       <CommandList className="max-h-[60vh]">
-        <CommandEmpty>
-          <div className="px-4 py-8 text-center">
-            <p className="font-display text-2xl">No matches.</p>
-            <p className="mt-1 text-[12px] text-mute">Try “anime”, “oversized”, or “hoodie”.</p>
+        {!loading && results.length === 0 && (
+          <CommandEmpty>
+            <div className="px-4 py-8 text-center">
+              <p className="font-display text-2xl">No matches.</p>
+              <p className="mt-1 text-[12px] text-mute">Try “anime”, “oversized”, or “hoodie”.</p>
+            </div>
+          </CommandEmpty>
+        )}
+        
+        {loading && (
+          <div className="px-4 py-8 text-center text-[12px] text-mute uppercase tracking-[0.18em]">
+            Searching...
           </div>
-        </CommandEmpty>
+        )}
 
         {query.trim() === "" && recents.length > 0 && (
           <>

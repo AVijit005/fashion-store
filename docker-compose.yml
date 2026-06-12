@@ -11,7 +11,7 @@ services:
     container_name: aura-frontend
     restart: always
     ports:
-      - '8080:8080' # Expose Vite dev server
+      - '8080:80' # Expose production frontend
     environment:
       - VITE_API_URL=http://localhost:3000
     depends_on:
@@ -29,22 +29,25 @@ services:
     ports:
       - '3000:3000'
     environment:
-      - DATABASE_URL=postgresql://aura_user:aura_password@postgres:5432/aura_db
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=super_secret_jwt_signature_key_2026
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET=${JWT_SECRET}
       - NODE_ENV=development
       - PORT=3000
-      - FRONTEND_ORIGINS=http://localhost:8080
-      - S3_ENDPOINT=http://minio:9000
-      - S3_ACCESS_KEY=aura_admin
-      - S3_SECRET_KEY=aura_password
-      - S3_REGION=us-east-1
-      - S3_BUCKET=aura-bucket
-      - PUBLIC_URL=http://localhost:3000
+      - FRONTEND_ORIGINS=${FRONTEND_ORIGINS}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_REGION=${S3_REGION}
+      - S3_BUCKET=${S3_BUCKET}
+      - PUBLIC_URL=${PUBLIC_URL}
     depends_on:
-      - postgres
-      - redis
-      - minio
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
 
   # -----------------------------------------------------
   # 🗄️ PostgreSQL Database
@@ -54,11 +57,16 @@ services:
     container_name: aura-postgres
     restart: always
     environment:
-      POSTGRES_USER: aura_user
-      POSTGRES_PASSWORD: aura_password
-      POSTGRES_DB: aura_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - '5432:5432'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -71,6 +79,11 @@ services:
     restart: always
     ports:
       - '6379:6379'
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     volumes:
       - redisdata:/data
 
@@ -82,8 +95,8 @@ services:
     container_name: aura-minio
     restart: always
     environment:
-      MINIO_ROOT_USER: aura_admin
-      MINIO_ROOT_PASSWORD: aura_password
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
     ports:
       - '9000:9000'

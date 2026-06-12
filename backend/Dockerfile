@@ -20,11 +20,12 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm install
+RUN npm ci --omit=dev
+RUN npx prisma generate
 
 COPY --from=builder /usr/src/app/dist ./dist
 COPY scripts ./scripts
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "node scripts/deploy-db.js && node dist/main"]
+CMD ["node", "dist/main"]

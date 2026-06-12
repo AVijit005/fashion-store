@@ -61,3 +61,13 @@ export class UpdateAddressDto {
   @IsOptional()
   isDefault?: boolean;
 }
+
+export class UpdatePreferencesDto {
+  @IsBoolean()
+  @IsOptional()
+  marketingEmails?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  orderUpdates?: boolean;
+}

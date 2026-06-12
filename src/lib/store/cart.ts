@@ -42,52 +42,88 @@ type CartState = {
 
 const keyFor = (i: { id: string; size: string; color: string }) => `${i.id}-${i.size}-${i.color}`;
 
-// Simple queue for backend sync to prevent race conditions
-const syncQueue: { task: () => Promise<void>, rollback?: () => void }[] = [];
+type SyncAction =
+  | { type: "add"; itemId: string; quantity: number; customData?: any }
+  | { type: "update"; itemId: string; qty: number }
+  | { type: "remove"; itemId: string }
+  | { type: "clear" };
+
+interface SyncStore {
+  queue: SyncAction[];
+  enqueue: (action: SyncAction) => void;
+  dequeue: () => SyncAction | undefined;
+}
+
+export const useSyncStore = create<SyncStore>()(
+  persist(
+    (set, get) => ({
+      queue: [],
+      enqueue: (action) => {
+        set({ queue: [...get().queue, action] });
+        processQueue();
+      },
+      dequeue: () => {
+        const queue = get().queue;
+        if (queue.length === 0) return undefined;
+        const action = queue[0];
+        set({ queue: queue.slice(1) });
+        return action;
+      },
+    }),
+    { name: "ink-cart-sync-queue" }
+  )
+);
+
 let isSyncing = false;
 
 async function processQueue() {
-  if (isSyncing || syncQueue.length === 0) return;
+  if (isSyncing || useSyncStore.getState().queue.length === 0) return;
   isSyncing = true;
-  while (syncQueue.length > 0) {
-    const item = syncQueue.shift();
-    if (item) {
-      try {
-        await item.task();
-      } catch (err) {
-        console.error("[cart] Backend sync failed:", err);
-        const msg = err instanceof Error ? err.message : "Failed to update cart";
-        toast.error(msg);
-        if (item.rollback) item.rollback();
+  while (useSyncStore.getState().queue.length > 0) {
+    const action = useSyncStore.getState().queue[0];
+    try {
+      if (action.type === "add") {
+        await cartApi.addItem(action.itemId, action.quantity, action.customData);
+      } else if (action.type === "update") {
+        await cartApi.updateItem(action.itemId, action.qty);
+      } else if (action.type === "remove") {
+        await cartApi.removeItem(action.itemId);
+      } else if (action.type === "clear") {
+        await cartApi.clearCart();
       }
+      useSyncStore.getState().dequeue();
+    } catch (err) {
+      console.error("[cart] Backend sync failed:", err);
+      toast.error("Failed to sync cart with server");
+      useSyncStore.getState().dequeue();
     }
   }
   isSyncing = false;
 }
 
-function enqueueSync(task: () => Promise<void>, rollback?: () => void) {
-  syncQueue.push({ task, rollback });
-  processQueue();
+if (typeof window !== "undefined") {
+  // Process queue on load in case there are pending items from last session
+  setTimeout(processQueue, 1000);
 }
 
-function syncAdd(itemId: string, quantity: number, customData?: any, rollback?: () => void) {
-  enqueueSync(() => cartApi.addItem(itemId, quantity, customData).then(() => {}), rollback);
+function syncAdd(itemId: string, quantity: number, customData?: any) {
+  useSyncStore.getState().enqueue({ type: "add", itemId, quantity, customData });
 }
 
-function syncUpdate(itemId: string, qty: number, rollback?: () => void) {
+function syncUpdate(itemId: string, qty: number) {
   if (qty <= 0) {
-    enqueueSync(() => cartApi.removeItem(itemId).then(() => {}), rollback);
+    useSyncStore.getState().enqueue({ type: "remove", itemId });
   } else {
-    enqueueSync(() => cartApi.updateItem(itemId, qty).then(() => {}), rollback);
+    useSyncStore.getState().enqueue({ type: "update", itemId, qty });
   }
 }
 
-function syncRemove(itemId: string, rollback?: () => void) {
-  enqueueSync(() => cartApi.removeItem(itemId).then(() => {}), rollback);
+function syncRemove(itemId: string) {
+  useSyncStore.getState().enqueue({ type: "remove", itemId });
 }
 
-function syncClear(rollback?: () => void) {
-  enqueueSync(() => cartApi.clearCart().then(() => {}), rollback);
+function syncClear() {
+  useSyncStore.getState().enqueue({ type: "clear" });
 }
 
 export const useCart = create<CartState>()(
@@ -113,8 +149,8 @@ export const useCart = create<CartState>()(
           set({ items: [...get().items, { ...i, qty }], open: true });
         }
 
-        // Sync to backend with rollback closure
-        syncAdd(i.variantId || i.id, qty, i.customData, () => set({ items: previousItems }));
+        // Sync to backend
+        syncAdd(i.variantId || i.id, qty, i.customData);
       },
 
       remove: (k) => {
@@ -122,7 +158,7 @@ export const useCart = create<CartState>()(
         const item = get().items.find((it) => keyFor(it) === k);
         set({ items: get().items.filter((it) => keyFor(it) !== k) });
 
-        syncRemove(item?.variantId || k, () => set({ items: previousItems }));
+        syncRemove(item?.variantId || k);
       },
 
       setQty: (k, qty) => {
@@ -140,14 +176,14 @@ export const useCart = create<CartState>()(
         });
 
         if (item) {
-          syncUpdate(item.variantId || k, qty, () => set({ items: previousItems }));
+          syncUpdate(item.variantId || k, qty);
         }
       },
 
       clear: () => {
         const previousItems = get().items;
         set({ items: [] });
-        syncClear(() => set({ items: previousItems }));
+        syncClear();
       },
 
       subtotal: () => get().items.reduce((s, i) => s + i.price * i.qty, 0),

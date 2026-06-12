@@ -15,16 +15,18 @@ import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { AnnouncementBar } from "@/components/layout/announcement-bar";
 import { BottomTabBar } from "@/components/layout/bottom-tab-bar";
-import { CartDrawer } from "@/components/cart/cart-drawer";
 import { FlyToCartPortal } from "@/components/ui/fly-to-cart-portal";
-import { WelcomeModal } from "@/components/welcome-modal";
 import { Toaster } from "@/components/ui/sonner";
-import { CommandPalette } from "@/components/search/command-palette";
 import { PaperGrain } from "@/components/ui/paper-grain";
 import { RouteTransition } from "@/components/layout/route-transition";
-import { useEffect } from "react";
+import React, { useEffect, Suspense } from "react";
 import { useAuthStore } from "@/lib/store/auth";
-import { AuthModal } from "@/components/layout/auth-modal";
+import * as Sentry from "@sentry/react";
+
+const CartDrawer = React.lazy(() => import("@/components/cart/cart-drawer").then(m => ({ default: m.CartDrawer })));
+const AuthModal = React.lazy(() => import("@/components/layout/auth-modal").then(m => ({ default: m.AuthModal })));
+const WelcomeModal = React.lazy(() => import("@/components/welcome-modal").then(m => ({ default: m.WelcomeModal })));
+const CommandPalette = React.lazy(() => import("@/components/search/command-palette").then(m => ({ default: m.CommandPalette })));
 
 function NotFoundComponent() {
   return (
@@ -160,39 +162,45 @@ function RootComponent() {
 
     return (
       <QueryClientProvider client={queryClient}>
-        <Outlet />
-        <PaperGrain />
-        <Toaster position="bottom-right" />
+        <Sentry.ErrorBoundary fallback={<div className="flex min-h-screen items-center justify-center text-center"><p className="text-xl">Admin Interface Error</p></div>}>
+          <Outlet />
+          <PaperGrain />
+          <Toaster position="bottom-right" />
+        </Sentry.ErrorBoundary>
       </QueryClientProvider>
     );
   }
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="flex min-h-screen flex-col">
-        <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:bg-ink focus:px-4 focus:py-2 focus:text-paper"
-        >
-          Skip to content
-        </a>
-        <AnnouncementBar />
-        <Navbar />
-        <main id="main-content" className="flex-1 pb-20 lg:pb-0">
-          <RouteTransition>
-            <Outlet />
-          </RouteTransition>
-        </main>
-        <Footer />
-        <BottomTabBar />
-        <CartDrawer />
-        <AuthModal />
-        <FlyToCartPortal />
-        <WelcomeModal />
-        <CommandPalette />
-        <PaperGrain />
-        <Toaster position="bottom-center" />
-      </div>
+      <Sentry.ErrorBoundary fallback={<div className="flex min-h-screen items-center justify-center text-center p-8 bg-paper text-ink"><p className="text-xl border border-ink p-8">Critical App Error: Something went wrong and the UI crashed. Please refresh.</p></div>}>
+        <div className="flex min-h-screen flex-col">
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:bg-ink focus:px-4 focus:py-2 focus:text-paper"
+          >
+            Skip to content
+          </a>
+          <AnnouncementBar />
+          <Navbar />
+          <main id="main-content" className="flex-1 pb-20 lg:pb-0">
+            <RouteTransition>
+              <Outlet />
+            </RouteTransition>
+          </main>
+          <Footer />
+          <BottomTabBar />
+          <Suspense fallback={null}>
+            <CartDrawer />
+            <AuthModal />
+            <WelcomeModal />
+            <CommandPalette />
+          </Suspense>
+          <FlyToCartPortal />
+          <PaperGrain />
+          <Toaster position="bottom-center" />
+        </div>
+      </Sentry.ErrorBoundary>
     </QueryClientProvider>
   );
 }

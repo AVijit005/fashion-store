@@ -1,7 +1,7 @@
 import { Link, useRouterState, useRouter } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Heart, Search, ShoppingBag, User, Menu, X, ArrowRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useCart } from "@/lib/store/cart";
 import { useWishlist } from "@/lib/store/wishlist";
 import { useCommandPalette } from "@/lib/store/command-palette";
@@ -175,6 +175,7 @@ export function Navbar() {
       const res = await catalogApi.getCategories();
       return Array.isArray(res) ? res : [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: featuredProducts = [] } = useQuery({
@@ -183,6 +184,7 @@ export function Navbar() {
       const res = await catalogApi.getProducts({ featured: true, limit: 10 });
       return res.products || [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const handleAccountClick = () => {
@@ -194,7 +196,16 @@ export function Navbar() {
   };
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
+    let ticking = false;
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrolled(window.scrollY > 12);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -205,23 +216,29 @@ export function Navbar() {
     setMega(null);
   }, [path]);
 
-  const megaData = mega ? { ...megaContent[mega] } : null;
-  
-  if (megaData && mega === "Shop" && categories.length > 0) {
-    megaData.columns = [
-      {
-        title: "Categories",
-        links: categories.slice(0, 6).map((c: any) => ({ 
-          l: c.name, 
-          to: "/c/$category", 
-          params: { category: c.slug } 
-        }))
-      },
-      ...megaContent.Shop.columns.slice(1)
-    ];
-  }
+  const megaData = React.useMemo(() => {
+    if (!mega) return null;
+    const data = { ...megaContent[mega] };
+    if (mega === "Shop" && categories.length > 0) {
+      data.columns = [
+        {
+          title: "Categories",
+          links: categories.slice(0, 6).map((c: any) => ({ 
+            l: c.name, 
+            to: "/c/$category", 
+            params: { category: c.slug } 
+          }))
+        },
+        ...megaContent.Shop.columns.slice(1)
+      ];
+    }
+    return data;
+  }, [mega, categories]);
 
-  const featureProduct = megaData ? featuredProducts.find((p: Product) => p.slug === megaData.featureSlug) || featuredProducts[0] : null;
+  const featureProduct = React.useMemo(() => {
+    if (!megaData) return null;
+    return featuredProducts.find((p: Product) => p.slug === megaData.featureSlug) || featuredProducts[0] || null;
+  }, [megaData, featuredProducts]);
 
   return (
     <>
@@ -254,6 +271,7 @@ export function Navbar() {
                 key={p.label}
                 to={p.to}
                 onMouseEnter={() => setMega(p.mega ?? null)}
+                onFocus={() => setMega(p.mega ?? null)}
                 activeProps={{ className: "text-ink" }}
                 activeOptions={{ exact: true }}
                 className="px-3 py-2 text-[13px] uppercase tracking-[0.18em] text-ink/80 transition hover:text-ink"
@@ -321,6 +339,7 @@ export function Navbar() {
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               onMouseEnter={() => setMega(mega)}
               onMouseLeave={() => setMega(null)}
+              onFocus={() => setMega(mega)}
               className="absolute left-0 right-0 hidden border-t border-line bg-paper/95 backdrop-blur-xl lg:block"
             >
               <div className="mx-auto grid max-w-[1480px] grid-cols-[1.1fr_2fr_1fr] gap-12 px-10 py-12">

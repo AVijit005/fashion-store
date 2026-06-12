@@ -42,7 +42,9 @@ export const useWishlist = create<WishlistState>()(
         syncQueue.push(async () => {
           try {
             await apiClient.post(`/wishlist/${id}/toggle`);
-          } catch (e) {}
+          } catch (e) {
+            import("sonner").then(({ toast }) => toast.error("Failed to sync wishlist with server."));
+          }
         });
         processQueue();
       },

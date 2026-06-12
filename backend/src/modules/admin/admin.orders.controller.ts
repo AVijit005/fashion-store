@@ -19,8 +19,8 @@ export class AdminOrdersController {
     @Query('q') q?: string,
     @Query('status') status?: string,
   ) {
-    const pageNum = page ? parseInt(page, 10) : 1;
-    const limitNum = limit ? parseInt(limit, 10) : 50;
+    const pageNum = Math.max(1, parseInt(page || '1', 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit || '50', 10) || 50));
     return this.ordersService.getOrders(pageNum, limitNum, q, status);
   }
 

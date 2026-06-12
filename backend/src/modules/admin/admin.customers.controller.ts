@@ -21,7 +21,9 @@ export class AdminCustomersController {
     @Query('q') q?: string,
     @Query('segment') segment?: string,
   ) {
-    return this.customersService.getCustomers(Number(page), Number(limit), q, segment);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 15));
+    return this.customersService.getCustomers(pageNum, limitNum, q, segment);
   }
 
   @Post(':id/notes')

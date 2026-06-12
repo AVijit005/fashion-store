@@ -9,6 +9,7 @@ import {
   Headers,
   UseGuards,
   BadRequestException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiHeader } from '@nestjs/swagger';
 import { CartService } from './cart.service';
@@ -84,7 +85,7 @@ export class CartController {
     description: 'Guest cart session ID (UUID)',
   })
   async updateItem(
-    @Param('itemId') itemId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() dto: UpdateCartItemDto,
     @CurrentUser() user?: RequestUser,
     @Headers('x-cart-session-id') sessionId?: string,
@@ -102,7 +103,7 @@ export class CartController {
     description: 'Guest cart session ID (UUID)',
   })
   async removeItem(
-    @Param('itemId') itemId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
     @CurrentUser() user?: RequestUser,
     @Headers('x-cart-session-id') sessionId?: string,
   ) {

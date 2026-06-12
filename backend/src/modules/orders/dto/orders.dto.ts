@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsNotEmpty, IsOptional, IsUUID, IsNumber } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, IsOptional, IsUUID, IsNumber, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CheckoutDto {
@@ -50,6 +50,7 @@ export class CheckoutDto {
   @ApiProperty({ description: 'Payment method selected by the user', required: false })
   @IsString()
   @IsOptional()
+  @IsIn(['cod', 'razorpay'])
   paymentMethod?: string;
 
   @ApiProperty({ description: 'Idempotency key to prevent duplicate orders', required: false })

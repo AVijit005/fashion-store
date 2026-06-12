@@ -54,7 +54,7 @@ export function PdpGallery({ images, alt, overlayBadges }: Props) {
                 idx === i ? "border-ink" : "border-transparent hover:border-line"
               }`}
             >
-              <img src={src} alt="" className="h-full w-full object-cover" />
+              <img src={src} alt={`${alt} - view ${i + 1}`} className="h-full w-full object-cover" />
             </button>
           ))}
         </div>
@@ -67,13 +67,15 @@ export function PdpGallery({ images, alt, overlayBadges }: Props) {
             onMouseMove={onMove}
             onMouseLeave={() => setPos(null)}
             onDoubleClick={() => setLightbox(true)}
-            className="group relative hidden aspect-[4/5] cursor-zoom-in overflow-hidden bg-fog lg:block"
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setLightbox(true); }}
+            tabIndex={0}
+            className="group relative hidden aspect-[4/5] cursor-zoom-in overflow-hidden bg-fog lg:block focus:outline-none focus:ring-2 focus:ring-ink"
           >
             <AnimatePresence mode="wait">
               <motion.img
                 key={idx}
                 src={images[idx]}
-                alt={alt}
+                alt={`${alt} - view ${idx + 1}`}
                 initial={{ opacity: 0, scale: 1.02 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0 }}
@@ -156,7 +158,7 @@ export function PdpGallery({ images, alt, overlayBadges }: Props) {
                     idx === i ? "border-ink" : "border-line"
                   }`}
                 >
-                  <img src={src} alt="" className="h-full w-full object-cover" />
+                  <img src={src} alt={`${alt} - view ${i + 1}`} className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>
@@ -207,7 +209,7 @@ export function PdpGallery({ images, alt, overlayBadges }: Props) {
             <motion.img
               key={idx}
               src={images[idx]}
-              alt={alt}
+              alt={`${alt} - view ${idx + 1}`}
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.35, ease: EASE }}

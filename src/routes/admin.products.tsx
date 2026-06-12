@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -19,7 +19,7 @@ import { AdminDrawer } from "@/components/admin/drawer";
 import { exportToCSV } from "@/lib/admin/export";
 import { type Product } from "@/lib/admin/data";
 import { compactInr, inr } from "@/lib/admin/format";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { z } from "zod";
 
@@ -63,9 +63,10 @@ function ProductsPage() {
   }, [active]);
 
   const queryClient = useQueryClient();
-  const { data: response, isLoading } = useQuery<{ data: Product[]; meta: { total: number; totalPages: number } }>({
+  const { data: response, isLoading, isPlaceholderData } = useQuery<{ data: Product[]; meta: { total: number; totalPages: number } }>({
     queryKey: ["admin-products", page, q],
     queryFn: async () => apiClient.get(`/admin/catalog/products?page=${page}&limit=${pageSize}&q=${encodeURIComponent(q)}`),
+    placeholderData: keepPreviousData,
   });
   const ALL = response?.data || [];
   const meta = response?.meta || { total: 0, totalPages: 1 };
@@ -113,6 +114,14 @@ function ProductsPage() {
       setNewProduct({ status: 'draft', visible: false, variants: 0, stock: 0 });
     },
   });
+
+  const handleEditsChange = useCallback((k: string, v: unknown) => {
+    setEdits(e => ({...e, [k]: v}));
+  }, []);
+
+  const handleNewProductChange = useCallback((k: string, v: unknown) => {
+    setNewProduct(e => ({...e, [k]: v}));
+  }, []);
 
   useEffect(() => {
     setPage(1);
@@ -455,7 +464,7 @@ function ProductsPage() {
           </div>
         }
       >
-        {active && <ProductDetail product={active} edits={edits} onChange={(k, v) => setEdits(e => ({...e, [k]: v}))} />}
+        {active && <ProductDetail product={active} edits={edits} onChange={handleEditsChange} />}
       </AdminDrawer>
       <AdminDrawer
         open={isCreating}
@@ -485,7 +494,7 @@ function ProductsPage() {
         <ProductDetail 
           product={newProduct as Product} 
           edits={newProduct} 
-          onChange={(k, v) => setNewProduct(e => ({...e, [k]: v}))} 
+          onChange={handleNewProductChange} 
         />
       </AdminDrawer>
     </div>
@@ -499,17 +508,21 @@ function ProductDetail({ product, edits, onChange }: { product: Product, edits: 
   const handleUpload = async (file: File) => {
     try {
       setIsUploading(true);
-      const { uploadUrl, asset, publicUrl } = await apiClient.post<{uploadUrl: string, asset: { id: string }, publicUrl: string}>("/assets/upload-url", {
+      const { uploadUrl, asset, publicUrl } = await apiClient.post<{uploadUrl: { url: string; fields: Record<string, string> }, asset: { id: string }, publicUrl: string}>("/assets/upload-url", {
         filename: file.name,
         mimeType: file.type,
         size: file.size,
       });
 
-      await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
+      const formData = new FormData();
+      Object.entries(uploadUrl.fields).forEach(([k, v]) => formData.append(k, v));
+      formData.append("file", file);
+
+      const res = await fetch(uploadUrl.url, {
+        method: "POST",
+        body: formData,
       });
+      if (!res.ok) throw new Error("Upload failed");
 
       await apiClient.patch(`/assets/${asset.id}/confirm`);
 
