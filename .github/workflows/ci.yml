@@ -70,6 +70,10 @@ jobs:
         RAZORPAY_KEY_ID: mock_key_id
         RAZORPAY_KEY_SECRET: mock_key_secret
         RAZORPAY_WEBHOOK_SECRET: mock_webhook_secret
+        AWS_ACCESS_KEY_ID: mock_aws_key
+        AWS_SECRET_ACCESS_KEY: mock_aws_secret
+        AWS_REGION: us-east-1
+        AWS_S3_BUCKET: mock-bucket
       run: npm run test
 
     - name: Run Backend E2E Tests
@@ -82,5 +86,9 @@ jobs:
         RAZORPAY_KEY_ID: mock_key_id
         RAZORPAY_KEY_SECRET: mock_key_secret
         RAZORPAY_WEBHOOK_SECRET: mock_webhook_secret
+        AWS_ACCESS_KEY_ID: mock_aws_key
+        AWS_SECRET_ACCESS_KEY: mock_aws_secret
+        AWS_REGION: us-east-1
+        AWS_S3_BUCKET: mock-bucket
         NODE_OPTIONS: "--experimental-vm-modules"
       run: npx prisma db push --force-reset --accept-data-loss && npm run test:e2e
