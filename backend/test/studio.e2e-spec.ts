@@ -474,7 +474,7 @@ describe('Studio Ecosystem (e2e)', () => {
 
   describe('Asset S3 Storage & Lifecycle', () => {
     let assetId: string;
-    let uploadUrl: string;
+    let uploadUrl: { url: string; fields: Record<string, string> };
 
     it('should request upload URL', async () => {
       const res = await request(app.getHttpServer())
@@ -505,16 +505,20 @@ describe('Studio Ecosystem (e2e)', () => {
     });
 
     it('should upload the file to local MinIO using the presigned URL', async () => {
-      // Put file contents directly using node native fetch
-      const response = await fetch(uploadUrl, {
-        method: 'PUT',
-        body: Buffer.from('mock-png-bytes'),
-        headers: {
-          'Content-Type': 'image/png',
-        },
+      // Post file contents directly using node native fetch and FormData
+      const formData = new FormData();
+      Object.entries(uploadUrl.fields).forEach(([key, value]) => {
+        formData.append(key, value);
+      });
+      // The file field MUST be the last field appended
+      formData.append('file', new Blob(['mock-png-bytes'], { type: 'image/png' }));
+
+      const response = await fetch(uploadUrl.url, {
+        method: 'POST',
+        body: formData,
       });
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(204); // S3 returns 204 for successful POST upload
     });
 
     it('should confirm the asset upload', async () => {

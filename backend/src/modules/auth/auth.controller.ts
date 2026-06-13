@@ -32,14 +32,16 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new customer' })
   @ApiResponse({ status: 201, description: 'User successfully registered' })
   async signUp(@Body() signUpDto: SignUpDto) {
-    return this.authService.signUp(signUpDto);
+    const data = await this.authService.signUp(signUpDto);
+    return { success: true, data };
   }
 
   @Get('me')
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Get current logged in user details' })
   async getMe(@Req() req: any) {
-    return this.authService.getMe(req.user.id);
+    const data = await this.authService.getMe(req.user.id);
+    return { success: true, data };
   }
 
   @Post('login')
@@ -60,7 +62,7 @@ export class AuthController {
     this.setRefreshTokenCookie(res, tokens.refreshToken);
     this.setAccessTokenCookie(res, tokens.accessToken);
 
-    return { accessToken: tokens.accessToken };
+    return { success: true, data: { accessToken: tokens.accessToken } };
   }
 
   @Post('refresh')
@@ -81,7 +83,7 @@ export class AuthController {
     this.setRefreshTokenCookie(res, tokens.refreshToken);
     this.setAccessTokenCookie(res, tokens.accessToken);
 
-    return { accessToken: tokens.accessToken };
+    return { success: true, data: { accessToken: tokens.accessToken } };
   }
 
   @Post('logout')
@@ -94,7 +96,7 @@ export class AuthController {
     }
     this.clearRefreshTokenCookie(res);
     this.clearAccessTokenCookie(res);
-    return { message: 'Logged out successfully' };
+    return { success: true, message: 'Logged out successfully' };
   }
 
   private setRefreshTokenCookie(res: Response, token: string) {

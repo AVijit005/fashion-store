@@ -16,9 +16,9 @@ jobs:
       postgres:
         image: postgres:15-alpine
         env:
-          POSTGRES_USER: ci_user
-          POSTGRES_PASSWORD: ci_dummy_password
-          POSTGRES_DB: ci_db
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: fashion_store_test
         ports:
           - 5432:5432
         options: >-
@@ -57,13 +57,13 @@ jobs:
     - name: Setup Prisma Database
       working-directory: ./backend
       env:
-        DATABASE_URL: postgresql://ci_user:ci_dummy_password@localhost:5432/ci_db
+        DATABASE_URL: postgresql://root:root@localhost:5432/fashion_store_test
       run: npx prisma db push --accept-data-loss && npx prisma generate
 
     - name: Run Backend Unit Tests
       working-directory: ./backend
       env:
-        DATABASE_URL: postgresql://ci_user:ci_dummy_password@localhost:5432/ci_db
+        DATABASE_URL: postgresql://root:root@localhost:5432/fashion_store_test
         REDIS_URL: redis://localhost:6379
         JWT_SECRET: ci_dummy_jwt_secret
         PORT: 3000
@@ -79,7 +79,7 @@ jobs:
     - name: Run Backend E2E Tests
       working-directory: ./backend
       env:
-        DATABASE_URL: postgresql://ci_user:ci_dummy_password@localhost:5432/ci_db
+        DATABASE_URL: postgresql://root:root@localhost:5432/fashion_store_test
         REDIS_URL: redis://localhost:6379
         JWT_SECRET: ci_dummy_jwt_secret
         PORT: 3000
