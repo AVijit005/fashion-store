@@ -164,7 +164,6 @@ export function Navbar() {
   const [mega, setMega] = useState<MegaKey>(null);
   const [mobile, setMobile] = useState(false);
   const setSearchOpen = (_v: boolean) => openPalette(true);
-  const searchOpen = false;
 
   const { isAuthenticated, user, setAuthModalOpen } = useAuthStore();
   const router = useRouter();
@@ -405,117 +404,6 @@ export function Navbar() {
         </AnimatePresence>
       </motion.header>
 
-      {/* Search overlay */}
-      <AnimatePresence>
-        {searchOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm"
-            onClick={() => setSearchOpen(false)}
-          >
-            <motion.div
-              initial={{ y: -40 }}
-              animate={{ y: 0 }}
-              exit={{ y: -40 }}
-              transition={{ ease: [0.22, 1, 0.36, 1], duration: 0.4 }}
-              onClick={(e) => e.stopPropagation()}
-              className="relative bg-paper p-8 pt-24 lg:p-16"
-            >
-              <button
-                onClick={() => setSearchOpen(false)}
-                aria-label="Close search"
-                className="icon-btn absolute right-6 top-6"
-              >
-                <X className="h-5 w-5" />
-              </button>
-              <div className="mx-auto max-w-4xl">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Search</p>
-                <div className="mt-3 flex items-end gap-4 border-b border-ink pb-3">
-                  <Search className="mb-1 h-5 w-5" />
-                  <input
-                    autoFocus
-                    placeholder="Try 'anime hoodie'"
-                    className="w-full bg-transparent font-display text-3xl outline-none placeholder:text-mute/40 lg:text-5xl"
-                  />
-                </div>
-                <div className="mt-10 grid gap-10 md:grid-cols-[1fr_1fr_1.2fr]">
-                  <div>
-                    <p className="mb-3 text-[11px] uppercase tracking-[0.22em] text-mute">
-                      Trending
-                    </p>
-                    <ul className="space-y-2">
-                      {[
-                        "Oversized tees",
-                        "Anime drops",
-                        "Heavyweight hoodies",
-                        "Custom mugs",
-                        "Field jacket",
-                      ].map((t) => (
-                        <li key={t}>
-                          <button
-                            onClick={() => setSearchOpen(false)}
-                            className="text-lg hover:underline"
-                          >
-                            {t}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="mb-3 text-[11px] uppercase tracking-[0.22em] text-mute">
-                      Categories
-                    </p>
-                    <ul className="grid grid-cols-1 gap-2">
-                      {categories.slice(0, 8).map((c) => (
-                        <li key={c.slug}>
-                          <Link
-                            to="/c/$category"
-                            params={{ category: c.slug }}
-                            onClick={() => setSearchOpen(false)}
-                            className="text-[14px] hover:underline"
-                          >
-                            {c.name}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="mb-3 text-[11px] uppercase tracking-[0.22em] text-mute">
-                      Suggested products
-                    </p>
-                    <ul className="space-y-3">
-                      {featuredProducts.slice(0, 3).map((p: Product) => (
-                        <li key={p.id}>
-                          <Link
-                            to="/p/$slug"
-                            params={{ slug: p.slug }}
-                            onClick={() => setSearchOpen(false)}
-                            className="flex items-center gap-3"
-                          >
-                            <img
-                              src={p.images[0]}
-                              alt=""
-                              className="h-14 w-12 shrink-0 object-cover"
-                            />
-                            <span>
-                              <span className="block text-[14px]">{p.name}</span>
-                              <span className="block text-[12px] text-mute">{p.tagline}</span>
-                            </span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Mobile menu */}
       <AnimatePresence>

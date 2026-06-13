@@ -28,6 +28,16 @@ const productSchema = z.object({
   sku: z.string().min(3, "SKU must be at least 3 characters"),
   price: z.number().min(1, "Price must be greater than 0"),
   stock: z.number().min(0, "Stock cannot be negative"),
+  variantsData: z.array(z.object({
+    sku: z.string(),
+    size: z.string(),
+    color: z.string(),
+    stock: z.number(),
+  })).optional().refine(variants => {
+    if (!variants) return true;
+    const skus = variants.map(v => v.sku).filter(Boolean);
+    return new Set(skus).size === skus.length;
+  }, "Variant SKUs must be unique"),
 });
 
 export const Route = createFileRoute("/admin/products")({
@@ -73,11 +83,17 @@ function ProductsPage() {
 
   const updateProductMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Product> }) => {
-      return apiClient.put(`/admin/catalog/products/${id}`, data);
+      return apiClient.patch(`/admin/catalog/products/${id}`, data);
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast.success("Product updated successfully");
-      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      queryClient.setQueriesData({ queryKey: ["admin-products"] }, (old: any) => {
+        if (!old?.data) return old;
+        return {
+          ...old,
+          data: old.data.map((p: any) => p.id === variables.id ? { ...p, ...variables.data } : p)
+        };
+      });
       setEdits({});
       setIsSaving(false);
       setActive(null);

@@ -47,7 +47,9 @@ export class UsersController {
   async updateProfile(@Req() req: any, @Body() updateProfileDto: UpdateProfileDto) {
     const user = await this.usersService.findById(req.user.id);
     if (!user) throw new NotFoundException('User not found');
-    const { passwordHash, ...safeUser } = user;
+    
+    const updatedUser = await this.usersService.update(req.user.id, updateProfileDto);
+    const { passwordHash, ...safeUser } = updatedUser;
     return safeUser;
   }
 

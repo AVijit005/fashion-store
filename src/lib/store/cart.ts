@@ -50,14 +50,18 @@ type SyncAction =
 
 interface SyncStore {
   queue: SyncAction[];
+  isSyncing: boolean;
   enqueue: (action: SyncAction) => void;
   dequeue: () => SyncAction | undefined;
+  setSyncing: (v: boolean) => void;
 }
 
 export const useSyncStore = create<SyncStore>()(
   persist(
     (set, get) => ({
       queue: [],
+      isSyncing: false,
+      setSyncing: (v) => set({ isSyncing: v }),
       enqueue: (action) => {
         set({ queue: [...get().queue, action] });
         processQueue();
@@ -70,15 +74,15 @@ export const useSyncStore = create<SyncStore>()(
         return action;
       },
     }),
-    { name: "ink-cart-sync-queue" }
+    { name: "ink-cart-sync-queue", partialize: (state) => ({ queue: state.queue }) as SyncStore }
   )
 );
 
-let isSyncing = false;
-
 async function processQueue() {
-  if (isSyncing || useSyncStore.getState().queue.length === 0) return;
-  isSyncing = true;
+  const store = useSyncStore.getState();
+  if (store.isSyncing || store.queue.length === 0) return;
+  store.setSyncing(true);
+  
   while (useSyncStore.getState().queue.length > 0) {
     const action = useSyncStore.getState().queue[0];
     try {
@@ -91,14 +95,14 @@ async function processQueue() {
       } else if (action.type === "clear") {
         await cartApi.clearCart();
       }
-      useSyncStore.getState().dequeue();
+      useSyncStore.getState().dequeue(); // only dequeue on success
     } catch (err) {
       console.error("[cart] Backend sync failed:", err);
-      toast.error("Failed to sync cart with server");
-      useSyncStore.getState().dequeue();
+      toast.error("Failed to sync cart with server. Retrying soon.");
+      break; // stop processing queue on failure
     }
   }
-  isSyncing = false;
+  useSyncStore.getState().setSyncing(false);
 }
 
 if (typeof window !== "undefined") {

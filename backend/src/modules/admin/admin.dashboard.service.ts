@@ -10,7 +10,10 @@ export class AdminDashboardService {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const aggregations = await this.prisma.order.aggregate({
-      where: { createdAt: { gte: thirtyDaysAgo } },
+      where: { 
+        createdAt: { gte: thirtyDaysAgo },
+        status: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'] }
+      },
       _sum: { totalAmount: true },
       _count: true,
     });
@@ -21,7 +24,7 @@ export class AdminDashboardService {
         SUM(total_amount) as revenue, 
         COUNT(id) as orders
       FROM orders
-      WHERE created_at >= ${thirtyDaysAgo}
+      WHERE created_at >= ${thirtyDaysAgo} AND status IN ('PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED')
       GROUP BY DATE(created_at)
     `;
 
@@ -59,7 +62,7 @@ export class AdminDashboardService {
       LEFT JOIN product_variants pv ON oi.product_variant_id = pv.id
       LEFT JOIN products p ON pv.product_id = p.id
       LEFT JOIN categories c ON p.category_id = c.id
-      WHERE o.created_at >= ${thirtyDaysAgo}
+      WHERE o.created_at >= ${thirtyDaysAgo} AND o.status IN ('PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED')
       GROUP BY c.name
       ORDER BY revenue DESC
       LIMIT 5

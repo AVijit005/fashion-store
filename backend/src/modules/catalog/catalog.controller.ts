@@ -14,18 +14,7 @@ export class CatalogController {
     private readonly searchService: SearchService,
   ) {}
 
-  @Get('trigger-seed')
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Trigger DB seed natively' })
-  async triggerSeed() {
-    try {
-      const result = await this.catalogService.runSeed();
-      return result;
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  }
+
 
   @Get('categories')
   @ApiOperation({ summary: 'Get all product categories' })

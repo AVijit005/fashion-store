@@ -2,12 +2,14 @@ import { Injectable, NestMiddleware, UnauthorizedException, ForbiddenException }
 import { Request, Response, NextFunction } from 'express';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../../config/prisma.service';
 
 @Injectable()
 export class AdminAuthMiddleware implements NestMiddleware {
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
@@ -24,6 +26,16 @@ export class AdminAuthMiddleware implements NestMiddleware {
 
       if (payload.role !== 'ADMIN') {
         throw new ForbiddenException('Admin role required');
+      }
+
+      if (payload.sessionId) {
+        const session = await this.prisma.session.findUnique({
+          where: { id: payload.sessionId },
+          select: { isRevoked: true }
+        });
+        if (!session || session.isRevoked) {
+          throw new UnauthorizedException('Session revoked');
+        }
       }
 
       // Attach user payload to request

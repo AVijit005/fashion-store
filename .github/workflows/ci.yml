@@ -60,6 +60,18 @@ jobs:
         DATABASE_URL: postgresql://root:root@localhost:5432/fashion_store_test
       run: npx prisma db push --accept-data-loss && npx prisma generate
 
+    - name: Run Lint
+      working-directory: ./backend
+      run: npm run lint
+
+    - name: Security Audit
+      working-directory: ./backend
+      run: npm audit --audit-level=high || true
+
+    - name: TypeScript Check
+      working-directory: ./backend
+      run: npx tsc --noEmit
+
     - name: Run Backend Unit Tests
       working-directory: ./backend
       env:

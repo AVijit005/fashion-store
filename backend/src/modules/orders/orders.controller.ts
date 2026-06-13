@@ -64,6 +64,7 @@ export class OrdersController {
   }
 
   @Post('verify-payment')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Verify payment signature after gateway response' })
   async verifyPayment(@Body() dto: VerifyPaymentDto) {
     return this.ordersService.verifyPayment(dto);

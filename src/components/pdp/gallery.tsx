@@ -64,10 +64,18 @@ export function PdpGallery({ images, alt, overlayBadges }: Props) {
           {/* Desktop main image with zoom lens */}
           <div
             ref={mainRef}
+            role="button"
+            aria-label="Zoom image"
             onMouseMove={onMove}
             onMouseLeave={() => setPos(null)}
             onDoubleClick={() => setLightbox(true)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setLightbox(true); }}
+            onClick={() => setLightbox(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setLightbox(true);
+              }
+            }}
             tabIndex={0}
             className="group relative hidden aspect-[4/5] cursor-zoom-in overflow-hidden bg-fog lg:block focus:outline-none focus:ring-2 focus:ring-ink"
           >

@@ -21,6 +21,7 @@ export const getRouter = () => {
   const queryClient = new QueryClient({
     queryCache: new QueryCache({
       onError: (error, query) => {
+        Sentry.captureException(error);
         // Prevent showing toast on automatic retries to avoid spam
         if (query.state.fetchFailureCount > 1) return;
 
@@ -34,6 +35,7 @@ export const getRouter = () => {
     }),
     mutationCache: new MutationCache({
       onError: (error, _variables, _context, mutation) => {
+        Sentry.captureException(error);
         if (mutation.meta?.errorMessage) {
           toast.error(mutation.meta.errorMessage as string);
         } else if (!mutation.meta?.ignoreGlobalError) {

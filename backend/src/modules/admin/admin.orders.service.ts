@@ -2,12 +2,14 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../config/prisma.service';
 import { OrderStatus } from '@prisma/client';
 import { OrdersService } from '../orders/orders.service';
+import { InventoryService } from '../orders/inventory.service';
 
 @Injectable()
 export class AdminOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordersService: OrdersService,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   async getOrders(page: number = 1, limit: number = 50, search?: string, status?: string) {
@@ -16,6 +18,8 @@ export class AdminOrdersService {
       where.status = status;
     }
     if (search) {
+      if (search.length < 3) throw new BadRequestException('Search term must be at least 3 characters');
+      if (search.length > 100) throw new BadRequestException('Search term cannot exceed 100 characters');
       where.OR = [
         { id: { contains: search, mode: 'insensitive' } },
         { shippingEmail: { contains: search, mode: 'insensitive' } },
@@ -70,14 +74,6 @@ export class AdminOrdersService {
       for (const item of validItems) {
         const variant = dbVariantMap.get(item.id);
         if (!variant) throw new BadRequestException(`Variant ${item.id} not found`);
-        if (variant.stockQuantity < item.qty) {
-          throw new BadRequestException(`Insufficient stock for variant ${item.id}`);
-        }
-
-        await tx.productVariant.update({
-          where: { id: item.id },
-          data: { stockQuantity: { decrement: item.qty } }
-        });
 
         orderItemsData.push({
           productVariantId: variant.id,
@@ -85,6 +81,12 @@ export class AdminOrdersService {
           priceAtPurchase: variant.priceOverride || variant.product.basePrice,
         });
       }
+
+      await this.inventoryService.reserveInventory(validItems.map((i: any) => ({
+        variantId: i.id,
+        quantity: i.qty,
+        sku: dbVariantMap.get(i.id)?.sku || ''
+      })), tx);
 
       const calculatedTotal = orderItemsData.reduce((acc, item) => acc + (item.quantity * Number(item.priceAtPurchase)), 0);
 
@@ -129,14 +131,14 @@ export class AdminOrdersService {
     if (!order) {
       throw new NotFoundException('Order not found');
     }
-    if (order.status !== 'PAID') {
+    if (order.status !== OrderStatus.PAID) {
       throw new BadRequestException('Order is not paid');
     }
     
     // Process refund using OrdersService to ensure inventory restoration
     return this.ordersService.transitionStatus(
       id,
-      'REFUNDED',
+      OrderStatus.REFUNDED,
       'ADMIN',
       'Order refunded manually by admin'
     );
@@ -145,6 +147,9 @@ export class AdminOrdersService {
   async updateBulkOrderStatus(orderIds: string[], status: OrderStatus) {
     if (!orderIds || orderIds.length === 0) {
       throw new BadRequestException('No order IDs provided');
+    }
+    if (orderIds.length > 100) {
+      throw new BadRequestException('Cannot bulk update more than 100 orders at once');
     }
 
     const results = { success: 0, failed: 0, errors: [] as any[] };

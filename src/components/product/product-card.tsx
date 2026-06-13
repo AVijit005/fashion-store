@@ -80,6 +80,8 @@ export const ProductCard = memo(function ProductCard({
             <img
               src={product.images?.[0] || "https://placehold.co/600x800/f5f3ee/0d0d0d?text=No+Image"}
               alt={product.name}
+              width={600}
+              height={800}
               loading={priority ? "eager" : "lazy"}
               className={`absolute inset-0 h-full w-full object-cover transition-all duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
                 hover && product.images?.[1] ? "scale-105 opacity-0" : "scale-100 opacity-100"
@@ -89,6 +91,8 @@ export const ProductCard = memo(function ProductCard({
               <img
                 src={product.images[1]}
                 alt=""
+                width={600}
+                height={800}
                 loading="lazy"
                 className={`absolute inset-0 h-full w-full object-cover transition-all duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
                   hover ? "scale-100 opacity-100" : "scale-110 opacity-0"

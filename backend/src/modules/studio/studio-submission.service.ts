@@ -25,10 +25,14 @@ export class StudioSubmissionService {
 
     return this.prisma.$transaction(async (tx) => {
       // 1. Update Design Status
-      await tx.studioDesign.update({
-        where: { id: designId },
+      const updateResult = await tx.studioDesign.updateMany({
+        where: { id: designId, status: DesignStatus.DRAFT },
         data: { status: DesignStatus.SUBMITTED },
       });
+
+      if (updateResult.count === 0) {
+        throw new BadRequestException('Design is no longer in DRAFT status or does not exist');
+      }
 
       // 2. Create Submission Record
       const submission = await tx.studioSubmission.create({

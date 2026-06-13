@@ -101,6 +101,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "stylesheet", href: appCss }
     ],
@@ -147,29 +150,10 @@ function RootComponent() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     initializeAuth();
-  }, [initializeAuth]);
-
-  if (isAdmin) {
-    if (isLoading) {
-      return <div className="flex h-screen items-center justify-center">Loading...</div>;
-    }
-    
-    if (!isAuthenticated || user?.role !== "ADMIN") {
-      return <Navigate to="/" />;
-    }
-
-    return (
-      <QueryClientProvider client={queryClient}>
-        <Sentry.ErrorBoundary fallback={<div className="flex min-h-screen items-center justify-center text-center"><p className="text-xl">Admin Interface Error</p></div>}>
-          <Outlet />
-          <PaperGrain />
-          <Toaster position="bottom-right" />
-        </Sentry.ErrorBoundary>
-      </QueryClientProvider>
-    );
-  }
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -181,24 +165,30 @@ function RootComponent() {
           >
             Skip to content
           </a>
-          <AnnouncementBar />
-          <Navbar />
-          <main id="main-content" className="flex-1 pb-20 lg:pb-0">
-            <RouteTransition>
+          {!isAdmin && <AnnouncementBar />}
+          {!isAdmin && <Navbar />}
+          <main id="main-content" className={isAdmin ? "flex-1" : "flex-1 pb-20 lg:pb-0"}>
+            {!isAdmin ? (
+              <RouteTransition>
+                <Outlet />
+              </RouteTransition>
+            ) : (
               <Outlet />
-            </RouteTransition>
+            )}
           </main>
-          <Footer />
-          <BottomTabBar />
+          {!isAdmin && <Footer />}
+          {!isAdmin && <BottomTabBar />}
+          
           <Suspense fallback={null}>
             <CartDrawer />
             <AuthModal />
             <WelcomeModal />
             <CommandPalette />
           </Suspense>
-          <FlyToCartPortal />
+          
+          {!isAdmin && <FlyToCartPortal />}
           <PaperGrain />
-          <Toaster position="bottom-center" />
+          <Toaster position={isAdmin ? "bottom-right" : "bottom-center"} />
         </div>
       </Sentry.ErrorBoundary>
     </QueryClientProvider>

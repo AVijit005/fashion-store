@@ -9,24 +9,8 @@ type WishlistState = {
   has: (id: string) => boolean;
 };
 
-let isSyncing = false;
-let syncQueue: (() => Promise<void>)[] = [];
+// Queue handled optimistically without global variables
 
-async function processQueue() {
-  if (isSyncing || syncQueue.length === 0) return;
-  isSyncing = true;
-  while (syncQueue.length > 0) {
-    const task = syncQueue.shift();
-    if (task) {
-      try {
-        await task();
-      } catch (err) {
-        console.error("[wishlist] sync failed", err);
-      }
-    }
-  }
-  isSyncing = false;
-}
 
 export const useWishlist = create<WishlistState>()(
   persist(
@@ -39,14 +23,11 @@ export const useWishlist = create<WishlistState>()(
           ids: hasIt ? get().ids.filter((x) => x !== id) : [...get().ids, id],
         });
         
-        syncQueue.push(async () => {
-          try {
-            await apiClient.post(`/wishlist/${id}/toggle`);
-          } catch (e) {
-            import("sonner").then(({ toast }) => toast.error("Failed to sync wishlist with server."));
-          }
-        });
-        processQueue();
+        if (typeof window !== "undefined") {
+          apiClient.post(`/wishlist/${id}/toggle`).catch((e) => {
+             import("sonner").then(({ toast }) => toast.error("Failed to sync wishlist with server."));
+          });
+        }
       },
       has: (id) => get().ids.includes(id),
     }),

@@ -56,4 +56,19 @@ export class OrdersSweeperService {
       }
     }
   }
+
+  @Cron('0 */6 * * *') // Every 6 hours
+  async pruneExpiredIdempotencyKeys() {
+    this.logger.log('Pruning expired idempotency keys...');
+    try {
+      const result = await this.prisma.idempotencyKey.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
+      if (result.count > 0) {
+        this.logger.log(`Pruned ${result.count} expired idempotency keys.`);
+      }
+    } catch (err) {
+      this.logger.error(`Failed to prune idempotency keys: ${(err as Error).message}`);
+    }
+  }
 }

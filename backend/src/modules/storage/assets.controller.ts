@@ -80,7 +80,7 @@ export class AssetsController {
     const asset = await this.prisma.asset.create({
       data: {
         userId,
-        filename: dto.filename,
+        filename: dto.filename.replace(/[^a-zA-Z0-9.\-_ ]/g, '_'),
         mimeType: dto.mimeType,
         size: dto.size,
         width: dto.width,

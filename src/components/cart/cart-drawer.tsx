@@ -1,12 +1,12 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
-import { Minus, Plus, X, ShoppingBag } from "lucide-react";
-import { useEffect } from "react";
+import { Minus, Plus, ShoppingBag } from "lucide-react";
 import { useCart, itemKey } from "@/lib/store/cart";
 import { inr } from "@/lib/format";
 import { catalogApi, type Product } from "@/lib/api/catalog";
 import { FreeShippingBar } from "@/components/cart/free-shipping-bar";
 import { useQuery } from "@tanstack/react-query";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 export function CartDrawer() {
   const { open, setOpen, items, setQty, remove, subtotal, savings } = useCart();
@@ -18,46 +18,19 @@ export function CartDrawer() {
     },
   });
 
-  useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [open]);
-
   const total = subtotal();
   const saved = savings();
   const shipping = total > 999 || total === 0 ? 0 : 79;
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm"
-          onClick={() => setOpen(false)}
-        >
-          <motion.aside
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ ease: [0.22, 1, 0.36, 1], duration: 0.5 }}
-            onClick={(e) => e.stopPropagation()}
-            className="ml-auto flex h-full w-full max-w-md flex-col bg-paper shadow-ink"
-          >
-            <div className="flex items-center justify-between border-b border-line px-6 py-5">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Your bag</p>
-                <p className="font-display text-2xl">
-                  {items.length} item{items.length === 1 ? "" : "s"}
-                </p>
-              </div>
-              <button onClick={() => setOpen(false)} aria-label="Close bag" className="icon-btn">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetContent className="flex w-full max-w-md flex-col p-0 border-none bg-paper shadow-ink sm:max-w-md [&>button]:top-6 [&>button]:right-6 [&>button]:opacity-100">
+        <SheetHeader className="border-b border-line px-6 py-5 text-left">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-mute mb-1">Your bag</p>
+          <SheetTitle className="font-display text-2xl font-normal">
+            {items.length} item{items.length === 1 ? "" : "s"}
+          </SheetTitle>
+        </SheetHeader>
 
             {items.length > 0 && <FreeShippingBar subtotal={total} />}
 
@@ -239,9 +212,7 @@ export function CartDrawer() {
                 </p>
               </div>
             )}
-          </motion.aside>
-        </motion.div>
-      )}
-    </AnimatePresence>
+      </SheetContent>
+    </Sheet>
   );
 }

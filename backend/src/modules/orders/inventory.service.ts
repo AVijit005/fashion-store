@@ -13,6 +13,7 @@ export class InventoryService {
     force: boolean = false
   ) {
     const variantIds = items.map((item) => item.variantId);
+    if (variantIds.length === 0) return;
     // Sort variant IDs to prevent deadlocks
     const sortedVariantIds = [...variantIds].sort();
 
@@ -41,54 +42,60 @@ export class InventoryService {
     }
 
     // Deduct Stock
-    for (const item of items) {
-      const variant = dbVariantMap.get(item.variantId);
-      if (!variant) continue;
-      await tx.productVariant.update({
-        where: { id: item.variantId },
-        data: {
-          stockQuantity: { decrement: item.quantity },
-        },
-      });
-    }
+    await Promise.all(
+      items.map((item) => {
+        const variant = dbVariantMap.get(item.variantId);
+        if (!variant) return Promise.resolve();
+        return tx.productVariant.update({
+          where: { id: item.variantId },
+          data: {
+            stockQuantity: { decrement: item.quantity },
+          },
+        });
+      })
+    );
   }
 
   // Locks and restores inventory for cancelled/failed order
   async restoreInventory(orderId: string, tx: Prisma.TransactionClient) {
+    await this.restoreBulkInventory([orderId], tx);
+  }
+
+  async restoreBulkInventory(orderIds: string[], tx: Prisma.TransactionClient) {
+    if (orderIds.length === 0) return;
     const items = await tx.orderItem.findMany({
-      where: { orderId },
+      where: { orderId: { in: orderIds } },
     });
 
     if (items.length === 0) return;
 
-    const variantIds = items
-      .map((item) => item.productVariantId)
-      .filter((id): id is string => id !== null);
-    // Sort variant IDs to prevent deadlocks
-    const sortedVariantIds = [...variantIds].sort();
+    const qtyByVariant = new Map<string, number>();
+    for (const item of items) {
+      if (!item.productVariantId) continue;
+      qtyByVariant.set(
+        item.productVariantId,
+        (qtyByVariant.get(item.productVariantId) || 0) + item.quantity
+      );
+    }
+
+    const variantIds = Array.from(qtyByVariant.keys()).sort();
+    if (variantIds.length === 0) return;
 
     // Acquire locks on variant rows in sorted order
     await tx.$executeRawUnsafe(
-      `SELECT id FROM product_variants WHERE id IN (${sortedVariantIds.map((_, i) => `$${i + 1}`).join(',')}) FOR UPDATE`,
-      ...sortedVariantIds,
+      `SELECT id FROM product_variants WHERE id IN (${variantIds.map((_, i) => `$${i + 1}`).join(',')}) FOR UPDATE`,
+      ...variantIds,
     );
 
-    const dbVariants = await tx.productVariant.findMany({
-      where: { id: { in: sortedVariantIds } },
-    });
-    const dbVariantMap = new Map(dbVariants.map((v) => [v.id, v]));
-
-    for (const item of items) {
-      if (!item.productVariantId) continue;
-      const variant = dbVariantMap.get(item.productVariantId);
-      if (variant) {
-        await tx.productVariant.update({
-          where: { id: item.productVariantId },
+    await Promise.all(
+      variantIds.map((vid) =>
+        tx.productVariant.update({
+          where: { id: vid },
           data: {
-            stockQuantity: { increment: item.quantity },
+            stockQuantity: { increment: qtyByVariant.get(vid) },
           },
-        });
-      }
-    }
+        })
+      )
+    );
   }
 }

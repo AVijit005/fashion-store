@@ -116,14 +116,14 @@ export class AuthService {
 
       if (current.isRevoked) {
         const timeSinceRevoked = Date.now() - current.updatedAt.getTime();
-        if (timeSinceRevoked >= 30000) {
+        if (timeSinceRevoked >= 5000) {
           await tx.session.updateMany({
             where: { userId: current.userId, isRevoked: false },
             data: { isRevoked: true },
           });
           throw new UnauthorizedException('Security breach detected. All sessions revoked.');
         }
-        // If < 30000ms, fall through to grace period (allow creating new session for this tab)
+        // If < 5000ms, fall through to grace period (allow creating new session for this tab)
       } else {
         const revoked = await tx.session.updateMany({
           where: { id: current.id, isRevoked: false },

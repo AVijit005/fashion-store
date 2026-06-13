@@ -120,7 +120,16 @@ function OrdersPage() {
     },
     onSuccess: (_, variables) => {
       toast.success(`Marked ${variables.ids.length} orders as ${variables.status.toLowerCase()}`);
-      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      queryClient.setQueriesData({ queryKey: ["admin-orders"] }, (old: any) => {
+        if (!old?.pages) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            data: page.data.map((o: any) => variables.ids.includes(o.id) ? { ...o, status: variables.status } : o)
+          }))
+        };
+      });
       setSelected([]);
     }
   });
@@ -212,7 +221,7 @@ function OrdersPage() {
           </p>
           <div className="flex items-center gap-2">
             <BulkBtn icon={<Printer className="h-3.5 w-3.5" />} onClick={() => toast.success('Labels sent to printer')}>Print labels</BulkBtn>
-            <BulkBtn icon={<Truck className="h-3.5 w-3.5" />} disabled={updateStatusMutation.isPending} onClick={() => updateStatusMutation.mutate({ ids: selected, status: 'SHIPPED' })}>{updateStatusMutation.isPending ? "Updating..." : "Mark shipped"}</BulkBtn>
+            <BulkBtn icon={<Truck className="h-3.5 w-3.5" />} disabled={updateStatusMutation.isPending || list.filter((o: Order) => selected.includes(o.id)).some((o: Order) => o.status !== 'PAID')} onClick={() => updateStatusMutation.mutate({ ids: selected, status: 'SHIPPED' })}>{updateStatusMutation.isPending ? "Updating..." : "Mark shipped"}</BulkBtn>
             <BulkBtn icon={<Mail className="h-3.5 w-3.5" />} onClick={() => toast.success('Emails queued')}>Email customers</BulkBtn>
             <button
               onClick={() => setSelected([])}

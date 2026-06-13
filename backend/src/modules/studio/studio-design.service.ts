@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../../config/prisma.service';
 import { CreateStudioDesignDto, UpdateStudioDesignDto } from './dto/studio-design.dto';
 import { designJsonSchema } from './dto/design-json.schema';
-import { DesignStatus } from '@prisma/client';
+import { DesignStatus, Prisma } from '@prisma/client';
 
 @Injectable()
 export class StudioDesignService {
@@ -139,6 +139,8 @@ export class StudioDesignService {
       }
 
       return { ...updatedDesign, latestVersion };
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
   }
 
@@ -240,6 +242,8 @@ export class StudioDesignService {
       });
 
       return { ...updatedDesign, latestVersion: newVersion };
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
   }
 }

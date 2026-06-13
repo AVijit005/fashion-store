@@ -167,7 +167,10 @@ export const apiClient = {
       if (err instanceof TypeError || err instanceof APIError) {
         throw err;
       }
-      return null as unknown as T;
+      if (err instanceof SyntaxError) {
+        throw new APIError("Invalid JSON response from server", response.status, null);
+      }
+      throw err;
     }
   },
 

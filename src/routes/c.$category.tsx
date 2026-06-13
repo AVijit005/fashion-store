@@ -5,6 +5,7 @@ import { catalogApi } from "@/lib/api/catalog";
 import { type Product } from "@/lib/api/catalog";
 import { categories } from "@/lib/api/catalog";
 import { LoadingState } from "@/components/state/loading";
+import * as Sentry from "@sentry/react";
 
 export const Route = createFileRoute("/c/$category")({
   head: ({ params }) => {
@@ -45,7 +46,8 @@ function CategoryPage() {
         setCatName(category.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()));
         setCatBlurb("Explore our collection.");
       }
-    }).catch(() => {
+    }).catch((err) => {
+      Sentry.captureException(err);
       setCatName(category.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()));
       setCatBlurb("Explore our collection.");
     });
@@ -60,6 +62,7 @@ function CategoryPage() {
           setLoading(false);
         })
         .catch((err) => {
+          Sentry.captureException(err);
           console.error(err);
           setLoading(false);
         });
@@ -71,6 +74,7 @@ function CategoryPage() {
           setLoading(false);
         })
         .catch((err) => {
+          Sentry.captureException(err);
           console.error(err);
           setLoading(false);
         });
@@ -82,6 +86,7 @@ function CategoryPage() {
           setLoading(false);
         })
         .catch((err) => {
+          Sentry.captureException(err);
           console.error(err);
           setLoading(false);
         });

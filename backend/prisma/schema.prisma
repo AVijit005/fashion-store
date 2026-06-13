@@ -227,7 +227,6 @@ model Order {
   paymentStatus      String               @default("PENDING") @map("payment_status")
   razorpayOrderId    String?              @unique @map("razorpay_order_id")
   razorpayPaymentId  String?              @unique @map("razorpay_payment_id")
-  razorpaySignature  String?              @map("razorpay_signature")
   guestToken         String?              @map("guest_token")
   couponCode         String?              @map("coupon_code")
   createdAt          DateTime             @default(now()) @map("created_at")
@@ -238,6 +237,7 @@ model Order {
   @@index([userId])
   @@index([guestToken])
   @@index([status, createdAt])
+  @@index([userId, status, createdAt])
   @@map("orders")
 }
 
@@ -491,9 +491,9 @@ model Coupon {
   id            String       @id @default(uuid())
   code          String       @unique
   type          DiscountType
-  value         Float
-  minOrderValue Float?       @map("min_order_value")
-  maxDiscount   Float?       @map("max_discount")
+  value         Decimal      @db.Decimal(10, 2)
+  minOrderValue Decimal?     @map("min_order_value") @db.Decimal(10, 2)
+  maxDiscount   Decimal?     @map("max_discount") @db.Decimal(10, 2)
   validFrom     DateTime     @map("valid_from")
   validUntil    DateTime?    @map("valid_until")
   usageLimit    Int?         @map("usage_limit")

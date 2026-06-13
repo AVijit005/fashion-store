@@ -9,15 +9,10 @@ export class AdminDropsService {
     const drops = await this.prisma.drop.findMany({
       include: {
         products: {
-          include: {
+          select: {
+            mediaUrls: true,
             variants: {
-              include: {
-                orderItems: {
-                  include: {
-                    order: true
-                  }
-                }
-              }
+              select: { stockQuantity: true }
             }
           }
         }
@@ -25,24 +20,42 @@ export class AdminDropsService {
       orderBy: { releaseDate: 'desc' },
     });
 
+    const dropIds = drops.map(d => d.id);
+    let orderStats: any[] = [];
+    if (dropIds.length > 0) {
+      orderStats = await this.prisma.$queryRawUnsafe<any[]>(
+        `
+        SELECT 
+          p.drop_id as "dropId",
+          COALESCE(SUM(oi.quantity), 0) as "sold",
+          COALESCE(SUM(oi.price_at_purchase * oi.quantity), 0) as "revenue"
+        FROM products p
+        JOIN product_variants pv ON pv.product_id = p.id
+        JOIN order_items oi ON oi.product_variant_id = pv.id
+        JOIN orders o ON o.id = oi.order_id
+        WHERE p.drop_id IN (${dropIds.map((_, i) => `$${i + 1}`).join(',')})
+          AND o.status NOT IN ('PAYMENT_PENDING', 'CANCELLED', 'FAILED')
+        GROUP BY p.drop_id
+        `,
+        ...dropIds
+      );
+    }
+
+    const statsByDropId = new Map(orderStats.map(stat => [stat.dropId, stat]));
+
     return drops.map((drop) => {
       let capsuleSize = 0;
-      let sold = 0;
-      let revenue = 0;
-      let units = 0;
 
       drop.products.forEach(product => {
         product.variants.forEach(variant => {
           capsuleSize += variant.stockQuantity;
-          variant.orderItems.forEach(item => {
-            if (item.order.status !== 'PAYMENT_PENDING' && item.order.status !== 'CANCELLED') {
-              sold += item.quantity;
-              units += item.quantity;
-              revenue += Number(item.priceAtPurchase) * item.quantity;
-            }
-          });
         });
       });
+
+      const stats = statsByDropId.get(drop.id) || { sold: 0n, revenue: 0 };
+      const sold = Number(stats.sold);
+      const revenue = Number(stats.revenue);
+      const units = sold;
 
       const now = new Date();
       let status = 'draft';

@@ -134,20 +134,24 @@ export class OrdersService {
 
     // Variant IDs are extracted inside the transaction for sorted locking.
 
-    let discountAmount = new Prisma.Decimal(0);
+    // Coupon validation will be performed safely inside the transaction with a lock
+    let initialDiscountAmount = new Prisma.Decimal(0);
     if (dto.couponCode) {
       try {
         const couponRes = await this.applyCoupon(dto.couponCode, cart.totalAmount);
-        discountAmount = new Prisma.Decimal(couponRes.discount);
+        initialDiscountAmount = new Prisma.Decimal(couponRes.discount);
       } catch (e: any) {
         throw new BadRequestException(`Coupon error: ${e.message}`);
       }
     }
 
     // Dynamic inclusive GST calculation of 18%
-    const shippingFee = new Prisma.Decimal(cart.totalAmount > 999 || cart.totalAmount === 0 ? 0 : 79);
-    const totalAmountBase = new Prisma.Decimal(cart.totalAmount);
-    const discountedBase = totalAmountBase.sub(discountAmount);
+    const totalDecimal = new Prisma.Decimal(cart.totalAmount);
+    const shippingFee = totalDecimal.greaterThan(999) || totalDecimal.equals(0) 
+      ? new Prisma.Decimal(0) 
+      : new Prisma.Decimal(79);
+    const totalAmountBase = totalDecimal;
+    const discountedBase = totalAmountBase.sub(initialDiscountAmount);
     // Inclusive tax = Base * (18 / 118)
     const tax = discountedBase.mul(18).div(118);
     const totalAmount = discountedBase.add(shippingFee);
@@ -190,10 +194,11 @@ export class OrdersService {
           })),
         });
 
-        // Restore inventory for all cancelled orders sequentially to prevent Prisma connection pool starvation
-        for (const o of existingPendingOrders) {
-          await this.inventoryService.restoreInventory(o.id, tx);
-        }
+        // Restore inventory for all cancelled orders in one bulk operation
+        await this.inventoryService.restoreBulkInventory(
+          existingPendingOrders.map((o) => o.id),
+          tx
+        );
       }
 
       if (inventoryItems.length > 0) {
@@ -202,6 +207,14 @@ export class OrdersService {
       }
 
       if (dto.couponCode) {
+        const coupon = await tx.$queryRawUnsafe<any[]>(
+          `SELECT * FROM coupons WHERE code = $1 FOR UPDATE`,
+          dto.couponCode.toUpperCase()
+        );
+        if (!coupon || !coupon[0]) throw new BadRequestException('Invalid coupon code');
+        if (coupon[0].usage_limit && coupon[0].usage_count >= coupon[0].usage_limit) {
+          throw new BadRequestException('This coupon has reached its usage limit');
+        }
         await tx.coupon.update({
           where: { code: dto.couponCode.toUpperCase() },
           data: { usageCount: { increment: 1 } },
@@ -309,31 +322,33 @@ export class OrdersService {
         
         let response: Response | undefined;
         let lastErr: any;
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            response = await fetch('https://api.razorpay.com/v1/orders', {
-              method: 'POST',
-              headers: {
-                Authorization: `Basic ${auth}`,
-                'Content-Type': 'application/json',
-                'Idempotency-Key': idempotencyKeyReq,
-              },
-              body: JSON.stringify({
-                amount: totalAmount.mul(100).round().toNumber(), // convert to paise precisely using Decimal
-                currency: 'INR',
-                receipt: createdOrder.id,
-              }),
-              signal: controller.signal,
-            });
-            break;
-          } catch (e) {
-            lastErr = e;
-            if (attempt === 3) throw e;
-            await new Promise((res) => setTimeout(res, attempt * 1000));
+        try {
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              response = await fetch('https://api.razorpay.com/v1/orders', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Basic ${auth}`,
+                  'Content-Type': 'application/json',
+                  'Idempotency-Key': idempotencyKeyReq,
+                },
+                body: JSON.stringify({
+                  amount: totalAmount.mul(100).round().toNumber(), // convert to paise precisely using Decimal
+                  currency: 'INR',
+                  receipt: createdOrder.id,
+                }),
+                signal: controller.signal,
+              });
+              break;
+            } catch (e) {
+              lastErr = e;
+              if (attempt === 3) throw e;
+              await new Promise((res) => setTimeout(res, attempt * 1000));
+            }
           }
+        } finally {
+          clearTimeout(timeoutId);
         }
-
-        clearTimeout(timeoutId);
 
         if (!response || !response.ok) {
           const errBody = response ? await response.text() : String(lastErr);

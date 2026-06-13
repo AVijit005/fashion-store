@@ -62,6 +62,9 @@ export class CartService {
     if (this.promiseMap.has(cacheKey)) {
       return this.promiseMap.get(cacheKey)!;
     }
+    if (this.promiseMap.size > 5000) {
+      throw new BadRequestException('Server is busy handling cart requests');
+    }
 
     const promise = (async () => {
       let cached = null;
@@ -407,33 +410,31 @@ export class CartService {
       });
       const existingUserItemMap = new Map(existingUserItems.map(i => [i.productVariantId, i]));
 
-      for (const guestItem of guestCart.items) {
+      const mergePromises = guestCart.items.map((guestItem) => {
         if (!guestItem.productVariantId) {
-          // It's a custom item, just copy it over
-          await tx.cartItem.create({
+          return tx.cartItem.create({
             data: {
               cartId: userCart.id,
               quantity: guestItem.quantity,
               customData: guestItem.customData || undefined,
             },
           });
-          continue;
         }
 
         const existing = existingUserItemMap.get(guestItem.productVariantId);
         const stock = stockByVariant.get(guestItem.productVariantId) ?? 0;
         const mergedQuantity = Math.min(stock, (existing?.quantity || 0) + guestItem.quantity);
         if (mergedQuantity <= 0) {
-          continue;
+          return Promise.resolve();
         }
         
         if (existing) {
-          await tx.cartItem.update({
+          return tx.cartItem.update({
             where: { id: existing.id },
             data: { quantity: mergedQuantity },
           });
         } else {
-          await tx.cartItem.create({
+          return tx.cartItem.create({
             data: {
               cartId: userCart.id,
               productVariantId: guestItem.productVariantId,
@@ -441,7 +442,8 @@ export class CartService {
             },
           });
         }
-      }
+      });
+      await Promise.all(mergePromises);
 
       // Delete the guest cart items
       await tx.cartItem.deleteMany({

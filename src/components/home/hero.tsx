@@ -18,7 +18,7 @@ export function Hero() {
             Volume 04 — Autumn drop
           </motion.p>
 
-          <h1 className="mt-4 font-display text-[16vw] leading-[0.85] tracking-[-0.03em] sm:text-[12vw] lg:text-[9vw]">
+          <h1 className="mt-4 font-display text-[clamp(4rem,16vw,7rem)] leading-[0.85] tracking-[-0.03em] sm:text-[clamp(5rem,12vw,8rem)] lg:text-[clamp(6rem,9vw,11rem)]">
             {"Heavy".split("").map((c, i) => (
               <motion.span
                 key={i}
@@ -112,6 +112,7 @@ export function Hero() {
             className="h-full w-full object-cover"
             width={1920}
             height={1280}
+            fetchPriority="high"
           />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between p-6 text-paper mix-blend-difference">
             <p className="font-display text-xl">No. 04 / 24</p>

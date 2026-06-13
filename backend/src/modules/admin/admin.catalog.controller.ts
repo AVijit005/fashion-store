@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
 import { AdminCatalogService } from './admin.catalog.service';
 import { CreateProductDto, UpdateProductDto } from './dto/admin.catalog.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
@@ -28,7 +28,7 @@ export class AdminCatalogController {
     return this.catalogService.createProduct(data);
   }
 
-  @Put('products/:id')
+  @Patch('products/:id')
   async updateProduct(@Param('id') id: string, @Body() data: UpdateProductDto) {
     return this.catalogService.updateProduct(id, data);
   }

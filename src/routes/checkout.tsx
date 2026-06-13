@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
+import * as Sentry from "@sentry/react";
 import { z } from "zod";
 import { useCart } from "@/lib/store/cart";
 import { apiClient } from "@/lib/api/client";
@@ -124,7 +125,12 @@ function CheckoutPage() {
   const [errors, setErrors] = useState<Errors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
-  const [idempotencyKey] = useState(() => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2));
+  const [idempotencyKey] = useState(() => {
+    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    const arr = new Uint8Array(16);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('-');
+  });
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{code: string, discount: number} | null>(null);
   const [couponError, setCouponError] = useState("");
@@ -218,7 +224,7 @@ function CheckoutPage() {
 
       // Persist guest token so order confirmation page can look up the order
       if (checkoutRes.guestToken && typeof window !== "undefined") {
-        localStorage.setItem("ink_order_guest_token", checkoutRes.guestToken);
+        sessionStorage.setItem("ink_order_guest_token", checkoutRes.guestToken);
       }
 
       if (pay === "cod") {
@@ -267,9 +273,7 @@ function CheckoutPage() {
             clear();
 
             // 4. Navigate to success
-                setTimeout(() => {
-                  navigate({ to: "/checkout/success", search: { orderId: checkoutRes.orderId, cod: false } });
-                }, 1000);
+            navigate({ to: "/checkout/success", search: { orderId: checkoutRes.orderId, cod: false } });
           } catch (err) {
             toast.error("Payment failed. Please try a different card, UPI app, or select Cash on Delivery.");
             setIsSubmitting(false);
@@ -291,6 +295,7 @@ function CheckoutPage() {
       if (msg.includes("P2002") || msg.toLowerCase().includes("internal server") || msg.includes("unexpected")) {
         msg = "An unexpected error occurred while processing your request. Please try again.";
       }
+      Sentry.captureException(err);
       toast.error(msg);
       setIsSubmitting(false);
     }
@@ -600,7 +605,7 @@ function CheckoutPage() {
           </div>
           <ul className="max-h-[260px] overflow-y-auto">
             {items.map((it, i) => (
-              <li key={i} className="flex gap-3 border-b border-line p-4">
+              <li key={it.variantId ?? it.cartItemId ?? i} className="flex gap-3 border-b border-line p-4">
                 <img
                   src={it.image}
                   alt=""

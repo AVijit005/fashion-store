@@ -6,17 +6,12 @@ export class WishlistService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getWishlist(userId: string) {
-    let wishlist = await this.prisma.wishlist.findUnique({
+    const wishlist = await this.prisma.wishlist.upsert({
       where: { userId },
+      update: {},
+      create: { userId },
       include: { items: { select: { productId: true } } },
     });
-
-    if (!wishlist) {
-      wishlist = await this.prisma.wishlist.create({
-        data: { userId },
-        include: { items: { select: { productId: true } } },
-      });
-    }
 
     return wishlist.items.map((item) => item.productId);
   }
@@ -27,15 +22,11 @@ export class WishlistService {
       throw new NotFoundException('Product not found');
     }
 
-    let wishlist = await this.prisma.wishlist.findUnique({
+    const wishlist = await this.prisma.wishlist.upsert({
       where: { userId },
+      update: {},
+      create: { userId },
     });
-
-    if (!wishlist) {
-      wishlist = await this.prisma.wishlist.create({
-        data: { userId },
-      });
-    }
 
     const existingItem = await this.prisma.wishlistItem.findUnique({
       where: {
@@ -63,28 +54,42 @@ export class WishlistService {
   }
 
   async syncWishlist(userId: string, productIds: string[]) {
-    let wishlist = await this.prisma.wishlist.findUnique({
+    const wishlist = await this.prisma.wishlist.upsert({
       where: { userId },
+      update: {},
+      create: { userId },
     });
 
-    if (!wishlist) {
-      wishlist = await this.prisma.wishlist.create({
-        data: { userId },
-      });
+    // Prevent N+1 DoS: Batch query existing products and items
+    const validProducts = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true },
+    });
+    
+    const validProductIds = validProducts.map(p => p.id);
+    
+    if (validProductIds.length === 0) {
+      return this.getWishlist(userId);
     }
 
-    for (const productId of productIds) {
-      const existingItem = await this.prisma.wishlistItem.findUnique({
-        where: { wishlistId_productId: { wishlistId: wishlist.id, productId } },
+    const existingItems = await this.prisma.wishlistItem.findMany({
+      where: {
+        wishlistId: wishlist.id,
+        productId: { in: validProductIds },
+      },
+      select: { productId: true },
+    });
+
+    const existingProductIds = new Set(existingItems.map(i => i.productId));
+    const itemsToCreate = validProductIds
+      .filter(id => !existingProductIds.has(id))
+      .map(id => ({ wishlistId: wishlist.id, productId: id }));
+
+    if (itemsToCreate.length > 0) {
+      await this.prisma.wishlistItem.createMany({
+        data: itemsToCreate,
+        skipDuplicates: true,
       });
-      if (!existingItem) {
-        const p = await this.prisma.product.findUnique({ where: { id: productId } });
-        if (p) {
-          await this.prisma.wishlistItem.create({
-            data: { wishlistId: wishlist.id, productId },
-          });
-        }
-      }
     }
 
     return this.getWishlist(userId);
