@@ -7,6 +7,20 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  vite: {
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            "react-vendor": ["react", "react-dom"],
+            "ui-vendor": ["framer-motion", "lucide-react", "recharts"],
+            "tanstack-vendor": ["@tanstack/react-query", "@tanstack/react-router"],
+          },
+        },
+      },
+    },
+  },
   nitro: {
     preset: "vercel",
     output: {

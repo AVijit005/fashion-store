@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { apiClient } from "../api/client";
 import { cartApi, getOrCreateCartSessionId } from "../api/cart";
-import { syncWishlistOnLogin } from "./wishlist";
+import { syncWishlistOnLogin, useWishlist } from "./wishlist";
+import { useCart } from "./cart";
 
 export interface UserProfile {
   id: string;
@@ -57,25 +58,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Merge guest cart into authenticated user cart after login
       const guestSessionId = getOrCreateCartSessionId();
       if (guestSessionId) {
-        const { useCart } = await import("./cart");
         const preMergeCount = useCart.getState().items.length;
         cartApi
           .mergeCart(guestSessionId)
           .then((cart) => {
-            useCart.getState().setItems(cart.items.map(item => ({
-               id: item.variantId || item.sku,
-               sku: item.sku,
-               name: item.productTitle,
-               price: item.unitPrice,
-               mrp: item.unitPrice,
-               image: item.thumbnailUrl || "",
-               color: item.color,
-               size: item.size,
-               qty: item.quantity,
-               slug: item.productSlug
-            })));
+            useCart.getState().setItems(
+              cart.items.map((item) => ({
+                id: item.variantId || item.sku,
+                sku: item.sku,
+                name: item.productTitle,
+                price: item.unitPrice,
+                mrp: item.unitPrice,
+                image: item.thumbnailUrl || "",
+                color: item.color,
+                size: item.size,
+                qty: item.quantity,
+                slug: item.productSlug,
+              })),
+            );
             if (cart.items.length > preMergeCount) {
-               import("sonner").then(({ toast }) => toast.info("We've restored items previously left in your cart."));
+              import("sonner").then(({ toast }) =>
+                toast.info("We've restored items previously left in your cart."),
+              );
             }
           })
           .catch((err) => console.error("[auth] Cart merge after login failed:", err));
@@ -84,7 +88,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Sync wishlist
       await syncWishlistOnLogin();
     } catch (error) {
-      get().logout();
       throw error;
     } finally {
       set({ isLoading: false });
@@ -94,7 +97,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signup: async (email, password) => {
     set({ isLoading: true });
     try {
-      const guestToken = typeof window !== "undefined" ? localStorage.getItem("ink_order_guest_token") || undefined : undefined;
+      const guestToken =
+        typeof window !== "undefined"
+          ? localStorage.getItem("ink_order_guest_token") || undefined
+          : undefined;
       await apiClient.post("/auth/signup", { email, password, guestToken });
       await get().login(email, password);
     } finally {
@@ -118,13 +124,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: null, accessToken: null, isAuthenticated: false });
 
       // Clear private data from local storage
-      import("./cart").then(({ useCart }) => useCart.getState().clear());
-      import("./wishlist").then(({ useWishlist }) => useWishlist.getState().setIds([]));
+      useCart.getState().clear();
+      useWishlist.getState().setIds([]);
     }
   },
 
   initialize: async () => {
-    const isLoggedIn = typeof window !== "undefined" ? localStorage.getItem("ink_logged_in") === "true" : false;
+    const isLoggedIn =
+      typeof window !== "undefined" ? localStorage.getItem("ink_logged_in") === "true" : false;
     if (!isLoggedIn) {
       set({ isLoading: false, isAuthenticated: false, user: null });
       return;
