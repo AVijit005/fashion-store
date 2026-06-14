@@ -17,6 +17,9 @@ FROM node:20-alpine AS runner
 
 WORKDIR /usr/src/app
 
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
 # Change ownership of working directory to node user
 RUN chown -R node:node /usr/src/app
 
@@ -34,4 +37,7 @@ COPY --chown=node:node scripts ./scripts
 
 EXPOSE 3000
 
-CMD ["node", "dist/main"]
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD curl -f http://localhost:3000/ || exit 1
+
+CMD ["npm", "run", "start:prod"]
