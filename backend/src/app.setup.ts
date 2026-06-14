@@ -12,10 +12,11 @@ export function configureApp(app: INestApplication, configService: ConfigService
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new ResponseTransformInterceptor());
 
-  const frontendOrigins = configService.get<string>('FRONTEND_ORIGINS');
   app.enableCors({
-    origin: frontendOrigins ? frontendOrigins.split(',') : true,
+    origin: true,
     credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Accept, Authorization, x-cart-session-id',
   });
 
   app.useGlobalPipes(
