@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCart, itemKey } from "@/lib/store/cart";
 import { inr } from "@/lib/format";
 import { Minus, Plus, X } from "lucide-react";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 export const Route = createFileRoute("/cart")({
   head: () => ({ meta: [{ title: "Bag — Ink Studio" }] }),
@@ -9,9 +10,12 @@ export const Route = createFileRoute("/cart")({
 });
 
 function CartPage() {
-  const { items, setQty, remove, subtotal, savings } = useCart();
-  const sub = subtotal();
+  const hydrated = useHydrated();
+  const { items: _items, setQty, remove, subtotal, savings } = useCart();
+  const items = hydrated ? _items : [];
+  const sub = hydrated ? subtotal() : 0;
   const ship = sub > 999 || sub === 0 ? 0 : 79;
+  const savingsAmt = hydrated ? savings() : 0;
 
   return (
     <div className="mx-auto max-w-[1480px] px-5 py-12 lg:px-10 lg:py-16">
@@ -100,10 +104,10 @@ function CartPage() {
                   <dt className="text-mute">Subtotal</dt>
                   <dd className="tabular-nums">{inr(sub)}</dd>
                 </div>
-                {savings() > 0 && (
+                {savingsAmt > 0 && (
                   <div className="flex justify-between text-accent">
                     <dt>You saved</dt>
-                    <dd className="tabular-nums">−{inr(savings())}</dd>
+                    <dd className="tabular-nums">−{inr(savingsAmt)}</dd>
                   </div>
                 )}
                 <div className="flex justify-between">

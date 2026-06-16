@@ -47,16 +47,23 @@ function DropsPage() {
   const { h, m, s } = useCountdown(target ?? 0);
 
   // Fallback to imported drops if API fails or returns empty, but map dynamic otherwise
-  const activeDrops = dynamicDrops?.length > 0 
-    ? dynamicDrops.map((d: any) => ({
-        slug: d.slug,
-        title: d.name,
-        date: new Date(d.releaseDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        blurb: "Exclusive limited release. Available for members early.",
-        img: d.products?.[0]?.mediaUrls?.[0] || "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&q=80&w=1600",
-        units: "Limited Stock"
-      }))
-    : drops;
+  const activeDrops =
+    dynamicDrops?.length > 0
+      ? dynamicDrops.map((d: any) => ({
+          slug: d.slug,
+          title: d.name,
+          date: new Date(d.releaseDate).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          }),
+          blurb: "Exclusive limited release. Available for members early.",
+          img:
+            d.products?.[0]?.mediaUrls?.[0] ||
+            "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&q=80&w=1600",
+          units: "Limited Stock",
+        }))
+      : drops;
 
   return (
     <div className="bg-paper">

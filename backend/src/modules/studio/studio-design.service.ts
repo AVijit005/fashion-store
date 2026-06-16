@@ -45,7 +45,7 @@ export class StudioDesignService {
 
   async findAllByUser(userId: string) {
     return this.prisma.studioDesign.findMany({
-      where: { userId, deletedAt: null },
+      where: { userId, isDeleted: false },
       include: {
         _count: {
           select: { versions: true, submissions: true },
@@ -66,7 +66,7 @@ export class StudioDesignService {
       },
     });
 
-    if (!design || design.deletedAt) {
+    if (!design || design.isDeleted) {
       throw new NotFoundException('Design not found');
     }
 
@@ -88,7 +88,7 @@ export class StudioDesignService {
       },
     });
 
-    if (!design || design.deletedAt) {
+    if (!design || design.isDeleted) {
       throw new NotFoundException('Design not found');
     }
 
@@ -103,45 +103,48 @@ export class StudioDesignService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      // Update parent design fields if provided
-      const updatedDesign = await tx.studioDesign.update({
-        where: { id },
-        data: {
-          title: dto.title ?? design.title,
-          description: dto.description ?? design.description,
-          // Editing an approved/rejected design resets it to DRAFT
-          status:
-            design.status === DesignStatus.APPROVED || design.status === DesignStatus.REJECTED
-              ? DesignStatus.DRAFT
-              : design.status,
-        },
-      });
-
-      let latestVersion = design.versions[0];
-
-      // If new designJson provided, create a new version
-      if (dto.designJson) {
-        const parsedJson = designJsonSchema.safeParse(dto.designJson);
-        if (!parsedJson.success) {
-          throw new BadRequestException(`Invalid design JSON: ${parsedJson.error.message}`);
-        }
-
-        const newVersionNumber = (latestVersion?.versionNumber || 0) + 1;
-
-        latestVersion = await tx.designVersion.create({
+    return this.prisma.$transaction(
+      async (tx) => {
+        // Update parent design fields if provided
+        const updatedDesign = await tx.studioDesign.update({
+          where: { id },
           data: {
-            designId: design.id,
-            versionNumber: newVersionNumber,
-            designJson: parsedJson.data as any,
+            title: dto.title ?? design.title,
+            description: dto.description ?? design.description,
+            // Editing an approved/rejected design resets it to DRAFT
+            status:
+              design.status === DesignStatus.APPROVED || design.status === DesignStatus.REJECTED
+                ? DesignStatus.DRAFT
+                : design.status,
           },
         });
-      }
 
-      return { ...updatedDesign, latestVersion };
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+        let latestVersion = design.versions[0];
+
+        // If new designJson provided, create a new version
+        if (dto.designJson) {
+          const parsedJson = designJsonSchema.safeParse(dto.designJson);
+          if (!parsedJson.success) {
+            throw new BadRequestException(`Invalid design JSON: ${parsedJson.error.message}`);
+          }
+
+          const newVersionNumber = (latestVersion?.versionNumber || 0) + 1;
+
+          latestVersion = await tx.designVersion.create({
+            data: {
+              designId: design.id,
+              versionNumber: newVersionNumber,
+              designJson: parsedJson.data as any,
+            },
+          });
+        }
+
+        return { ...updatedDesign, latestVersion };
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
   }
 
   async duplicate(userId: string, id: string) {
@@ -177,7 +180,7 @@ export class StudioDesignService {
 
   async remove(userId: string, id: string) {
     const design = await this.prisma.studioDesign.findFirst({
-      where: { id, userId, deletedAt: null },
+      where: { id, userId, isDeleted: false },
     });
 
     if (!design) {
@@ -186,7 +189,7 @@ export class StudioDesignService {
 
     return this.prisma.studioDesign.update({
       where: { id },
-      data: { deletedAt: new Date() },
+      data: { isDeleted: true },
     });
   }
 
@@ -200,7 +203,7 @@ export class StudioDesignService {
       },
     });
 
-    if (!design || design.deletedAt) {
+    if (!design || design.isDeleted) {
       throw new NotFoundException('Design not found');
     }
 
@@ -219,31 +222,34 @@ export class StudioDesignService {
       throw new BadRequestException(`Version ${versionNumber} not found`);
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const latestVersionNumber = design.versions[0]?.versionNumber || 0;
-      const newVersionNumber = latestVersionNumber + 1;
+    return this.prisma.$transaction(
+      async (tx) => {
+        const latestVersionNumber = design.versions[0]?.versionNumber || 0;
+        const newVersionNumber = latestVersionNumber + 1;
 
-      const newVersion = await tx.designVersion.create({
-        data: {
-          designId: id,
-          versionNumber: newVersionNumber,
-          designJson: targetVersion.designJson as any,
-        },
-      });
+        const newVersion = await tx.designVersion.create({
+          data: {
+            designId: id,
+            versionNumber: newVersionNumber,
+            designJson: targetVersion.designJson as any,
+          },
+        });
 
-      const updatedDesign = await tx.studioDesign.update({
-        where: { id },
-        data: {
-          status:
-            design.status === DesignStatus.APPROVED || design.status === DesignStatus.REJECTED
-              ? DesignStatus.DRAFT
-              : design.status,
-        },
-      });
+        const updatedDesign = await tx.studioDesign.update({
+          where: { id },
+          data: {
+            status:
+              design.status === DesignStatus.APPROVED || design.status === DesignStatus.REJECTED
+                ? DesignStatus.DRAFT
+                : design.status,
+          },
+        });
 
-      return { ...updatedDesign, latestVersion: newVersion };
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+        return { ...updatedDesign, latestVersion: newVersion };
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
   }
 }

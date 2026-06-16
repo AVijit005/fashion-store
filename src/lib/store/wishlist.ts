@@ -11,7 +11,6 @@ type WishlistState = {
 
 // Queue handled optimistically without global variables
 
-
 export const useWishlist = create<WishlistState>()(
   persist(
     (set, get) => ({
@@ -22,10 +21,12 @@ export const useWishlist = create<WishlistState>()(
         set({
           ids: hasIt ? get().ids.filter((x) => x !== id) : [...get().ids, id],
         });
-        
+
         if (typeof window !== "undefined") {
           apiClient.post(`/wishlist/${id}/toggle`).catch((e) => {
-             import("sonner").then(({ toast }) => toast.error("Failed to sync wishlist with server."));
+            import("sonner").then(({ toast }) =>
+              toast.error("Failed to sync wishlist with server."),
+            );
           });
         }
       },

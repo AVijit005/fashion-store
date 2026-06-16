@@ -1,10 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
-import { products } from "@/lib/api/catalog";
-import { categories } from "@/lib/api/catalog";
+import { catalogApi } from "@/lib/api/catalog";
 
-// Note: Replace with the production project URL once a custom domain is configured.
-const BASE_URL = "";
+const BASE_URL = process.env.VITE_SITE_URL || "https://aurastreetwear.com";
 
 interface SitemapEntry {
   path: string;
@@ -41,6 +39,11 @@ export const Route = createFileRoute("/sitemap.xml")({
           "/terms",
         ];
 
+        const [categories, { products }] = await Promise.all([
+          catalogApi.getCategories(),
+          catalogApi.getProducts({ limit: 1000 }),
+        ]);
+
         const entries: SitemapEntry[] = [
           ...staticPaths.map((path) => ({
             path,
@@ -52,7 +55,7 @@ export const Route = createFileRoute("/sitemap.xml")({
             changefreq: "weekly" as const,
             priority: "0.7",
           })),
-          ...products.map((p) => ({
+          ...products.map((p: any) => ({
             path: `/p/${p.slug}`,
             changefreq: "weekly" as const,
             priority: "0.6",

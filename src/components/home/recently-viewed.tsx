@@ -1,17 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useRecentlyViewed } from "@/lib/store/recently-viewed";
-import { products } from "@/lib/api/catalog";
+import { catalogApi } from "@/lib/api/catalog";
+import { useQuery } from "@tanstack/react-query";
 import { inr } from "@/lib/format";
+import type { Product } from "@/lib/api/catalog";
 
 export function RecentlyViewed() {
   const ids = useRecentlyViewed((s) => s.ids);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted || ids.length === 0) return null;
-  const items = ids
-    .map((id) => products.find((p) => p.id === id))
-    .filter(Boolean) as typeof products;
+  const { data } = useQuery({
+    queryKey: ["products", "recently-viewed", ids],
+    queryFn: () => catalogApi.getProducts({ ids, limit: 10 }),
+    enabled: ids.length > 0,
+  });
+  const items = data?.products || [];
   if (items.length === 0) return null;
 
   return (
@@ -26,7 +31,7 @@ export function RecentlyViewed() {
           </div>
         </div>
         <div className="flex gap-4 overflow-x-auto pb-2 hide-scrollbar lg:gap-5">
-          {items.map((p) => (
+          {items.map((p: Product, i: number) => (
             <Link
               key={p.id}
               to="/p/$slug"

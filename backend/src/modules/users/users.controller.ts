@@ -12,7 +12,12 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { UpdateProfileDto, CreateAddressDto, UpdateAddressDto, UpdatePreferencesDto } from './dto/users.dto';
+import {
+  UpdateProfileDto,
+  CreateAddressDto,
+  UpdateAddressDto,
+  UpdatePreferencesDto,
+} from './dto/users.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { PrismaService } from '../../config/prisma.service';
 
@@ -36,7 +41,7 @@ export class UsersController {
     if (!user) {
       throw new NotFoundException('User profile not found');
     }
-    
+
     // Omit sensitive data
     const { passwordHash, ...safeUser } = user;
     return safeUser;
@@ -47,7 +52,7 @@ export class UsersController {
   async updateProfile(@Req() req: any, @Body() updateProfileDto: UpdateProfileDto) {
     const user = await this.usersService.findById(req.user.id);
     if (!user) throw new NotFoundException('User not found');
-    
+
     const updatedUser = await this.usersService.update(req.user.id, updateProfileDto);
     const { passwordHash, ...safeUser } = updatedUser;
     return safeUser;

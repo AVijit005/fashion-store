@@ -86,7 +86,7 @@ export class AuthService {
 
     const accessToken = this.generateAccessToken(user.id, user.role, session.id);
 
-    this.logger.log(`Audit: User logged in. userId=${user.id} ip=${ipAddress}`);
+    this.logger.log({ event: 'login', userId: user.id, ipAddress });
 
     return {
       accessToken,
@@ -110,20 +110,20 @@ export class AuthService {
         include: { user: true },
       });
 
-      if (!current) {
+      if (!current || current.user.isDeleted) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
+      if (current.expiresAt < new Date()) {
+        throw new UnauthorizedException('Refresh token expired');
+      }
+
       if (current.isRevoked) {
-        const timeSinceRevoked = Date.now() - current.updatedAt.getTime();
-        if (timeSinceRevoked >= 5000) {
-          await tx.session.updateMany({
-            where: { userId: current.userId, isRevoked: false },
-            data: { isRevoked: true },
-          });
-          throw new UnauthorizedException('Security breach detected. All sessions revoked.');
-        }
-        // If < 5000ms, fall through to grace period (allow creating new session for this tab)
+        await tx.session.updateMany({
+          where: { userId: current.userId, isRevoked: false },
+          data: { isRevoked: true },
+        });
+        throw new UnauthorizedException('Security breach detected. All sessions revoked.');
       } else {
         const revoked = await tx.session.updateMany({
           where: { id: current.id, isRevoked: false },
@@ -131,12 +131,8 @@ export class AuthService {
         });
         if (revoked.count !== 1) {
           // It was revoked by another concurrent transaction just now.
-          // Fall through to grace period.
+          throw new UnauthorizedException('Concurrent token refresh detected or session already revoked.');
         }
-      }
-
-      if (current.expiresAt < new Date()) {
-        throw new UnauthorizedException('Refresh token expired');
       }
 
       const created = await tx.session.create({

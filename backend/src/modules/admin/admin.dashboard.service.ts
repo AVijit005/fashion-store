@@ -10,9 +10,9 @@ export class AdminDashboardService {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const aggregations = await this.prisma.order.aggregate({
-      where: { 
+      where: {
         createdAt: { gte: thirtyDaysAgo },
-        status: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'] }
+        status: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
       },
       _sum: { totalAmount: true },
       _count: true,
@@ -29,27 +29,27 @@ export class AdminDashboardService {
     `;
 
     const seriesMap = new Map<string, { revenue: number; orders: number }>();
-    for(let i=30; i>=0; i--) {
+    for (let i = 30; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       seriesMap.set(dateStr, { revenue: 0, orders: 0 });
     }
 
-    dailySeries.forEach(row => {
+    dailySeries.forEach((row) => {
       const d = new Date(row.date);
       const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       if (seriesMap.has(dateStr)) {
-         const existing = seriesMap.get(dateStr)!;
-         existing.revenue += Number(row.revenue);
-         existing.orders += Number(row.orders);
+        const existing = seriesMap.get(dateStr)!;
+        existing.revenue += Number(row.revenue);
+        existing.orders += Number(row.orders);
       }
     });
 
     const series = Array.from(seriesMap.entries()).map(([date, data]) => ({
       date,
       revenue: data.revenue,
-      orders: data.orders
+      orders: data.orders,
     }));
 
     const categoriesAggr = await this.prisma.$queryRaw<any[]>`
@@ -68,10 +68,10 @@ export class AdminDashboardService {
       LIMIT 5
     `;
 
-    const topCategories = categoriesAggr.map(cat => ({
+    const topCategories = categoriesAggr.map((cat) => ({
       name: cat.name,
       revenue: Number(cat.revenue),
-      orders: Number(cat.orders)
+      orders: Number(cat.orders),
     }));
 
     return {
@@ -81,10 +81,10 @@ export class AdminDashboardService {
       topCategories,
       conversion: 2.4,
       trafficSources: [
-        { source: "Instagram", percentage: 45 },
-        { source: "Direct", percentage: 30 },
-        { source: "Google Organic", percentage: 25 },
-      ]
+        { source: 'Instagram', percentage: 45 },
+        { source: 'Direct', percentage: 30 },
+        { source: 'Google Organic', percentage: 25 },
+      ],
     };
   }
 
@@ -95,8 +95,8 @@ export class AdminDashboardService {
       orderBy: { createdAt: 'desc' },
       include: { user: true },
     });
-    
-    return orders.map(o => ({
+
+    return orders.map((o) => ({
       id: o.id,
       time: o.createdAt,
       text: `Order ${o.id.substring(0, 8)} placed`,

@@ -15,7 +15,9 @@ export function BestSellers() {
       .then((res) => {
         setItems(
           res.products
-            .filter((p: Product) => p.badges.includes("bestseller") || p.badges.includes("trending"))
+            .filter(
+              (p: Product) => p.badges.includes("bestseller") || p.badges.includes("trending"),
+            )
             .slice(0, 8),
         );
         setLoading(false);

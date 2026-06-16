@@ -28,10 +28,7 @@ export class AdminCustomersController {
 
   @Post(':id/notes')
   @ApiOperation({ summary: 'Add an internal note to a customer' })
-  async addNote(
-    @Param('id') id: string,
-    @Body('note') note: string,
-  ) {
+  async addNote(@Param('id') id: string, @Body('note') note: string) {
     return this.customersService.addNote(id, note);
   }
 }

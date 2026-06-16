@@ -38,9 +38,13 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function OverviewPage() {
-  const adminName = useAuthStore((s) => s.user?.email?.split('@')[0] ?? 'Admin');
+  const adminName = useAuthStore((s) => s.user?.email?.split("@")[0] ?? "Admin");
 
-  const { data: kpisData, isLoading: kpisLoading, isError: kpisError } = useQuery<KpisData>({
+  const {
+    data: kpisData,
+    isLoading: kpisLoading,
+    isError: kpisError,
+  } = useQuery<KpisData>({
     queryKey: ["admin-kpis"],
     queryFn: () => apiClient.get("/admin/dashboard/kpis"),
   });
@@ -61,20 +65,32 @@ function OverviewPage() {
   const apiOrders = apiOrdersRes?.data || [];
 
   if (kpisLoading || productsLoading || ordersLoading) {
-    return <div className="flex h-96 items-center justify-center text-mute">Loading dashboard data...</div>;
+    return (
+      <div className="flex h-96 items-center justify-center text-mute">
+        Loading dashboard data...
+      </div>
+    );
   }
 
   if (kpisError) {
-    return <div className="flex h-96 items-center justify-center text-red-500">Failed to load dashboard data. Please try again.</div>;
+    return (
+      <div className="flex h-96 items-center justify-center text-red-500">
+        Failed to load dashboard data. Please try again.
+      </div>
+    );
   }
 
   const recent = apiOrders.slice(0, 6);
-  const lowStock = products.filter((p: Product) => p.stock > 0 && p.stock <= p.lowStockAt).slice(0, 5);
-  const trending = [...products].sort((a: Product, b: Product) => (b.views7d || 0) - (a.views7d || 0)).slice(0, 5);
+  const lowStock = products
+    .filter((p: Product) => p.stock > 0 && p.stock <= p.lowStockAt)
+    .slice(0, 5);
+  const trending = [...products]
+    .sort((a: Product, b: Product) => (b.views7d || 0) - (a.views7d || 0))
+    .slice(0, 5);
   const liveActivity = activityData;
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   // Dynamic calculations from backend KPIs
   const realRevenue = kpisData?.totalRevenue || 0;
@@ -103,10 +119,28 @@ function OverviewPage() {
       {/* KPI grid */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: 'Revenue', value: compactInr(realRevenue), delta: 0, spark: chartSeries.map((d: { revenue: number }) => d.revenue), hint: "Last 14 days" },
-          { label: 'Orders', value: String(realOrders), delta: 0, spark: chartSeries.map((d: { orders: number }) => d.orders), hint: "Last 14 days" },
-          { label: 'AOV', value: compactInr(realAov), delta: 0, spark: [], hint: "Last 14 days" },
-          { label: 'Conversion', value: `${kpisData?.conversion || 0}%`, delta: 0, spark: [], hint: "Storefront" }
+          {
+            label: "Revenue",
+            value: compactInr(realRevenue),
+            delta: 0,
+            spark: chartSeries.map((d: { revenue: number }) => d.revenue),
+            hint: "Last 14 days",
+          },
+          {
+            label: "Orders",
+            value: String(realOrders),
+            delta: 0,
+            spark: chartSeries.map((d: { orders: number }) => d.orders),
+            hint: "Last 14 days",
+          },
+          { label: "AOV", value: compactInr(realAov), delta: 0, spark: [], hint: "Last 14 days" },
+          {
+            label: "Conversion",
+            value: `${kpisData?.conversion || 0}%`,
+            delta: 0,
+            spark: [],
+            hint: "Storefront",
+          },
         ].map((k) => (
           <KpiCard key={k.label} {...k} />
         ))}
@@ -158,11 +192,11 @@ function OverviewPage() {
           </div>
           <div className="mt-4">
             {chartSeries.length > 0 ? (
-               <AreaChart data={chartSeries} yKey="revenue" height={220} />
+              <AreaChart data={chartSeries} yKey="revenue" height={220} />
             ) : (
-               <div className="flex h-[220px] items-center justify-center border border-dashed border-line bg-fog/20 text-[12px] text-mute">
-                 No revenue data available for the selected period
-               </div>
+              <div className="flex h-[220px] items-center justify-center border border-dashed border-line bg-fog/20 text-[12px] text-mute">
+                No revenue data available for the selected period
+              </div>
             )}
           </div>
         </Panel>
@@ -170,8 +204,11 @@ function OverviewPage() {
         <Panel title="Traffic · Sources">
           {kpisData?.trafficSources && kpisData.trafficSources.length > 0 ? (
             <div className="space-y-4">
-              {kpisData.trafficSources.map(ts => (
-                <div key={ts.source} className="flex items-center justify-between border-b border-line pb-2 text-[13px]">
+              {kpisData.trafficSources.map((ts) => (
+                <div
+                  key={ts.source}
+                  className="flex items-center justify-between border-b border-line pb-2 text-[13px]"
+                >
                   <span>{ts.source}</span>
                   <span className="font-mono tabular-nums">{ts.percentage}%</span>
                 </div>
@@ -201,36 +238,40 @@ function OverviewPage() {
           bodyClassName="p-0"
         >
           <div className="overflow-x-auto w-full">
-          <table className="w-full text-[13px]">
-            <thead className="border-b border-line bg-fog/40 text-left">
-              <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
-                <th className="px-4 py-2.5 font-normal">Order</th>
-                <th className="px-4 py-2.5 font-normal">Customer</th>
-                <th className="px-4 py-2.5 font-normal">Status</th>
-                <th className="px-4 py-2.5 text-right font-normal">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recent.map((o) => (
-                <tr key={o.id} className="border-b border-line/60 transition hover:bg-fog/30">
-                  <td className="px-4 py-3">
-                    <p className="font-mono text-[12px] text-ink">{o.id.substring(0, 8).toUpperCase()}</p>
-                    <p className="text-[11px] text-mute">{relTime(o.createdAt)}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="truncate text-ink">{o.user?.name || o.shippingName}</p>
-                    <p className="truncate text-[11px] text-mute">{o.user?.email || o.shippingEmail}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusChip label={o.status} tone={orderTone(o.status)} />
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono tabular-nums">
-                    {compactInr(o.total)}
-                  </td>
+            <table className="w-full text-[13px]">
+              <thead className="border-b border-line bg-fog/40 text-left">
+                <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
+                  <th className="px-4 py-2.5 font-normal">Order</th>
+                  <th className="px-4 py-2.5 font-normal">Customer</th>
+                  <th className="px-4 py-2.5 font-normal">Status</th>
+                  <th className="px-4 py-2.5 text-right font-normal">Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {recent.map((o) => (
+                  <tr key={o.id} className="border-b border-line/60 transition hover:bg-fog/30">
+                    <td className="px-4 py-3">
+                      <p className="font-mono text-[12px] text-ink">
+                        {o.id.substring(0, 8).toUpperCase()}
+                      </p>
+                      <p className="text-[11px] text-mute">{relTime(o.createdAt)}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="truncate text-ink">{o.user?.name || o.shippingName}</p>
+                      <p className="truncate text-[11px] text-mute">
+                        {o.user?.email || o.shippingEmail}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusChip label={o.status} tone={orderTone(o.status)} />
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono tabular-nums">
+                      {compactInr(o.total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </Panel>
 
@@ -243,30 +284,30 @@ function OverviewPage() {
           }
         >
           {liveActivity.length === 0 ? (
-             <div className="flex flex-col items-center justify-center py-12 text-mute">
-               <p className="text-[13px]">No recent activity.</p>
-             </div>
+            <div className="flex flex-col items-center justify-center py-12 text-mute">
+              <p className="text-[13px]">No recent activity.</p>
+            </div>
           ) : (
-          <ol className="space-y-3">
-            {liveActivity.map((a) => (
-              <li
-                key={a.id}
-                className="flex gap-3 border-b border-line/60 pb-3 last:border-0 last:pb-0"
-              >
-                <span
-                  className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-ink/60"
-                  aria-hidden="true"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] text-ink">{a.text}</p>
-                  <p className="text-[11px] text-mute">{a.meta}</p>
-                </div>
-                <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-mute">
-                  {a.time}
-                </p>
-              </li>
-            ))}
-          </ol>
+            <ol className="space-y-3">
+              {liveActivity.map((a) => (
+                <li
+                  key={a.id}
+                  className="flex gap-3 border-b border-line/60 pb-3 last:border-0 last:pb-0"
+                >
+                  <span
+                    className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-ink/60"
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] text-ink">{a.text}</p>
+                    <p className="text-[11px] text-mute">{a.meta}</p>
+                  </div>
+                  <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-mute">
+                    {a.time}
+                  </p>
+                </li>
+              ))}
+            </ol>
           )}
         </Panel>
       </div>
@@ -276,12 +317,17 @@ function OverviewPage() {
         <Panel title="Top categories">
           {kpisData?.topCategories && kpisData.topCategories.length > 0 ? (
             <ul className="space-y-3">
-              {kpisData.topCategories.map(cat => (
-                <li key={cat.name} className="flex items-center justify-between border-b border-line pb-2 text-[13px]">
+              {kpisData.topCategories.map((cat) => (
+                <li
+                  key={cat.name}
+                  className="flex items-center justify-between border-b border-line pb-2 text-[13px]"
+                >
                   <span>{cat.name}</span>
                   <div className="text-right">
                     <p className="font-mono tabular-nums text-ink">{compactInr(cat.revenue)}</p>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-mute">{cat.orders} orders</p>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-mute">
+                      {cat.orders} orders
+                    </p>
                   </div>
                 </li>
               ))}
@@ -306,7 +352,11 @@ function OverviewPage() {
                   key={p.id}
                   className="flex items-center gap-3 border-b border-line/60 pb-2.5 last:border-0 last:pb-0"
                 >
-                  <img src={p.image || "https://placehold.co/400x500/f5f3ee/0d0d0d?text=No+Image"} alt="" className="h-10 w-10 object-cover" />
+                  <img
+                    src={p.image || "https://placehold.co/400x500/f5f3ee/0d0d0d?text=No+Image"}
+                    alt=""
+                    className="h-10 w-10 object-cover"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] text-ink">{p.name}</p>
                     <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-mute">

@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { breadcrumbJsonLd, collectionJsonLd } from "@/lib/seo";
 import { Reveal } from "@/components/ui/reveal";
 import { Gift, Sparkles, Heart } from "lucide-react";
-import { products } from "@/lib/api/catalog";
+import { catalogApi, type Product } from "@/lib/api/catalog";
+import { useQuery } from "@tanstack/react-query";
 import { inr } from "@/lib/format";
 
 export const Route = createFileRoute("/gift-guide")({
@@ -38,24 +39,29 @@ const buckets = [
     title: "For the streetwear head",
     icon: Sparkles,
     blurb: "Heavyweight basics that earn their place in the rotation.",
-    filter: (p: (typeof products)[number]) =>
-      p.badges.includes("oversized") || p.badges.includes("bestseller"),
+    filter: (p: Product) => p.badges.includes("oversized") || p.badges.includes("bestseller"),
   },
   {
     title: "For the anime lover",
     icon: Heart,
     blurb: "Editorial collabs, screen-printed on heavyweight cotton.",
-    filter: (p: (typeof products)[number]) => p.badges.includes("anime"),
+    filter: (p: Product) => p.badges?.includes("anime"),
   },
   {
     title: "Under ₹999",
     icon: Gift,
     blurb: "Small but mighty. Accessories, prints, and everyday carry.",
-    filter: (p: (typeof products)[number]) => p.price < 999,
+    filter: (p: Product) => p.price < 999,
   },
 ];
 
 function GiftGuidePage() {
+  const { data } = useQuery({
+    queryKey: ["products", "gift-guide"],
+    queryFn: () => catalogApi.getProducts({ limit: 100 }),
+  });
+  const products = data?.products || [];
+
   return (
     <div className="bg-paper">
       <header className="mx-auto max-w-[1480px] px-5 py-16 lg:px-10 lg:py-24">
@@ -83,7 +89,7 @@ function GiftGuidePage() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6">
-                  {items.map((p) => (
+                  {items.slice(0, 4).map((p: Product, i: number) => (
                     <Link
                       key={p.id}
                       to="/p/$slug"

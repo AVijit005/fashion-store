@@ -23,7 +23,7 @@ export class CreatorTemplateService {
         include: { design: true },
       });
 
-      if (!designVersion || designVersion.design.deletedAt) {
+      if (!designVersion || designVersion.design.isDeleted) {
         throw new NotFoundException('Design version not found');
       }
 
@@ -132,7 +132,7 @@ export class CreatorTemplateService {
         include: { design: true },
       });
 
-      if (!designVersion || designVersion.design.deletedAt) {
+      if (!designVersion || designVersion.design.isDeleted) {
         throw new NotFoundException('Design version not found');
       }
 

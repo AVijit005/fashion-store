@@ -132,7 +132,7 @@ export function CommandPalette() {
             </div>
           </CommandEmpty>
         )}
-        
+
         {loading && (
           <div className="px-4 py-8 text-center text-[12px] text-mute uppercase tracking-[0.18em]">
             Searching...
@@ -181,7 +181,7 @@ export function CommandPalette() {
                 value={`${p.name} ${p.tagline} ${p.category}`}
                 onSelect={() => go(`/p/${p.slug}`, p.name)}
               >
-                <img src={p.images[0]} alt="" className="h-10 w-8 shrink-0 object-cover" />
+                <img src={p.images[0]} alt="" loading="lazy" className="h-10 w-8 shrink-0 object-cover" />
                 <div className="flex-1 truncate">
                   <p className="truncate text-[13px]">{p.name}</p>
                   <p className="truncate text-[11px] text-mute">{p.tagline}</p>

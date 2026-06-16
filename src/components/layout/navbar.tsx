@@ -222,13 +222,13 @@ export function Navbar() {
       data.columns = [
         {
           title: "Categories",
-          links: categories.slice(0, 6).map((c: any) => ({ 
-            l: c.name, 
-            to: "/c/$category", 
-            params: { category: c.slug } 
-          }))
+          links: categories.slice(0, 6).map((c: any) => ({
+            l: c.name,
+            to: "/c/$category",
+            params: { category: c.slug },
+          })),
         },
-        ...megaContent.Shop.columns.slice(1)
+        ...megaContent.Shop.columns.slice(1),
       ];
     }
     return data;
@@ -236,7 +236,11 @@ export function Navbar() {
 
   const featureProduct = React.useMemo(() => {
     if (!megaData) return null;
-    return featuredProducts.find((p: Product) => p.slug === megaData.featureSlug) || featuredProducts[0] || null;
+    return (
+      featuredProducts.find((p: Product) => p.slug === megaData.featureSlug) ||
+      featuredProducts[0] ||
+      null
+    );
   }, [megaData, featuredProducts]);
 
   return (
@@ -403,7 +407,6 @@ export function Navbar() {
           )}
         </AnimatePresence>
       </motion.header>
-
 
       {/* Mobile menu */}
       <AnimatePresence>

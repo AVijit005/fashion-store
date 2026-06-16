@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SlidersHorizontal, X, ChevronDown } from "lucide-react";
 import { ProductCard } from "@/components/product/product-card";
 import { Reveal } from "@/components/ui/reveal";
-import { products as ALL, type Product } from "@/lib/api/catalog";
+import type { Product } from "@/lib/api/catalog";
 
 const SIZE_OPTS = ["S", "M", "L", "XL", "XXL"];
 const COLOR_OPTS = [
@@ -29,12 +29,14 @@ export function ProductGridShell({
   description,
   base,
   hero,
+  isLoading,
 }: {
   title: string;
   eyebrow: string;
   description?: string;
   base: Product[];
   hero?: ReactNode;
+  isLoading?: boolean;
 }) {
   const [sizes, setSizes] = useState<string[]>([]);
   const [colors, setColors] = useState<string[]>([]);
@@ -144,13 +146,23 @@ export function ProductGridShell({
             </div>
           )}
 
-          {list.length === 0 ? (
+          {isLoading ? (
+            <div className="grid min-h-[60vh] grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 lg:gap-x-6 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="animate-pulse space-y-4">
+                  <div className="aspect-[3/4] w-full bg-line/50"></div>
+                  <div className="h-4 w-2/3 bg-line/50"></div>
+                  <div className="h-4 w-1/3 bg-line/50"></div>
+                </div>
+              ))}
+            </div>
+          ) : list.length === 0 ? (
             <div className="flex min-h-[40vh] flex-col items-center justify-center text-center">
               <p className="font-display text-3xl">No matches</p>
               <p className="mt-2 text-mute">Try removing a filter or two.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 lg:gap-x-6 xl:grid-cols-4">
+            <div className="grid min-h-[60vh] grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 lg:gap-x-6 xl:grid-cols-4">
               {list.map((p, i) => (
                 <Reveal key={p.id} delay={(i % 4) * 0.05}>
                   <ProductCard product={p} priority={i < 4} />

@@ -1,4 +1,4 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { OrdersService } from './orders.service';
 import { OrderStatus } from '@prisma/client';
@@ -17,6 +17,13 @@ export class OrderExpiryProcessor extends WorkerHost implements OnModuleDestroy 
     if (this.worker) {
       await this.worker.close();
     }
+  }
+
+  // BE-007: Dead Letter Queue Trap
+  @OnWorkerEvent('failed')
+  onFailed(job: Job, error: Error) {
+    this.logger.error(`[DEAD LETTER] Job ${job?.id} (Type: ${job?.name}) failed permanently. Reason: ${error.message}`);
+    // Future: Persist to a DLQ Postgres table or push to Datadog/Sentry
   }
 
   async process(job: Job<{ orderId: string }>): Promise<void> {

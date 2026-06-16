@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, PaymentProvider, PaymentStatus } from '@prisma/client';
 import { OrdersService } from '../orders/orders.service';
 import { InventoryService } from '../orders/inventory.service';
 
@@ -18,8 +18,10 @@ export class AdminOrdersService {
       where.status = status;
     }
     if (search) {
-      if (search.length < 3) throw new BadRequestException('Search term must be at least 3 characters');
-      if (search.length > 100) throw new BadRequestException('Search term cannot exceed 100 characters');
+      if (search.length < 3)
+        throw new BadRequestException('Search term must be at least 3 characters');
+      if (search.length > 100)
+        throw new BadRequestException('Search term cannot exceed 100 characters');
       where.OR = [
         { id: { contains: search, mode: 'insensitive' } },
         { shippingEmail: { contains: search, mode: 'insensitive' } },
@@ -58,18 +60,18 @@ export class AdminOrdersService {
 
   async createOrder(data: any) {
     const { email, items } = data; // items: [{ id, qty }]
-    
+
     return this.prisma.$transaction(async (tx) => {
       const orderItemsData = [];
 
       const validItems = (items || []).filter((i: any) => i.id);
       const variantIds = validItems.map((i: any) => i.id);
-      
+
       const variants = await tx.productVariant.findMany({
         where: { id: { in: variantIds } },
-        include: { product: true }
+        include: { product: true },
       });
-      const dbVariantMap = new Map(variants.map(v => [v.id, v]));
+      const dbVariantMap = new Map(variants.map((v) => [v.id, v]));
 
       for (const item of validItems) {
         const variant = dbVariantMap.get(item.id);
@@ -82,13 +84,19 @@ export class AdminOrdersService {
         });
       }
 
-      await this.inventoryService.reserveInventory(validItems.map((i: any) => ({
-        variantId: i.id,
-        quantity: i.qty,
-        sku: dbVariantMap.get(i.id)?.sku || ''
-      })), tx);
+      await this.inventoryService.reserveInventory(
+        validItems.map((i: any) => ({
+          variantId: i.id,
+          quantity: i.qty,
+          sku: dbVariantMap.get(i.id)?.sku || '',
+        })),
+        tx,
+      );
 
-      const calculatedTotal = orderItemsData.reduce((acc, item) => acc + (item.quantity * Number(item.priceAtPurchase)), 0);
+      const calculatedTotal = orderItemsData.reduce(
+        (acc, item) => acc + item.quantity * Number(item.priceAtPurchase),
+        0,
+      );
 
       return tx.order.create({
         data: {
@@ -101,9 +109,9 @@ export class AdminOrdersService {
           shippingState: '',
           shippingPostalCode: '',
           shippingCountry: '',
-          status: 'PAID', // POS orders are considered paid
-          paymentStatus: 'COMPLETED',
-          paymentProvider: 'POS',
+          status: OrderStatus.PAID, // POS orders are considered paid
+          paymentStatus: PaymentStatus.PAID,
+          paymentProvider: PaymentProvider.COD,
           items: {
             create: orderItemsData,
           },
@@ -117,12 +125,12 @@ export class AdminOrdersService {
     if (!order) {
       throw new NotFoundException('Order not found');
     }
-    
+
     return this.ordersService.transitionStatus(
       id,
       status,
       'ADMIN',
-      'Status updated manually by admin'
+      'Status updated manually by admin',
     );
   }
 
@@ -134,13 +142,13 @@ export class AdminOrdersService {
     if (order.status !== OrderStatus.PAID) {
       throw new BadRequestException('Order is not paid');
     }
-    
+
     // Process refund using OrdersService to ensure inventory restoration
     return this.ordersService.transitionStatus(
       id,
       OrderStatus.REFUNDED,
       'ADMIN',
-      'Order refunded manually by admin'
+      'Order refunded manually by admin',
     );
   }
 

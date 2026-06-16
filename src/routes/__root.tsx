@@ -23,10 +23,18 @@ import React, { useEffect, Suspense } from "react";
 import { useAuthStore } from "@/lib/store/auth";
 import * as Sentry from "@sentry/react";
 
-const CartDrawer = React.lazy(() => import("@/components/cart/cart-drawer").then(m => ({ default: m.CartDrawer })));
-const AuthModal = React.lazy(() => import("@/components/layout/auth-modal").then(m => ({ default: m.AuthModal })));
-const WelcomeModal = React.lazy(() => import("@/components/welcome-modal").then(m => ({ default: m.WelcomeModal })));
-const CommandPalette = React.lazy(() => import("@/components/search/command-palette").then(m => ({ default: m.CommandPalette })));
+const CartDrawer = React.lazy(() =>
+  import("@/components/cart/cart-drawer").then((m) => ({ default: m.CartDrawer })),
+);
+const AuthModal = React.lazy(() =>
+  import("@/components/layout/auth-modal").then((m) => ({ default: m.AuthModal })),
+);
+const WelcomeModal = React.lazy(() =>
+  import("@/components/welcome-modal").then((m) => ({ default: m.WelcomeModal })),
+);
+const CommandPalette = React.lazy(() =>
+  import("@/components/search/command-palette").then((m) => ({ default: m.CommandPalette })),
+);
 
 function NotFoundComponent() {
   return (
@@ -96,16 +104,27 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Heavyweight cotton tees, anime drops, hoodies, jackets, and a print studio for one-of-one pieces.",
       },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "https://raw.githubusercontent.com/AVijit005/fashion-store/main/public/og-image.jpg" },
-      { name: "twitter:image", content: "https://raw.githubusercontent.com/AVijit005/fashion-store/main/public/og-image.jpg" },
+      {
+        property: "og:image",
+        content:
+          "https://raw.githubusercontent.com/AVijit005/fashion-store/main/public/og-image.jpg",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://raw.githubusercontent.com/AVijit005/fashion-store/main/public/og-image.jpg",
+      },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
+      },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
-      { rel: "stylesheet", href: appCss }
+      { rel: "stylesheet", href: appCss },
     ],
     scripts: [
       {
@@ -145,19 +164,24 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isAdmin = pathname.startsWith("/admin");
-  const initializeAuth = useAuthStore((state) => state.initialize);
-  const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    initializeAuth();
+    useAuthStore.getState().initialize();
   }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Sentry.ErrorBoundary fallback={<div className="flex min-h-screen items-center justify-center text-center p-8 bg-paper text-ink"><p className="text-xl border border-ink p-8">Critical App Error: Something went wrong and the UI crashed. Please refresh.</p></div>}>
+      <Sentry.ErrorBoundary
+        fallback={
+          <div className="flex min-h-screen items-center justify-center text-center p-8 bg-paper text-ink">
+            <p className="text-xl border border-ink p-8">
+              Critical App Error: Something went wrong and the UI crashed. Please refresh.
+            </p>
+          </div>
+        }
+      >
         <div className="flex min-h-screen flex-col">
           <a
             href="#main-content"
@@ -178,14 +202,14 @@ function RootComponent() {
           </main>
           {!isAdmin && <Footer />}
           {!isAdmin && <BottomTabBar />}
-          
+
           <Suspense fallback={null}>
             <CartDrawer />
             <AuthModal />
             <WelcomeModal />
             <CommandPalette />
           </Suspense>
-          
+
           {!isAdmin && <FlyToCartPortal />}
           <PaperGrain />
           <Toaster position={isAdmin ? "bottom-right" : "bottom-center"} />

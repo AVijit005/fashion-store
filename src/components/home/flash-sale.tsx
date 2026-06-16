@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Reveal } from "@/components/ui/reveal";
 import { useCountdown } from "@/hooks/use-countdown";
-import { products } from "@/lib/api/catalog";
+import { catalogApi } from "@/lib/api/catalog";
+import { type Product } from "@/lib/api/catalog";
+import { ProductCard } from "../product/product-card";
+import { useQuery } from "@tanstack/react-query";
 import { inr, pct } from "@/lib/format";
 import { Link } from "@tanstack/react-router";
 
@@ -12,7 +15,11 @@ export function FlashSale() {
     setTarget(Date.now() + 1000 * 60 * 60 * 8 + 1000 * 60 * 43);
   }, []);
   const { h, m, s } = useCountdown(target ?? 0);
-  const items = products.filter((p) => pct(p.price, p.mrp) >= 30).slice(0, 6);
+  const { data } = useQuery({
+    queryKey: ["products", "featured"],
+    queryFn: () => catalogApi.getProducts({ featured: true, limit: 6 }),
+  });
+  const items = data?.products || [];
 
   return (
     <section className="bg-fog">
@@ -42,7 +49,7 @@ export function FlashSale() {
         </Reveal>
 
         <div className="mt-10 flex gap-4 overflow-x-auto pb-2 hide-scrollbar lg:gap-6">
-          {items.map((p, i) => (
+          {items.map((p: Product, i: number) => (
             <Reveal key={p.id} delay={i * 0.04} className="w-[240px] shrink-0 lg:w-[280px]">
               <Link to="/p/$slug" params={{ slug: p.slug }} className="block">
                 <div className="relative aspect-[3/4] overflow-hidden bg-paper">

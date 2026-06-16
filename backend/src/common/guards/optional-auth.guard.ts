@@ -34,21 +34,29 @@ export class OptionalAuthGuard implements CanActivate {
         if (sessionId) {
           const session = await this.prisma.session.findUnique({
             where: { id: sessionId },
-            select: { isRevoked: true },
+            select: { isRevoked: true, user: { select: { role: true } } },
           });
 
           if (session && !session.isRevoked) {
             request.user = {
               id: payload.sub,
-              role: payload.role,
+              role: session.user.role,
               sessionId,
             };
           }
         } else {
-          request.user = {
-            id: payload.sub,
-            role: payload.role,
-          };
+          // If no sessionId is present, fall back to checking the user directly
+          const user = await this.prisma.user.findUnique({
+            where: { id: payload.sub },
+            select: { role: true, isDeleted: true },
+          });
+          
+          if (user && !user.isDeleted) {
+            request.user = {
+              id: payload.sub,
+              role: user.role,
+            };
+          }
         }
       } catch {
         // Silently ignore invalid tokens, request proceeds as guest

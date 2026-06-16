@@ -28,8 +28,8 @@ function AdminLayout() {
             </div>
           </aside>
           <main className="flex-1 p-6">
-             <div className="h-8 w-48 animate-pulse bg-fog/80 mb-6" />
-             <div className="h-64 w-full animate-pulse bg-fog/80" />
+            <div className="h-8 w-48 animate-pulse bg-fog/80 mb-6" />
+            <div className="h-64 w-full animate-pulse bg-fog/80" />
           </main>
         </div>
       </div>

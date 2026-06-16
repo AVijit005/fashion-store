@@ -15,7 +15,7 @@ export class AdminCatalogService {
       ];
     }
     const skip = (page - 1) * limit;
-    
+
     const [data, total] = await Promise.all([
       this.prisma.product.findMany({
         where,
@@ -43,21 +43,29 @@ export class AdminCatalogService {
   }
 
   async createProduct(data: any) {
-    const { categoryId, collectionId, variantsData, images, image, ...productData } = data;
+    const { categoryId, collectionId, variantsData, images, image, name, price, isActive, compareAtPrice, dropId, isFeatured, slug, description } = data;
     return this.prisma.product.create({
       data: {
-        ...productData,
+        title: name,
+        slug,
+        description: description || '',
+        basePrice: price,
+        status: isActive ? 'PUBLISHED' : 'DRAFT',
+        isFeatured: isFeatured || false,
         categoryId,
+        dropId,
         collections: collectionId ? { connect: { id: collectionId } } : undefined,
-        mediaUrls: images || [],
-        variants: variantsData ? {
-          create: variantsData.map((v: any) => ({
-            sku: v.sku,
-            size: v.size,
-            color: v.color,
-            stockQuantity: v.stock || 0,
-          }))
-        } : undefined,
+        mediaUrls: images || (image ? [image] : []),
+        variants: variantsData
+          ? {
+              create: variantsData.map((v: any) => ({
+                sku: v.sku,
+                size: v.size,
+                color: v.color || '',
+                stockQuantity: v.stock || 0,
+              })),
+            }
+          : undefined,
       },
       include: { variants: true },
     });
@@ -69,8 +77,8 @@ export class AdminCatalogService {
       throw new NotFoundException('Product not found');
     }
 
-    const { variantsData, images, image, categoryId, collectionId, dropId, ...productData } = data;
-    
+    const { variantsData, images, image, categoryId, collectionId, dropId, name, price, isActive, compareAtPrice, slug, description, isFeatured } = data;
+
     if (variantsData) {
       await this.prisma.productVariant.updateMany({
         where: {
@@ -83,11 +91,17 @@ export class AdminCatalogService {
         if (v.id) {
           await this.prisma.productVariant.update({
             where: { id: v.id },
-            data: { sku: v.sku, size: v.size, color: v.color, stockQuantity: v.stock || 0 },
+            data: { sku: v.sku, size: v.size, color: v.color || '', stockQuantity: v.stock || 0 },
           });
         } else {
           await this.prisma.productVariant.create({
-            data: { productId: id, sku: v.sku, size: v.size, color: v.color, stockQuantity: v.stock || 0 },
+            data: {
+              productId: id,
+              sku: v.sku,
+              size: v.size,
+              color: v.color || '',
+              stockQuantity: v.stock || 0,
+            },
           });
         }
       }
@@ -96,11 +110,16 @@ export class AdminCatalogService {
     return this.prisma.product.update({
       where: { id },
       data: {
-        ...productData,
+        ...(name && { title: name }),
+        ...(slug && { slug }),
+        ...(description !== undefined && { description }),
+        ...(price !== undefined && { basePrice: price }),
+        ...(isActive !== undefined && { status: isActive ? 'PUBLISHED' : 'DRAFT' }),
+        ...(isFeatured !== undefined && { isFeatured }),
         categoryId,
         dropId,
         collections: collectionId ? { set: [{ id: collectionId }] } : undefined,
-        mediaUrls: images ? images : undefined,
+        mediaUrls: images ? images : (image ? [image] : undefined),
       },
     });
   }

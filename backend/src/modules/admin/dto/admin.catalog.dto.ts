@@ -1,4 +1,13 @@
-import { IsString, IsNumber, IsOptional, IsArray, ValidateNested, IsBoolean, IsUUID, Min } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+  IsBoolean,
+  IsUUID,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ProductVariantDto {

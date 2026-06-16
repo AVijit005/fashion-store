@@ -2,7 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { breadcrumbJsonLd, collectionJsonLd } from "@/lib/seo";
 import { Reveal } from "@/components/ui/reveal";
 import { ProductCard } from "@/components/product/product-card";
-import { products } from "@/lib/api/catalog";
+import { catalogApi } from "@/lib/api/catalog";
+import { useQuery } from "@tanstack/react-query";
+import type { Product } from "@/lib/api/catalog";
 
 export const Route = createFileRoute("/anime-universe")({
   head: () => ({
@@ -32,7 +34,11 @@ export const Route = createFileRoute("/anime-universe")({
 });
 
 function AnimeUniverse() {
-  const items = products.filter((p) => p.badges.includes("anime"));
+  const { data } = useQuery({
+    queryKey: ["products", "anime"],
+    queryFn: () => catalogApi.getProducts({ category: "anime", limit: 20 }),
+  });
+  const items = data?.products || [];
   return (
     <div className="bg-ink text-paper">
       <header className="relative overflow-hidden border-b border-paper/15">
@@ -68,7 +74,7 @@ function AnimeUniverse() {
           <h2 className="mt-2 font-display text-5xl">Drops in rotation</h2>
         </Reveal>
         <div className="mt-10 grid grid-cols-2 gap-x-4 gap-y-10 lg:grid-cols-4 lg:gap-x-6 [&_p]:text-paper [&_.text-mute]:text-paper/60">
-          {items.map((p) => (
+          {items.slice(0, 4).map((p: Product, i: number) => (
             <ProductCard key={p.id} product={p} />
           ))}
         </div>

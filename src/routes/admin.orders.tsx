@@ -74,27 +74,27 @@ function OrdersPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [active, setActive] = useState<Order | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [manualOrder, setManualOrder] = useState({ email: '', items: [] as { id: string, qty: number, price: number }[], total: 0 });
+  const [manualOrder, setManualOrder] = useState({
+    email: "",
+    items: [] as { id: string; qty: number; price: number }[],
+    total: 0,
+  });
 
   useEffect(() => {
-    const sum = manualOrder.items.reduce((acc, item) => acc + (item.qty * (item.price || 0)), 0);
-    setManualOrder(m => ({ ...m, total: sum }));
+    const sum = manualOrder.items.reduce((acc, item) => acc + item.qty * (item.price || 0), 0);
+    setManualOrder((m) => ({ ...m, total: sum }));
   }, [manualOrder.items]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
   const queryClient = useQueryClient();
-  const {
-    data,
-    isLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage
-  } = useInfiniteQuery({
+  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ["admin-orders", q, status],
     queryFn: async ({ pageParam = 1 }) => {
-      return apiClient.get<PaginatedResponse<Order>>(`/admin/orders?page=${pageParam}&limit=${pageSize}&q=${encodeURIComponent(q)}&status=${status}`);
+      return apiClient.get<PaginatedResponse<Order>>(
+        `/admin/orders?page=${pageParam}&limit=${pageSize}&q=${encodeURIComponent(q)}&status=${status}`,
+      );
     },
     getNextPageParam: (lastPage, allPages) => {
       const totalPages = lastPage.meta?.totalPages || 1;
@@ -105,17 +105,21 @@ function OrdersPage() {
   });
 
   const createOrderMutation = useMutation({
-    mutationFn: async (data: { email: string; items: { id: string; qty: number; price?: number }[]; total: number }) => apiClient.post('/admin/orders', data),
+    mutationFn: async (data: {
+      email: string;
+      items: { id: string; qty: number; price?: number }[];
+      total: number;
+    }) => apiClient.post("/admin/orders", data),
     onSuccess: () => {
-      toast.success('Order created successfully');
+      toast.success("Order created successfully");
       queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
       setIsCreating(false);
-      setManualOrder({ email: '', items: [], total: 0 });
-    }
+      setManualOrder({ email: "", items: [], total: 0 });
+    },
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ ids, status }: { ids: string[], status: string }) => {
+    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
       return apiClient.patch(`/admin/orders/bulk-status`, { orderIds: ids, status });
     },
     onSuccess: (_, variables) => {
@@ -126,12 +130,14 @@ function OrdersPage() {
           ...old,
           pages: old.pages.map((page: any) => ({
             ...page,
-            data: page.data.map((o: any) => variables.ids.includes(o.id) ? { ...o, status: variables.status } : o)
-          }))
+            data: page.data.map((o: any) =>
+              variables.ids.includes(o.id) ? { ...o, status: variables.status } : o,
+            ),
+          })),
         };
       });
       setSelected([]);
-    }
+    },
   });
 
   const list = useMemo(() => {
@@ -166,13 +172,13 @@ function OrdersPage() {
         description="Fulfillment, payments, refunds and returns in one view."
         actions={
           <>
-            <button 
+            <button
               onClick={() => exportToCSV("orders", list)}
               className="press flex items-center gap-2 border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute transition hover:border-ink hover:text-ink"
             >
               <Download className="h-3.5 w-3.5" /> Export
             </button>
-            <button 
+            <button
               onClick={() => setIsCreating(true)}
               className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper"
             >
@@ -191,7 +197,9 @@ function OrdersPage() {
             className={`flex items-center gap-2 px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] transition ${status === s ? "bg-ink text-paper" : "text-mute hover:text-ink"}`}
           >
             <span>{s}</span>
-            {counts[s] !== undefined && <span className="font-mono tabular-nums opacity-70">{counts[s]}</span>}
+            {counts[s] !== undefined && (
+              <span className="font-mono tabular-nums opacity-70">{counts[s]}</span>
+            )}
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2 pr-1">
@@ -220,9 +228,30 @@ function OrdersPage() {
             {selected.length} selected
           </p>
           <div className="flex items-center gap-2">
-            <BulkBtn icon={<Printer className="h-3.5 w-3.5" />} onClick={() => toast.success('Labels sent to printer')}>Print labels</BulkBtn>
-            <BulkBtn icon={<Truck className="h-3.5 w-3.5" />} disabled={updateStatusMutation.isPending || list.filter((o: Order) => selected.includes(o.id)).some((o: Order) => o.status !== 'PAID')} onClick={() => updateStatusMutation.mutate({ ids: selected, status: 'SHIPPED' })}>{updateStatusMutation.isPending ? "Updating..." : "Mark shipped"}</BulkBtn>
-            <BulkBtn icon={<Mail className="h-3.5 w-3.5" />} onClick={() => toast.success('Emails queued')}>Email customers</BulkBtn>
+            <BulkBtn
+              icon={<Printer className="h-3.5 w-3.5" />}
+              onClick={() => toast.success("Labels sent to printer")}
+            >
+              Print labels
+            </BulkBtn>
+            <BulkBtn
+              icon={<Truck className="h-3.5 w-3.5" />}
+              disabled={
+                updateStatusMutation.isPending ||
+                list
+                  .filter((o: Order) => selected.includes(o.id))
+                  .some((o: Order) => o.status !== "PAID")
+              }
+              onClick={() => updateStatusMutation.mutate({ ids: selected, status: "SHIPPED" })}
+            >
+              {updateStatusMutation.isPending ? "Updating..." : "Mark shipped"}
+            </BulkBtn>
+            <BulkBtn
+              icon={<Mail className="h-3.5 w-3.5" />}
+              onClick={() => toast.success("Emails queued")}
+            >
+              Email customers
+            </BulkBtn>
             <button
               onClick={() => setSelected([])}
               className="font-mono text-[10px] uppercase tracking-[0.2em] text-paper/70 hover:text-paper"
@@ -240,122 +269,134 @@ function OrdersPage() {
             <p className="text-[13px]">No orders found matching your criteria.</p>
           </div>
         ) : (
-        <>
-        <div className="overflow-x-auto w-full hidden md:block">
-        <table className="w-full text-[13px]">
-          <thead className="border-b border-line bg-fog/40 text-left">
-            <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
-              <th className="w-10 px-3 py-2.5">
-                <Checkbox checked={allSelected} onChange={toggleAll} aria-label="Select all" />
-              </th>
-              <th className="px-3 py-2.5 font-normal">Order</th>
-              <th className="px-3 py-2.5 font-normal">Customer</th>
-              <th className="px-3 py-2.5 font-normal">Status</th>
-              <th className="px-3 py-2.5 font-normal">Fulfillment</th>
-              <th className="px-3 py-2.5 font-normal">Payment</th>
-              <th className="px-3 py-2.5 font-normal">Channel</th>
-              <th className="px-3 py-2.5 text-right font-normal">Total</th>
-            </tr>
-          </thead>
-          <tbody>
+          <>
+            <div className="overflow-x-auto w-full hidden md:block">
+              <table className="w-full text-[13px]">
+                <thead className="border-b border-line bg-fog/40 text-left">
+                  <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
+                    <th className="w-10 px-3 py-2.5">
+                      <Checkbox
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        aria-label="Select all"
+                      />
+                    </th>
+                    <th className="px-3 py-2.5 font-normal">Order</th>
+                    <th className="px-3 py-2.5 font-normal">Customer</th>
+                    <th className="px-3 py-2.5 font-normal">Status</th>
+                    <th className="px-3 py-2.5 font-normal">Fulfillment</th>
+                    <th className="px-3 py-2.5 font-normal">Payment</th>
+                    <th className="px-3 py-2.5 font-normal">Channel</th>
+                    <th className="px-3 py-2.5 text-right font-normal">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((o: Order) => (
+                    <tr
+                      key={o.id}
+                      onClick={() => setActive(o)}
+                      className={`border-b border-line/60 transition hover:bg-fog/30 ${selected.includes(o.id) ? "bg-fog/30" : ""}`}
+                    >
+                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selected.includes(o.id)}
+                          onChange={() => toggle(o.id)}
+                          aria-label={`Select ${o.number}`}
+                        />
+                      </td>
+                      <td className="px-3 py-3">
+                        <p className="font-mono text-[12px] text-ink">
+                          {o.id.substring(0, 8).toUpperCase()}
+                        </p>
+                        <p className="text-[11px] text-mute">{relTime(o.createdAt)}</p>
+                      </td>
+                      <td className="px-3 py-3">
+                        <p className="text-ink">{o.user?.name || o.shippingName}</p>
+                        <p className="text-[11px] text-mute">{o.shippingCity}</p>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-col items-start gap-1">
+                          <StatusChip label={o.status} tone={orderTone(o.status)} />
+                          {o.refundRequested && <StatusChip label="Refund requested" tone="warn" />}
+                          {o.returnRequested && <StatusChip label="Return open" tone="info" />}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-mute">
+                        {FULFILL_LABEL[o.fulfillment]}
+                      </td>
+                      <td className="px-3 py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-mute">
+                        {o.payment}
+                      </td>
+                      <td className="px-3 py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-mute">
+                        {o.channel}
+                      </td>
+                      <td className="px-3 py-3 text-right font-mono tabular-nums">
+                        {compactInr(o.total)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Layout */}
+            <div className="flex flex-col md:hidden">
               {list.map((o: Order) => (
-                <tr
+                <div
                   key={o.id}
                   onClick={() => setActive(o)}
-                  className={`border-b border-line/60 transition hover:bg-fog/30 ${selected.includes(o.id) ? "bg-fog/30" : ""}`}
+                  className="flex flex-col gap-3 border-b border-line/60 p-4 transition hover:bg-fog/30"
                 >
-                <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                  <Checkbox
-                    checked={selected.includes(o.id)}
-                    onChange={() => toggle(o.id)}
-                    aria-label={`Select ${o.number}`}
-                  />
-                </td>
-                <td className="px-3 py-3">
-                  <p className="font-mono text-[12px] text-ink">{o.id.substring(0, 8).toUpperCase()}</p>
-                  <p className="text-[11px] text-mute">{relTime(o.createdAt)}</p>
-                </td>
-                <td className="px-3 py-3">
-                  <p className="text-ink">{o.user?.name || o.shippingName}</p>
-                  <p className="text-[11px] text-mute">{o.shippingCity}</p>
-                </td>
-                <td className="px-3 py-3">
-                  <div className="flex flex-col items-start gap-1">
-                    <StatusChip label={o.status} tone={orderTone(o.status)} />
-                    {o.refundRequested && <StatusChip label="Refund requested" tone="warn" />}
-                    {o.returnRequested && <StatusChip label="Return open" tone="info" />}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selected.includes(o.id)}
+                          onChange={() => toggle(o.id)}
+                          aria-label={`Select ${o.id}`}
+                        />
+                      </div>
+                      <div>
+                        <p className="font-mono text-[12px] text-ink">
+                          {o.id.substring(0, 8).toUpperCase()}
+                        </p>
+                        <p className="text-[11px] text-mute">{relTime(o.createdAt)}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono tabular-nums text-[13px]">{compactInr(o.total)}</p>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-mute">
+                        {o.payment}
+                      </p>
+                    </div>
                   </div>
-                </td>
-                <td className="px-3 py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-mute">
-                  {FULFILL_LABEL[o.fulfillment]}
-                </td>
-                <td className="px-3 py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-mute">
-                  {o.payment}
-                </td>
-                <td className="px-3 py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-mute">
-                  {o.channel}
-                </td>
-                <td className="px-3 py-3 text-right font-mono tabular-nums">
-                  {compactInr(o.total)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
-
-        {/* Mobile Layout */}
-        <div className="flex flex-col md:hidden">
-          {list.map((o: Order) => (
-            <div 
-              key={o.id}
-              onClick={() => setActive(o)}
-              className="flex flex-col gap-3 border-b border-line/60 p-4 transition hover:bg-fog/30"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={selected.includes(o.id)}
-                      onChange={() => toggle(o.id)}
-                      aria-label={`Select ${o.id}`}
-                    />
-                  </div>
-                  <div>
-                    <p className="font-mono text-[12px] text-ink">{o.id.substring(0, 8).toUpperCase()}</p>
-                    <p className="text-[11px] text-mute">{relTime(o.createdAt)}</p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[12px] text-ink">{o.user?.name || o.shippingName}</p>
+                      <p className="text-[11px] text-mute">{o.shippingCity}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <StatusChip label={o.status} tone={orderTone(o.status)} />
+                      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-mute">
+                        {FULFILL_LABEL[o.fulfillment]}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-mono tabular-nums text-[13px]">{compactInr(o.total)}</p>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-mute">{o.payment}</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[12px] text-ink">{o.user?.name || o.shippingName}</p>
-                  <p className="text-[11px] text-mute">{o.shippingCity}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <StatusChip label={o.status} tone={orderTone(o.status)} />
-                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-mute">{FULFILL_LABEL[o.fulfillment]}</span>
-                </div>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
-        {hasNextPage && (
-          <div className="flex justify-center p-4 border-t border-line">
-            <button
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="border border-line bg-paper px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
-            >
-              {isFetchingNextPage ? "Loading more..." : "Load more"}
-            </button>
-          </div>
-        )}
-        </>
+            {hasNextPage && (
+              <div className="flex justify-center p-4 border-t border-line">
+                <button
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                  className="border border-line bg-paper px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
+                >
+                  {isFetchingNextPage ? "Loading more..." : "Load more"}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </Panel>
 
@@ -367,29 +408,47 @@ function OrdersPage() {
         footer={
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-col gap-1">
-              <button 
-                disabled={updateStatusMutation.isPending && updateStatusMutation.variables?.status === 'CANCELLED'}
+              <button
+                disabled={
+                  updateStatusMutation.isPending &&
+                  updateStatusMutation.variables?.status === "CANCELLED"
+                }
                 onClick={() => {
-                   if (!active || !window.confirm("Are you sure you want to cancel this order? This action cannot be undone.")) return;
-                   updateStatusMutation.mutate(
-                     { ids: [active.id as string], status: 'CANCELLED' },
-                     { onSuccess: () => setActive(null) }
-                   );
+                  if (
+                    !active ||
+                    !window.confirm(
+                      "Are you sure you want to cancel this order? This action cannot be undone.",
+                    )
+                  )
+                    return;
+                  updateStatusMutation.mutate(
+                    { ids: [active.id as string], status: "CANCELLED" },
+                    { onSuccess: () => setActive(null) },
+                  );
                 }}
                 className="press flex items-center gap-1.5 border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
               >
-                {updateStatusMutation.isPending && updateStatusMutation.variables?.status === 'CANCELLED' ? "Cancelling..." : <><RotateCcw className="h-3.5 w-3.5" /> Cancel / Refund</>}
+                {updateStatusMutation.isPending &&
+                updateStatusMutation.variables?.status === "CANCELLED" ? (
+                  "Cancelling..."
+                ) : (
+                  <>
+                    <RotateCcw className="h-3.5 w-3.5" /> Cancel / Refund
+                  </>
+                )}
               </button>
-              {active?.paymentProvider === "RAZORPAY" && active?.status !== "FAILED" && active?.status !== "PAYMENT_PENDING" && (
-                <p className="text-[9px] text-accent max-w-[150px] leading-tight">
-                  Warning: Does not auto-refund via Razorpay.
-                </p>
-              )}
+              {active?.paymentProvider === "RAZORPAY" &&
+                active?.status !== "FAILED" &&
+                active?.status !== "PAYMENT_PENDING" && (
+                  <p className="text-[9px] text-accent max-w-[150px] leading-tight">
+                    Warning: Does not auto-refund via Razorpay.
+                  </p>
+                )}
             </div>
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={() => {
-                  const invoiceWindow = window.open('', '_blank');
+                  const invoiceWindow = window.open("", "_blank");
                   if (!invoiceWindow) return;
                   invoiceWindow.document.write(`
                     <html>
@@ -408,26 +467,32 @@ function OrdersPage() {
                       <div class="header">
                         <div>
                           <h1>INK STUDIO</h1>
-                          <p>Order #${active?.id?.substring(0,8).toUpperCase()}</p>
-                          <p>${active?.createdAt ? longDate(active.createdAt) : ''}</p>
+                          <p>Order #${active?.id?.substring(0, 8).toUpperCase()}</p>
+                          <p>${active?.createdAt ? longDate(active.createdAt) : ""}</p>
                         </div>
                         <div style="text-align: right;">
                           <p><strong>Billed To:</strong></p>
-                          <p>${active?.user?.name || active?.shippingName || ''}</p>
-                          <p>${active?.user?.email || active?.shippingEmail || ''}</p>
+                          <p>${active?.user?.name || active?.shippingName || ""}</p>
+                          <p>${active?.user?.email || active?.shippingEmail || ""}</p>
                           <p>${active?.shippingCity || active?.city}, IN</p>
                         </div>
                       </div>
                       <table>
                         <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>
-                        ${active?.items?.map(it => `
+                        ${
+                          active?.items
+                            ?.map(
+                              (it) => `
                           <tr>
                             <td>${it.name}<br/><small style="color: #666">${it.sku}</small></td>
                             <td>${it.qty}</td>
                             <td>${inr(it.price)}</td>
                             <td>${inr(it.price * it.qty)}</td>
                           </tr>
-                        `).join('') || ''}
+                        `,
+                            )
+                            .join("") || ""
+                        }
                       </table>
                       <div class="total">Total: ${inr(active?.total || 0)}</div>
                     </body>
@@ -439,18 +504,28 @@ function OrdersPage() {
               >
                 Print invoice
               </button>
-              <button 
-                disabled={updateStatusMutation.isPending && updateStatusMutation.variables?.status === 'SHIPPED'}
+              <button
+                disabled={
+                  updateStatusMutation.isPending &&
+                  updateStatusMutation.variables?.status === "SHIPPED"
+                }
                 onClick={() => {
-                   if (!active) return;
-                   updateStatusMutation.mutate(
-                     { ids: [active.id as string], status: 'SHIPPED' },
-                     { onSuccess: () => setActive(null) }
-                   );
+                  if (!active) return;
+                  updateStatusMutation.mutate(
+                    { ids: [active.id as string], status: "SHIPPED" },
+                    { onSuccess: () => setActive(null) },
+                  );
                 }}
                 className="press flex items-center gap-1.5 bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
               >
-                {updateStatusMutation.isPending && updateStatusMutation.variables?.status === 'SHIPPED' ? "Fulfilling..." : <><PackageCheck className="h-3.5 w-3.5" /> Fulfill</>}
+                {updateStatusMutation.isPending &&
+                updateStatusMutation.variables?.status === "SHIPPED" ? (
+                  "Fulfilling..."
+                ) : (
+                  <>
+                    <PackageCheck className="h-3.5 w-3.5" /> Fulfill
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -466,17 +541,17 @@ function OrdersPage() {
         title="Create Order"
         footer={
           <div className="flex justify-end gap-2">
-            <button 
+            <button
               disabled={createOrderMutation.isPending}
               onClick={() => {
                 setIsCreating(false);
-                setManualOrder({ email: '', items: [], total: 0 });
+                setManualOrder({ email: "", items: [], total: 0 });
               }}
               className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink disabled:opacity-50"
             >
               Cancel
             </button>
-            <button 
+            <button
               disabled={createOrderMutation.isPending}
               onClick={() => createOrderMutation.mutate(manualOrder)}
               className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
@@ -489,33 +564,93 @@ function OrdersPage() {
         <div className="space-y-4">
           <div>
             <label className="text-[12px] text-mute">Customer Email</label>
-            <input 
-              value={manualOrder.email} 
-              onChange={e => setManualOrder(m => ({...m, email: e.target.value}))}
-              className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" 
+            <input
+              value={manualOrder.email}
+              onChange={(e) => setManualOrder((m) => ({ ...m, email: e.target.value }))}
+              className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink"
             />
           </div>
           <div>
             <label className="text-[12px] text-mute">Items</label>
             <div className="space-y-2 mt-1">
-              {manualOrder.items.map((item: { id: string; qty: number; price: number }, i: number) => (
-                <div key={i} className="flex gap-2">
-                  <input value={item.id} onChange={e => { setManualOrder(m => ({...m, items: m.items.map((it, idx) => idx === i ? { ...it, id: e.target.value } : it)}))}} placeholder="Product ID / SKU" className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink" />
-                  <input type="number" value={item.price || ''} onChange={e => { setManualOrder(m => ({...m, items: m.items.map((it, idx) => idx === i ? { ...it, price: Number(e.target.value) } : it)}))}} placeholder="Price" className="h-9 w-24 border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums" />
-                  <input type="number" value={item.qty} onChange={e => { setManualOrder(m => ({...m, items: m.items.map((it, idx) => idx === i ? { ...it, qty: Number(e.target.value) } : it)}))}} placeholder="Qty" className="h-9 w-16 border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums" />
-                  <button onClick={() => setManualOrder(m => ({...m, items: m.items.filter((_, idx) => idx !== i)}))} className="text-accent hover:opacity-70 px-2">✕</button>
-                </div>
-              ))}
-              <button onClick={() => setManualOrder(m => ({...m, items: [...m.items, { id: "", qty: 1, price: 0 }]}))} className="press border border-dashed border-line bg-fog/20 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink w-full">+ Add Item</button>
+              {manualOrder.items.map(
+                (item: { id: string; qty: number; price: number }, i: number) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      value={item.id}
+                      onChange={(e) => {
+                        setManualOrder((m) => ({
+                          ...m,
+                          items: m.items.map((it, idx) =>
+                            idx === i ? { ...it, id: e.target.value } : it,
+                          ),
+                        }));
+                      }}
+                      placeholder="Product ID / SKU"
+                      className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink"
+                    />
+                    <input
+                      type="number"
+                      value={item.price || ""}
+                      onChange={(e) => {
+                        setManualOrder((m) => ({
+                          ...m,
+                          items: m.items.map((it, idx) =>
+                            idx === i ? { ...it, price: Number(e.target.value) } : it,
+                          ),
+                        }));
+                      }}
+                      placeholder="Price"
+                      className="h-9 w-24 border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums"
+                    />
+                    <input
+                      type="number"
+                      value={item.qty}
+                      onChange={(e) => {
+                        setManualOrder((m) => ({
+                          ...m,
+                          items: m.items.map((it, idx) =>
+                            idx === i ? { ...it, qty: Number(e.target.value) } : it,
+                          ),
+                        }));
+                      }}
+                      placeholder="Qty"
+                      className="h-9 w-16 border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums"
+                    />
+                    <button
+                      onClick={() =>
+                        setManualOrder((m) => ({
+                          ...m,
+                          items: m.items.filter((_, idx) => idx !== i),
+                        }))
+                      }
+                      className="text-accent hover:opacity-70 px-2"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ),
+              )}
+              <button
+                onClick={() =>
+                  setManualOrder((m) => ({
+                    ...m,
+                    items: [...m.items, { id: "", qty: 1, price: 0 }],
+                  }))
+                }
+                className="press border border-dashed border-line bg-fog/20 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink w-full"
+              >
+                + Add Item
+              </button>
             </div>
           </div>
           <div>
             <label className="text-[12px] text-mute">Total Amount</label>
-            <input 
+            <input
               type="number"
-              value={manualOrder.total} 
-              onChange={e => setManualOrder(m => ({...m, total: Number(e.target.value)}))}
-              className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums" 
+              value={manualOrder.total}
+              onChange={(e) => setManualOrder((m) => ({ ...m, total: Number(e.target.value) }))}
+              className="mt-1 h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink tabular-nums"
             />
           </div>
         </div>
@@ -525,7 +660,7 @@ function OrdersPage() {
 }
 
 function OrderDetail({ order }: { order: Order }) {
-  const currentStep = FULFILL_STEPS.indexOf(order.fulfillment as typeof FULFILL_STEPS[number]);
+  const currentStep = FULFILL_STEPS.indexOf(order.fulfillment as (typeof FULFILL_STEPS)[number]);
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
@@ -635,9 +770,23 @@ function Checkbox({ checked, onChange, ...rest }: React.InputHTMLAttributes<HTML
   );
 }
 
-function BulkBtn({ children, icon, onClick, disabled }: { children: React.ReactNode; icon: React.ReactNode; onClick?: () => void; disabled?: boolean }) {
+function BulkBtn({
+  children,
+  icon,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  icon: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
   return (
-    <button onClick={onClick} disabled={disabled} className="flex items-center gap-1.5 border border-paper/20 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-paper transition hover:bg-paper/10 disabled:opacity-50 disabled:cursor-not-allowed">
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="flex items-center gap-1.5 border border-paper/20 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-paper transition hover:bg-paper/10 disabled:opacity-50 disabled:cursor-not-allowed"
+    >
       {icon}
       {children}
     </button>

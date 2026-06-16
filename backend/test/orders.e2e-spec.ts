@@ -2,11 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, HttpStatus } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { configureApp } from '../src/app.setup';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../src/config/prisma.service';
 import { OrderStatus } from '@prisma/client';
 import * as crypto from 'crypto';
 import { OrdersService } from '../src/modules/orders/orders.service';
-import { OrdersSweeperService } from '../src/modules/orders/orders-sweeper.service';
+import { AbandonedCartCron } from '../src/modules/orders/abandoned-cart.cron';
 
 describe('OrdersModule (e2e)', () => {
   let app: INestApplication;
@@ -25,6 +27,7 @@ describe('OrdersModule (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication({ rawBody: true });
+    configureApp(app, app.get(ConfigService));
     await app.init();
     prisma = app.get(PrismaService);
   });
@@ -340,9 +343,9 @@ describe('OrdersModule (e2e)', () => {
     });
   });
 
-  describe('OrdersSweeperService E2E', () => {
+  describe('AbandonedCartCron E2E', () => {
     it('should sweep expired PAYMENT_PENDING orders and restore stock', async () => {
-      const sweeperService = app.get(OrdersSweeperService);
+      const cronService = app.get(AbandonedCartCron);
 
       // 1. Add item to cart
       await request(app.getHttpServer())
@@ -371,7 +374,7 @@ describe('OrdersModule (e2e)', () => {
       });
 
       // 4. Run sweeper
-      await sweeperService.handleSweeperCron();
+      await cronService.handleAbandonedCarts();
 
       // 5. Verify status is FAILED and stock is restored
       const order = await prisma.order.findUnique({ where: { id: orderId } });

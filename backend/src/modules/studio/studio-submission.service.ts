@@ -17,7 +17,7 @@ export class StudioSubmissionService {
       where: { id: designId },
     });
 
-    if (!design || design.deletedAt) throw new NotFoundException('Design not found');
+    if (!design || design.isDeleted) throw new NotFoundException('Design not found');
     if (design.userId !== userId) throw new ForbiddenException('Access denied');
     if (design.status !== DesignStatus.DRAFT) {
       throw new BadRequestException('Only DRAFT designs can be submitted');

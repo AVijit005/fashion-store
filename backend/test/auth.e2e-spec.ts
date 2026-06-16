@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, HttpStatus } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { configureApp } from '../src/app.setup';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../src/config/prisma.service';
 import * as cookieParser from 'cookie-parser';
 
@@ -16,6 +18,7 @@ describe('AuthController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
+    configureApp(app, app.get(ConfigService));
     await app.init();
 
     prisma = app.get(PrismaService);

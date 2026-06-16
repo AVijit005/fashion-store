@@ -47,6 +47,7 @@
     "helmet": "^8.0.0",
     "ioredis": "^5.5.0",
     "nest-winston": "^1.10.2",
+    "nestjs-throttler-storage-redis": "^0.5.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.1",

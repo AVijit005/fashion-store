@@ -7,6 +7,7 @@ import type { Product } from "@/lib/api/catalog";
 import { inr, pct } from "@/lib/format";
 import { useCart } from "@/lib/store/cart";
 import { useWishlist } from "@/lib/store/wishlist";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useRecentlyViewed } from "@/lib/store/recently-viewed";
 import { useFlyToCart } from "@/lib/store/fly-to-cart";
 import { ProductCard } from "@/components/product/product-card";
@@ -106,10 +107,12 @@ function ProductPage() {
   const [color, setColor] = useState(product.colors[0].name);
   const [guideOpen, setGuideOpen] = useState(false);
   const add = useCart((s) => s.add);
+  const hydrated = useHydrated();
   const { has, toggle } = useWishlist();
+  const _wished = has(product.id);
+  const wished = hydrated ? _wished : false;
   const launch = useFlyToCart((s) => s.launch);
   const addBtnRef = useRef<HTMLButtonElement>(null);
-  const wished = has(product.id);
 
   const [related, setRelated] = useState<Product[]>([]);
   const [look, setLook] = useState<Product[]>([]);
@@ -119,7 +122,8 @@ function ProductPage() {
     catalogApi
       .getProducts({ category: product.category, limit: 5 })
       .then((res) => {
-        if (active) setRelated(res.products.filter((p: Product) => p.id !== product.id).slice(0, 4));
+        if (active)
+          setRelated(res.products.filter((p: Product) => p.id !== product.id).slice(0, 4));
       })
       .catch((err) => console.error(err));
 
@@ -129,22 +133,33 @@ function ProductPage() {
         if (active) setLook(res.products.filter((p: Product) => p.id !== product.id).slice(0, 3));
       })
       .catch((err) => console.error(err));
-      
-    return () => { active = false; };
+
+    return () => {
+      active = false;
+    };
   }, [product]);
 
-  const discount = pct(product.price, product.mrp);
-  
-  const totalStock = product.variants?.reduce((s: number, v: any) => s + (v.stockQuantity || 0), 0) || 0;
+  const selectedVariant = product.variants?.find((v: any) => v.size === size && v.color === color);
+  const displayPrice = selectedVariant?.priceOverride
+    ? Number(selectedVariant.priceOverride)
+    : product.price;
+  const discount = pct(displayPrice, product.mrp);
+
+  const totalStock =
+    product.variants?.reduce((s: number, v: any) => s + (v.stockQuantity || 0), 0) || 0;
   const lowStock = totalStock > 0 && totalStock <= 10 ? totalStock : null;
 
-  const gallery = useMemo(() => product.images && product.images.length > 0 ? product.images : ["https://placehold.co/800x1000/f5f3ee/0d0d0d?text=No+Image"], [product.images]);
+  const gallery = useMemo(
+    () =>
+      product.images && product.images.length > 0
+        ? product.images
+        : ["https://placehold.co/800x1000/f5f3ee/0d0d0d?text=No+Image"],
+    [product.images],
+  );
 
   const handleAdd = () => {
     const rect = addBtnRef.current?.getBoundingClientRect();
     if (rect) launch(product.images[0], rect);
-    // Find the matching variant to get its backend UUID for cart sync
-    const selectedVariant = product.variants?.find((v) => v.size === size && v.color === color);
     if (!selectedVariant || selectedVariant.stockQuantity <= 0) {
       toast.error("This size/color combination is out of stock");
       return;
@@ -155,7 +170,7 @@ function ProductPage() {
       slug: product.slug,
       name: product.name,
       image: product.images[0],
-      price: product.price,
+      price: displayPrice,
       mrp: product.mrp,
       size,
       color,
@@ -224,7 +239,7 @@ function ProductPage() {
           </div>
 
           <div className="mt-6 flex items-baseline gap-3">
-            <p className="font-display text-4xl tabular-nums">{inr(product.price)}</p>
+            <p className="font-display text-4xl tabular-nums">{inr(displayPrice)}</p>
             {discount > 0 && (
               <>
                 <p className="text-mute line-through tabular-nums">{inr(product.mrp)}</p>
@@ -307,10 +322,14 @@ function ProductPage() {
               ref={addBtnRef}
               whileTap={{ scale: 0.98 }}
               onClick={handleAdd}
-              disabled={!product.variants?.find((v) => v.size === size && v.color === color) || (product.variants?.find((v) => v.size === size && v.color === color)?.stockQuantity || 0) <= 0}
+              disabled={
+                !product.variants?.find((v) => v.size === size && v.color === color) ||
+                (product.variants?.find((v) => v.size === size && v.color === color)
+                  ?.stockQuantity || 0) <= 0
+              }
               className="flex min-h-[56px] items-center justify-center gap-3 bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-paper transition hover:bg-graphite disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Plus className="h-4 w-4" /> Add to bag — {inr(product.price)}
+              <Plus className="h-4 w-4" /> Add to bag — {inr(displayPrice)}
             </motion.button>
             <button
               onClick={() => {
@@ -345,7 +364,9 @@ function ProductPage() {
               onClick={() => {
                 const hintText = `Hey! I've been eyeing the ${product.name} at Ink Studio. Hint hint 😉: ${window.location.href}`;
                 if (navigator.share) {
-                  navigator.share({ title: "Gift hint", text: hintText, url: window.location.href }).catch(() => {});
+                  navigator
+                    .share({ title: "Gift hint", text: hintText, url: window.location.href })
+                    .catch(() => {});
                 } else {
                   navigator.clipboard.writeText(hintText);
                   toast.success("Hint text & link copied to clipboard");
@@ -370,8 +391,8 @@ function ProductPage() {
               Fabric & care
             </summary>
             <p className="mt-3 text-sm text-graphite">
-              {(product as any).tags && (product as any).tags.includes("heavyweight") 
-                ? "100% combed cotton, 240gsm. Machine wash cold, inside out. Tumble dry low. Iron reverse only." 
+              {(product as any).tags && (product as any).tags.includes("heavyweight")
+                ? "100% combed cotton, 240gsm. Machine wash cold, inside out. Tumble dry low. Iron reverse only."
                 : "Premium materials. Follow label instructions for care."}
             </p>
           </details>
@@ -379,9 +400,7 @@ function ProductPage() {
             <summary className="cursor-pointer list-none text-[12px] uppercase tracking-[0.22em]">
               Origin
             </summary>
-            <p className="mt-3 text-sm text-graphite">
-              Cut and sewn in Tirupur, India.
-            </p>
+            <p className="mt-3 text-sm text-graphite">Cut and sewn in Tirupur, India.</p>
           </details>
           <details className="border-b border-line py-4">
             <summary className="cursor-pointer list-none text-[12px] uppercase tracking-[0.22em]">
@@ -438,7 +457,7 @@ function ProductPage() {
       <StickyBuyBar
         name={product.name}
         image={product.images[0]}
-        price={product.price}
+        price={displayPrice}
         sizes={product.sizes}
         size={size}
         onSize={setSize}

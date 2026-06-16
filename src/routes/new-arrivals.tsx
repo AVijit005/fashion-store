@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { catalogApi } from "@/lib/api/catalog";
 import { type Product } from "@/lib/api/catalog";
 import { LoadingState } from "@/components/state/loading";
+import { useQuery } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/new-arrivals")({
   head: () => ({
@@ -31,32 +32,22 @@ export const Route = createFileRoute("/new-arrivals")({
 });
 
 function NewArrivalsPage() {
-  const [list, setList] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading } = useQuery({
+    queryKey: ["products", "new-arrivals"],
+    queryFn: () => catalogApi.getProducts({ limit: 50 }),
+  });
 
-  useEffect(() => {
-    catalogApi
-      .getProducts({ limit: 100 })
-      .then((res) => {
-        setList(res.products.filter((p: Product) => p.badges.includes("new") || p.badges.includes("limited")));
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error(err);
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading) {
-    return <LoadingState label="Loading new arrivals" />;
-  }
+  const items = (data?.products || []).filter(
+    (p: Product) => p.badges.includes("new") || p.badges.includes("limited"),
+  );
 
   return (
     <ProductGridShell
       eyebrow="Just landed"
       title="New arrivals."
       description="Fresh from the studio. Heavyweight cotton, new collabs, and limited editions."
-      base={list}
+      base={items}
+      isLoading={isLoading}
     />
   );
 }

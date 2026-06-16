@@ -1,4 +1,16 @@
-import { IsUUID, IsInt, Min, IsNotEmpty, IsString, IsOptional, IsObject, ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments, Validate } from 'class-validator';
+import {
+  IsUUID,
+  IsInt,
+  Min,
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsObject,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+  ValidationArguments,
+  Validate,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 @ValidatorConstraint({ name: 'isSafeJson', async: false })
@@ -7,7 +19,7 @@ export class IsSafeJsonConstraint implements ValidatorConstraintInterface {
     if (typeof value !== 'object' || value === null) return false;
     const str = JSON.stringify(value);
     if (str.length > 5000) return false; // 5KB limit
-    
+
     // Depth check
     let depth = 0;
     let maxDepth = 0;

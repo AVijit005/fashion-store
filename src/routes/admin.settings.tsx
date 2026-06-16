@@ -53,20 +53,22 @@ const DEFAULT_SETTINGS = {
   ],
   seo: {
     metaTitle: "{page} — Ink Studio",
-    metaDesc: "Heavyweight cotton, custom prints, and editorial anime drops from the Ink Studio."
+    metaDesc: "Heavyweight cotton, custom prints, and editorial anime drops from the Ink Studio.",
   },
   theme: {
     aesthetic: "Paper & Ink",
-    motionIntensity: 2
+    motionIntensity: 2,
   },
   security: {
     twoFactor: true,
     sessionTimeout: true,
-    auditLog: true
-  }
+    auditLog: true,
+  },
 };
 
-const SettingsContext = createContext<[typeof DEFAULT_SETTINGS, React.Dispatch<React.SetStateAction<typeof DEFAULT_SETTINGS>>]>([DEFAULT_SETTINGS, () => {}]);
+const SettingsContext = createContext<
+  [typeof DEFAULT_SETTINGS, React.Dispatch<React.SetStateAction<typeof DEFAULT_SETTINGS>>]
+>([DEFAULT_SETTINGS, () => {}]);
 
 function SettingsPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("branding");
@@ -84,14 +86,14 @@ function SettingsPage() {
   }, [serverSettings]);
 
   const saveMutation = useMutation({
-    mutationFn: (newSettings: typeof DEFAULT_SETTINGS) => 
+    mutationFn: (newSettings: typeof DEFAULT_SETTINGS) =>
       apiClient.put("/admin/settings", newSettings).catch(() => newSettings),
     onSuccess: () => {
       toast.success("Settings saved successfully");
     },
     onError: () => {
       toast.error("Failed to save settings");
-    }
+    },
   });
 
   if (isLoading) {
@@ -106,64 +108,71 @@ function SettingsPage() {
   return (
     <SettingsContext.Provider value={[settings, setSettings]}>
       <div className="space-y-6">
-      <SectionHeader
-        eyebrow="Workspace"
-        title="Settings"
-        description="Configure branding, fulfillment, payments, SEO, and team access."
-        actions={
-          <button 
-            onClick={() => saveMutation.mutate(settings)}
-            disabled={saveMutation.isPending}
-            className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
-          >
-            {saveMutation.isPending ? "Saving..." : "Save changes"}
-          </button>
-        }
-      />
+        <SectionHeader
+          eyebrow="Workspace"
+          title="Settings"
+          description="Configure branding, fulfillment, payments, SEO, and team access."
+          actions={
+            <button
+              onClick={() => saveMutation.mutate(settings)}
+              disabled={saveMutation.isPending}
+              className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
+            >
+              {saveMutation.isPending ? "Saving..." : "Save changes"}
+            </button>
+          }
+        />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">
-        <nav className="hidden lg:block border border-line bg-paper p-1" aria-label="Settings sections">
-          <ul>
-            {TABS.map((t) => {
-              const Icon = t.icon;
-              const active = tab === t.id;
-              return (
-                <li key={t.id}>
-                  <button
-                    onClick={() => setTab(t.id)}
-                    className={`flex w-full items-center gap-2.5 px-3 py-2 text-[12px] uppercase tracking-[0.18em] transition ${active ? "bg-ink text-paper" : "text-mute hover:bg-fog hover:text-ink"}`}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {t.label}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-        
-        <div className="block lg:hidden border border-line bg-paper px-3 py-2">
-          <select 
-            value={tab} 
-            onChange={(e) => setTab(e.target.value as (typeof TABS)[number]["id"])}
-            className="w-full bg-transparent outline-none text-[12px] uppercase tracking-[0.18em] text-ink"
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">
+          <nav
+            className="hidden lg:block border border-line bg-paper p-1"
+            aria-label="Settings sections"
           >
-            {TABS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-          </select>
-        </div>
+            <ul>
+              {TABS.map((t) => {
+                const Icon = t.icon;
+                const active = tab === t.id;
+                return (
+                  <li key={t.id}>
+                    <button
+                      onClick={() => setTab(t.id)}
+                      className={`flex w-full items-center gap-2.5 px-3 py-2 text-[12px] uppercase tracking-[0.18em] transition ${active ? "bg-ink text-paper" : "text-mute hover:bg-fog hover:text-ink"}`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {t.label}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
 
-        <div className="space-y-4">
-          {tab === "branding" && <BrandingPanel />}
-          {tab === "notifications" && <NotificationsPanel />}
-          {tab === "shipping" && <ShippingPanel />}
-          {tab === "payments" && <PaymentsPanel />}
-          {tab === "seo" && <SeoPanel />}
-          {tab === "theme" && <ThemePanel />}
-          {tab === "security" && <SecurityPanel />}
-          {tab === "domain" && <DomainPanel />}
+          <div className="block lg:hidden border border-line bg-paper px-3 py-2">
+            <select
+              value={tab}
+              onChange={(e) => setTab(e.target.value as (typeof TABS)[number]["id"])}
+              className="w-full bg-transparent outline-none text-[12px] uppercase tracking-[0.18em] text-ink"
+            >
+              {TABS.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-4">
+            {tab === "branding" && <BrandingPanel />}
+            {tab === "notifications" && <NotificationsPanel />}
+            {tab === "shipping" && <ShippingPanel />}
+            {tab === "payments" && <PaymentsPanel />}
+            {tab === "seo" && <SeoPanel />}
+            {tab === "theme" && <ThemePanel />}
+            {tab === "security" && <SecurityPanel />}
+            {tab === "domain" && <DomainPanel />}
+          </div>
         </div>
       </div>
-    </div>
     </SettingsContext.Provider>
   );
 }
@@ -176,7 +185,7 @@ function BrandingPanel() {
         <Row label="Brand name" hint="Used in emails, invoices and meta tags.">
           <input
             value={settings.brandName}
-            onChange={e => setSettings({...settings, brandName: e.target.value})}
+            onChange={(e) => setSettings({ ...settings, brandName: e.target.value })}
             className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink"
           />
         </Row>
@@ -203,7 +212,7 @@ function BrandingPanel() {
         <Row label="Tagline">
           <input
             value={settings.tagline}
-            onChange={e => setSettings({...settings, tagline: e.target.value})}
+            onChange={(e) => setSettings({ ...settings, tagline: e.target.value })}
             className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink"
           />
         </Row>
@@ -219,18 +228,24 @@ function NotificationsPanel() {
       <div className="space-y-3">
         {[
           { key: "newOrders", label: "New orders", hint: "Email + push for every new order." },
-          { key: "lowStock", label: "Low stock alerts", hint: "When inventory drops below threshold." },
+          {
+            key: "lowStock",
+            label: "Low stock alerts",
+            hint: "When inventory drops below threshold.",
+          },
           { key: "studioRequests", label: "Studio requests", hint: "VIP and rush priority only." },
           { key: "refundRequests", label: "Refund requests" },
           { key: "dailyDigest", label: "Daily digest", hint: "9am IST summary email." },
           { key: "weeklyPerformance", label: "Weekly performance" },
         ].map((n) => (
-          <ToggleRow 
-            key={n.label} 
-            label={n.label} 
-            hint={n.hint} 
-            on={settings.notifications[n.key as keyof typeof settings.notifications]} 
-            onChange={(v) => setSettings({...settings, notifications: {...settings.notifications, [n.key]: v}})}
+          <ToggleRow
+            key={n.label}
+            label={n.label}
+            hint={n.hint}
+            on={settings.notifications[n.key as keyof typeof settings.notifications]}
+            onChange={(v) =>
+              setSettings({ ...settings, notifications: { ...settings.notifications, [n.key]: v } })
+            }
           />
         ))}
       </div>
@@ -264,9 +279,9 @@ function PaymentsPanel() {
     <Panel title="Payment methods">
       <div className="space-y-3">
         {settings.payments.map((p: (typeof DEFAULT_SETTINGS)["payments"][number], idx: number) => (
-          <ToggleRow 
-            key={p.label} 
-            {...p} 
+          <ToggleRow
+            key={p.label}
+            {...p}
             onChange={(v) => {
               const newPayments = [...settings.payments];
               newPayments[idx].on = v;
@@ -287,7 +302,9 @@ function SeoPanel() {
         <Row label="Meta title template" hint="Use {page} for the route title.">
           <input
             value={settings.seo.metaTitle}
-            onChange={e => setSettings({...settings, seo: {...settings.seo, metaTitle: e.target.value}})}
+            onChange={(e) =>
+              setSettings({ ...settings, seo: { ...settings.seo, metaTitle: e.target.value } })
+            }
             className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink"
           />
         </Row>
@@ -295,7 +312,9 @@ function SeoPanel() {
           <textarea
             rows={2}
             value={settings.seo.metaDesc}
-            onChange={e => setSettings({...settings, seo: {...settings.seo, metaDesc: e.target.value}})}
+            onChange={(e) =>
+              setSettings({ ...settings, seo: { ...settings.seo, metaDesc: e.target.value } })
+            }
             className="w-full resize-none border border-line bg-paper p-3 text-[13px] outline-none focus:border-ink"
           />
         </Row>
@@ -315,9 +334,11 @@ function ThemePanel() {
     <Panel title="Storefront theme">
       <div className="space-y-5">
         <Row label="Active aesthetic">
-          <select 
+          <select
             value={settings.theme.aesthetic}
-            onChange={(e) => setSettings({...settings, theme: {...settings.theme, aesthetic: e.target.value}})}
+            onChange={(e) =>
+              setSettings({ ...settings, theme: { ...settings.theme, aesthetic: e.target.value } })
+            }
             className="h-9 w-full border border-line bg-paper px-3 text-[13px] outline-none focus:border-ink"
           >
             <option>Paper & Ink</option>
@@ -330,9 +351,13 @@ function ThemePanel() {
             {[1, 2, 3].map((lvl) => (
               <button
                 key={lvl}
-                onClick={() => setSettings({...settings, theme: {...settings.theme, motionIntensity: lvl}})}
+                onClick={() =>
+                  setSettings({ ...settings, theme: { ...settings.theme, motionIntensity: lvl } })
+                }
                 className={`flex h-9 flex-1 items-center justify-center border text-[12px] transition ${
-                  settings.theme.motionIntensity === lvl ? "border-ink bg-ink text-paper" : "border-line bg-paper text-mute hover:border-ink"
+                  settings.theme.motionIntensity === lvl
+                    ? "border-ink bg-ink text-paper"
+                    : "border-line bg-paper text-mute hover:border-ink"
                 }`}
               >
                 Level {lvl}
@@ -350,23 +375,29 @@ function SecurityPanel() {
   return (
     <Panel title="Security & access">
       <div className="space-y-3">
-        <ToggleRow 
-          label="Two-factor authentication" 
-          on={settings.security.twoFactor} 
-          onChange={(v) => setSettings({...settings, security: {...settings.security, twoFactor: v}})}
-          hint="Required for all admins." 
+        <ToggleRow
+          label="Two-factor authentication"
+          on={settings.security.twoFactor}
+          onChange={(v) =>
+            setSettings({ ...settings, security: { ...settings.security, twoFactor: v } })
+          }
+          hint="Required for all admins."
         />
         <ToggleRow
           label="Session timeout"
           on={settings.security.sessionTimeout}
-          onChange={(v) => setSettings({...settings, security: {...settings.security, sessionTimeout: v}})}
+          onChange={(v) =>
+            setSettings({ ...settings, security: { ...settings.security, sessionTimeout: v } })
+          }
           hint="Auto sign-out after 8 hours of inactivity."
         />
-        <ToggleRow 
-          label="Audit log" 
+        <ToggleRow
+          label="Audit log"
           on={settings.security.auditLog}
-          onChange={(v) => setSettings({...settings, security: {...settings.security, auditLog: v}})}
-          hint="Records all admin actions." 
+          onChange={(v) =>
+            setSettings({ ...settings, security: { ...settings.security, auditLog: v } })
+          }
+          hint="Records all admin actions."
         />
       </div>
     </Panel>
@@ -412,7 +443,17 @@ function Row({
   );
 }
 
-function ToggleRow({ label, on, hint, onChange }: { label: string; on?: boolean; hint?: string; onChange?: (v: boolean) => void }) {
+function ToggleRow({
+  label,
+  on,
+  hint,
+  onChange,
+}: {
+  label: string;
+  on?: boolean;
+  hint?: string;
+  onChange?: (v: boolean) => void;
+}) {
   const [internalV, setInternalV] = useState(on ?? false);
   const v = on !== undefined ? on : internalV;
   const handleChange = () => {

@@ -110,7 +110,7 @@ function DropCard({ drop }: { drop: Drop }) {
             <div className="flex items-baseline justify-between font-mono text-[11px] uppercase tracking-[0.18em] text-mute">
               <span>Sell-through</span>
               <span className="tabular-nums text-ink">
-                {drop.sold || 0}/{drop.capsuleSize || '?'} · {sellThrough || 0}%
+                {drop.sold || 0}/{drop.capsuleSize || "?"} · {sellThrough || 0}%
               </span>
             </div>
             <div className="h-[3px] bg-fog">

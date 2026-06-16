@@ -55,7 +55,7 @@ function Success() {
       >
         We'll email you a tracking link the moment it ships. Most orders move within 24 hours.
       </motion.p>
-      
+
       {cod && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -63,7 +63,9 @@ function Success() {
           transition={{ delay: 0.6 }}
           className="mt-6 border border-ink/20 bg-ink/5 px-6 py-4 text-[13px] text-ink"
         >
-          <p className="font-semibold uppercase tracking-widest text-[11px] mb-1">Cash on Delivery</p>
+          <p className="font-semibold uppercase tracking-widest text-[11px] mb-1">
+            Cash on Delivery
+          </p>
           <p>Please have exact cash ready at delivery.</p>
         </motion.div>
       )}
@@ -76,7 +78,7 @@ function Success() {
           className="mt-6 border border-line p-6"
         >
           <p className="font-medium">Create an account to easily track this order.</p>
-          <button 
+          <button
             onClick={() => setAuthModalOpen(true)}
             className="mt-3 text-[12px] uppercase tracking-[0.22em] text-ink hover:underline underline-offset-4"
           >

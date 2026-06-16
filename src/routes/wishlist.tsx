@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Heart } from "lucide-react";
 import { useWishlist } from "@/lib/store/wishlist";
-import { products } from "@/lib/api/catalog";
+import { catalogApi } from "@/lib/api/catalog";
+import { useQuery } from "@tanstack/react-query";
 import { ProductCard } from "@/components/product/product-card";
 import { EmptyState } from "@/components/state/empty";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 export const Route = createFileRoute("/wishlist")({
   head: () => ({ meta: [{ title: "Wishlist — Ink Studio" }] }),
@@ -11,8 +13,15 @@ export const Route = createFileRoute("/wishlist")({
 });
 
 function Wishlist() {
-  const ids = useWishlist((s) => s.ids);
-  const items = products.filter((p) => ids.includes(p.id));
+  const hydrated = useHydrated();
+  const _ids = useWishlist((s) => s.ids);
+  const ids = hydrated ? _ids : [];
+  const { data } = useQuery({
+    queryKey: ["products", "wishlist", ids],
+    queryFn: () => catalogApi.getProducts({ ids, limit: 100 }),
+    enabled: ids.length > 0,
+  });
+  const items = data?.products || [];
 
   return (
     <div className="mx-auto max-w-[1480px] px-5 py-12 lg:px-10 lg:py-16">
@@ -30,7 +39,7 @@ function Wishlist() {
         />
       ) : (
         <div className="mt-10 grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 lg:gap-x-6 xl:grid-cols-4">
-          {items.map((p) => (
+          {items.map((p: any, i: number) => (
             <ProductCard key={p.id} product={p} />
           ))}
         </div>

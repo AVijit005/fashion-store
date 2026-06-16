@@ -11,6 +11,8 @@ import { AdminDropsController } from './admin.drops.controller';
 import { AdminDropsService } from './admin.drops.service';
 import { AdminStudioController } from './admin.studio.controller';
 import { AdminStudioService } from './admin.studio.service';
+import { AdminSettingsController } from './admin.settings.controller';
+import { AdminSettingsService } from './admin.settings.service';
 import { PrismaService } from '../../config/prisma.service';
 import { AuthModule } from '../auth/auth.module';
 import { OrdersModule } from '../orders/orders.module';
@@ -24,6 +26,7 @@ import { OrdersModule } from '../orders/orders.module';
     AdminCustomersController,
     AdminDropsController,
     AdminStudioController,
+    AdminSettingsController,
   ],
   providers: [
     AdminCatalogService,
@@ -32,6 +35,7 @@ import { OrdersModule } from '../orders/orders.module';
     AdminCustomersService,
     AdminDropsService,
     AdminStudioService,
+    AdminSettingsService,
     PrismaService,
   ],
 })

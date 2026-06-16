@@ -58,7 +58,7 @@ jobs:
       working-directory: ./backend
       env:
         DATABASE_URL: postgresql://root:root@localhost:5432/fashion_store_test
-      run: npx prisma db push --accept-data-loss && npx prisma generate
+      run: npx prisma migrate deploy && npx prisma generate
 
     - name: Run Lint
       working-directory: ./backend
@@ -103,4 +103,23 @@ jobs:
         AWS_REGION: us-east-1
         AWS_S3_BUCKET: mock-bucket
         NODE_OPTIONS: "--experimental-vm-modules"
-      run: npx prisma db push --force-reset --accept-data-loss && npm run test:e2e
+      run: npx prisma migrate reset --force && npm run test:e2e
+
+  frontend:
+    name: Run Frontend Build & Checks
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: 'latest'
+
+    - name: Install Frontend Dependencies
+      run: bun install --frozen-lockfile
+
+    - name: Run Frontend Build
+      env:
+        VITE_API_URL: http://localhost:3000
+      run: bun run build

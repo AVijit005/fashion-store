@@ -5,6 +5,32 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
+  constructor() {
+    const rawUrl = process.env.DATABASE_URL;
+    let finalUrl: string | undefined;
+    
+    if (rawUrl) {
+      try {
+        const url = new URL(rawUrl);
+        url.searchParams.set('connection_limit', '20');
+        url.searchParams.set('pool_timeout', '30');
+        url.searchParams.set('statement_timeout', '15000');
+        url.searchParams.set('lock_timeout', '5000');
+        finalUrl = url.toString();
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    super(finalUrl ? {
+      datasources: {
+        db: {
+          url: finalUrl,
+        },
+      },
+    } : undefined);
+  }
+
   async onModuleInit() {
     await this.$connect();
     await this.setupSearchIndexes();

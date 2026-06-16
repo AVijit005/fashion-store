@@ -4,6 +4,7 @@ import {
   NotFoundException,
   InternalServerErrorException,
   Logger,
+  Inject,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
@@ -14,6 +15,7 @@ import { CheckoutDto, VerifyPaymentDto } from './dto/orders.dto';
 import { OrderStatus, Order, Prisma } from '@prisma/client';
 import { InventoryService } from './inventory.service';
 import * as crypto from 'crypto';
+import Redis from 'ioredis';
 
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PENDING]: [OrderStatus.PAYMENT_PENDING, OrderStatus.CANCELLED, OrderStatus.FAILED],
@@ -22,7 +24,7 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.REFUNDED],
   [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
   [OrderStatus.DELIVERED]: [OrderStatus.REFUNDED],
-  [OrderStatus.CANCELLED]: [OrderStatus.PAID, OrderStatus.PAYMENT_PENDING],
+  [OrderStatus.CANCELLED]: [],
   [OrderStatus.REFUNDED]: [],
   [OrderStatus.FAILED]: [OrderStatus.PAID, OrderStatus.PAYMENT_PENDING],
 };
@@ -36,6 +38,7 @@ export class OrdersService {
     private readonly cartService: CartService,
     private readonly configService: ConfigService,
     private readonly inventoryService: InventoryService,
+    @Inject('REDIS_CLIENT') private readonly redis: Redis,
     @InjectQueue('order-expiry') private readonly orderExpiryQueue: Queue,
   ) {}
 
@@ -61,18 +64,18 @@ export class OrdersService {
       throw new BadRequestException('This coupon has reached its usage limit');
     }
 
-    if (coupon.minOrderValue && subtotal < coupon.minOrderValue) {
-      throw new BadRequestException(`Order value must be at least ₹${coupon.minOrderValue} to use this coupon`);
+    if (coupon.minOrderValue && subtotal < (coupon.minOrderValue as any).toNumber()) {
+      throw new BadRequestException(`Order value must be at least ₹${(coupon.minOrderValue as any).toNumber()} to use this coupon`);
     }
 
     let discount = 0;
     if (coupon.type === 'PERCENTAGE') {
-      discount = (subtotal * coupon.value) / 100;
-      if (coupon.maxDiscount && discount > coupon.maxDiscount) {
-        discount = coupon.maxDiscount;
+      discount = (subtotal * Number(coupon.value)) / 100;
+      if (coupon.maxDiscount && discount > (coupon.maxDiscount as any).toNumber()) {
+        discount = (coupon.maxDiscount as any).toNumber();
       }
     } else {
-      discount = coupon.value;
+      discount = (coupon.value as any).toNumber();
     }
 
     if (discount > subtotal) discount = subtotal;
@@ -88,17 +91,6 @@ export class OrdersService {
     const { guestSessionId, idempotencyKey } = dto;
     
     if (idempotencyKey) {
-      const existingKey = await this.prisma.idempotencyKey.findUnique({
-        where: { key: idempotencyKey },
-      });
-      if (existingKey) {
-        if (existingKey.response) {
-          return existingKey.response;
-        } else {
-          throw new BadRequestException('Checkout is already in progress for this request.');
-        }
-      }
-      
       try {
         await this.prisma.idempotencyKey.create({
           data: {
@@ -108,6 +100,12 @@ export class OrdersService {
         });
       } catch (err: any) {
         if (err.code === 'P2002') {
+          const existingKey = await this.prisma.idempotencyKey.findUnique({
+            where: { key: idempotencyKey },
+          });
+          if (existingKey?.response) {
+            return existingKey.response;
+          }
           throw new BadRequestException('Checkout is already in progress for this request.');
         }
         throw err;
@@ -197,8 +195,19 @@ export class OrdersService {
         // Restore inventory for all cancelled orders in one bulk operation
         await this.inventoryService.restoreBulkInventory(
           existingPendingOrders.map((o) => o.id),
-          tx
+          tx,
         );
+
+        // Decrement coupon usage counts if applicable
+        const couponCodes = existingPendingOrders
+          .map((o) => o.couponCode)
+          .filter((c): c is string => !!c);
+        if (couponCodes.length > 0) {
+          await tx.coupon.updateMany({
+            where: { code: { in: couponCodes } },
+            data: { usageCount: { decrement: 1 } },
+          });
+        }
       }
 
       if (inventoryItems.length > 0) {
@@ -258,7 +267,7 @@ export class OrdersService {
           },
         },
       });
-    });
+    }, { timeout: 8000 });
 
     // Schedule expiry job BEFORE making the Razorpay API call (Fix Deadlock)
     // Schedule expiry job ONLY if not COD
@@ -310,45 +319,63 @@ export class OrdersService {
             'Razorpay credentials are not configured.',
             tx,
           );
-        });
+        }, { timeout: 8000 });
         throw new InternalServerErrorException('Payment gateway is not configured');
       }
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased timeout to 15s
-
       try {
         const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
         const idempotencyKeyReq = `req_${crypto.randomUUID()}`;
         
+        const failuresKey = `razorpay:failures`;
+        const cbKey = `razorpay:circuitOpenUntil`;
+        const circuitOpenUntil = await this.redis.get(cbKey);
+        if (circuitOpenUntil && parseInt(circuitOpenUntil) > Date.now()) {
+          throw new Error('Circuit breaker open. Payment gateway is temporarily unavailable.');
+        }
+
         let response: Response | undefined;
         let lastErr: any;
-        try {
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-              response = await fetch('https://api.razorpay.com/v1/orders', {
-                method: 'POST',
-                headers: {
-                  Authorization: `Basic ${auth}`,
-                  'Content-Type': 'application/json',
-                  'Idempotency-Key': idempotencyKeyReq,
-                },
-                body: JSON.stringify({
-                  amount: totalAmount.mul(100).round().toNumber(), // convert to paise precisely using Decimal
-                  currency: 'INR',
-                  receipt: createdOrder.id,
-                }),
-                signal: controller.signal,
-              });
-              break;
-            } catch (e) {
-              lastErr = e;
-              if (attempt === 3) throw e;
-              await new Promise((res) => setTimeout(res, attempt * 1000));
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s per attempt
+
+          try {
+            response = await fetch('https://api.razorpay.com/v1/orders', {
+              method: 'POST',
+              headers: {
+                Authorization: `Basic ${auth}`,
+                'Content-Type': 'application/json',
+                'Idempotency-Key': idempotencyKeyReq,
+              },
+              body: JSON.stringify({
+                amount: totalAmount.mul(100).round().toNumber(), // convert to paise precisely using Decimal
+                currency: 'INR',
+                receipt: createdOrder.id,
+              }),
+              signal: controller.signal,
+            });
+            if (response.ok) {
+              await this.redis.del(failuresKey);
+            } else {
+              // If it's a 5xx error, count it as a failure
+              if (response.status >= 500) throw new Error(`Gateway Error: ${response.status}`);
             }
+            break;
+          } catch (e) {
+            lastErr = e;
+            const failures = await this.redis.incr(failuresKey);
+            if (failures >= 5) {
+              await this.redis.set(cbKey, Date.now() + 60000, 'EX', 60); // Open circuit for 60 seconds
+            } else {
+              await this.redis.expire(failuresKey, 60);
+            }
+            if (attempt === 3) throw e;
+            await new Promise((res) => setTimeout(res, attempt * 1000));
+          } finally {
+            clearTimeout(timeoutId);
           }
-        } finally {
-          clearTimeout(timeoutId);
         }
+
 
         if (!response || !response.ok) {
           const errBody = response ? await response.text() : String(lastErr);
@@ -358,7 +385,6 @@ export class OrdersService {
         const data = (await response.json()) as { id: string };
         razorpayOrderId = data.id;
       } catch (err) {
-        clearTimeout(timeoutId);
         // Rollback DB order creation manually if Razorpay API integration fails
         await this.prisma.$transaction(async (tx) => {
           await this.transitionStatus(
@@ -368,7 +394,7 @@ export class OrdersService {
             `Razorpay integration failed: ${(err as Error).message}`,
             tx,
           );
-        });
+        }, { timeout: 8000 });
 
         throw new InternalServerErrorException(
           `Could not create gateway transaction: ${(err as Error).message}`,
@@ -400,16 +426,19 @@ export class OrdersService {
     }
 
     return responseObj;
-    } catch (error) {
+    } catch (error: any) {
       if (idempotencyKey) {
-        await this.prisma.idempotencyKey.delete({ where: { key: idempotencyKey } }).catch(() => null);
+        await this.prisma.idempotencyKey.update({
+          where: { key: idempotencyKey },
+          data: { response: { error: error.message || 'Checkout failed' } },
+        }).catch(() => null);
       }
       throw error;
     }
   }
 
   // Retry Payment
-  async retryPayment(orderId: string, userId?: string) {
+  async retryPayment(orderId: string, userId?: string, guestToken?: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
     });
@@ -418,8 +447,14 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    if (order.userId && order.userId !== userId) {
-      throw new NotFoundException('Order not found');
+    if (order.userId) {
+      if (order.userId !== userId) {
+        throw new NotFoundException('Order not found');
+      }
+    } else {
+      if (!guestToken || order.guestToken !== guestToken) {
+        throw new NotFoundException('Order not found');
+      }
     }
 
     if (order.status !== OrderStatus.FAILED && order.status !== OrderStatus.PAYMENT_PENDING) {
@@ -449,7 +484,7 @@ export class OrdersService {
   }
 
   // Verify payment via direct API submit
-  async verifyPayment(dto: VerifyPaymentDto) {
+  async verifyPayment(dto: VerifyPaymentDto, userId?: string, guestToken?: string) {
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
 
     // Calculate signature
@@ -475,7 +510,7 @@ export class OrdersService {
     }
 
     // Update order status transactionally with SELECT FOR UPDATE
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const orders = await tx.$queryRawUnsafe<Order[]>(
         `SELECT * FROM orders WHERE "razorpay_order_id" = $1 FOR UPDATE`,
         dto.razorpayOrderId,
@@ -486,11 +521,21 @@ export class OrdersService {
         throw new NotFoundException('Order matching payment ID not found');
       }
 
+      if (order.userId) {
+        if (order.userId !== userId) {
+          throw new NotFoundException('Order matching payment ID not found');
+        }
+      } else {
+        if (!guestToken || order.guestToken !== guestToken) {
+          throw new NotFoundException('Order matching payment ID not found');
+        }
+      }
+
       if (order.status === OrderStatus.PAID) {
         if (order.razorpayPaymentId && order.razorpayPaymentId !== dto.razorpayPaymentId) {
           throw new BadRequestException('Order has already been paid with a different payment');
         }
-        return { success: true, orderId: order.id, status: order.status };
+        return { success: true, orderId: order.id, status: order.status, order };
       }
 
       await this.transitionStatus(
@@ -510,11 +555,18 @@ export class OrdersService {
         },
       });
 
-      // Clear the cart securely after payment confirmation
-      await this.cartService.clearCart(order.userId || undefined, order.guestToken || undefined);
+      return { success: true, orderId: order.id, status: OrderStatus.PAID, order };
+    }, { timeout: 8000 });
 
-      return { success: true, orderId: order.id, status: OrderStatus.PAID };
-    });
+    // Clear the cart securely after payment confirmation transaction completes
+    if (result.order) {
+      await this.cartService.clearCart(
+        result.order.userId || undefined,
+        result.order.guestToken || undefined,
+      );
+    }
+
+    return { success: true, orderId: result.orderId, status: result.status };
   }
 
   // Idempotent webhook handler
@@ -565,6 +617,8 @@ export class OrdersService {
     }
 
     let status: string;
+    let cartToClear = null as { userId?: string; guestToken?: string } | null;
+
     try {
       status = await this.prisma.$transaction(async (tx) => {
         let result = 'processed';
@@ -602,8 +656,7 @@ export class OrdersService {
                 },
               });
 
-              // Clear the cart securely after payment capture via webhook
-              await this.cartService.clearCart(order.userId || undefined, order.guestToken || undefined);
+              cartToClear = { userId: order.userId || undefined, guestToken: order.guestToken || undefined };
             }
           }
         } else {
@@ -621,7 +674,7 @@ export class OrdersService {
         });
 
         return result;
-      });
+      }, { timeout: 8000 });
     } catch (error: any) {
       // P2002 is Prisma's Unique Constraint Violation error code
       if (error.code === 'P2002') {
@@ -630,6 +683,10 @@ export class OrdersService {
       }
       this.logger.error(`Webhook transaction failed: ${error.message}`, error.stack);
       throw error;
+    }
+
+    if (cartToClear) {
+      await this.cartService.clearCart(cartToClear.userId, cartToClear.guestToken);
     }
 
     return { status };
@@ -644,7 +701,9 @@ export class OrdersService {
           include: {
             productVariant: {
               include: {
-                product: true,
+                product: {
+                  select: { id: true, title: true, slug: true, basePrice: true, mediaUrls: true }
+                },
               },
             },
           },
@@ -674,7 +733,7 @@ export class OrdersService {
       paymentProvider: order.paymentProvider,
       paymentStatus: order.paymentStatus,
       createdAt: order.createdAt,
-      items: order.items,
+      items: (order as any).items,
     }));
   }
 
@@ -687,7 +746,9 @@ export class OrdersService {
           include: {
             productVariant: {
               include: {
-                product: true,
+                product: {
+                  select: { id: true, title: true, slug: true, basePrice: true, mediaUrls: true }
+                },
               },
             },
           },
@@ -818,6 +879,6 @@ export class OrdersService {
     if (tx) {
       return execute(tx);
     }
-    return this.prisma.$transaction(execute);
+    return this.prisma.$transaction(execute, { timeout: 8000 });
   }
 }

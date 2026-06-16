@@ -2,9 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { configureApp } from '../src/app.setup';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../src/config/prisma.service';
 import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
 import { DesignStatus, SubmissionStatus, TemplateStatus, AssetStatus } from '@prisma/client';
 import { S3Client, CreateBucketCommand } from '@aws-sdk/client-s3';
 
@@ -29,6 +30,7 @@ describe('Studio Ecosystem (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+    configureApp(app, app.get(ConfigService));
     await app.init();
 
     prisma = app.get<PrismaService>(PrismaService);
@@ -284,7 +286,7 @@ describe('Studio Ecosystem (e2e)', () => {
         where: { id: deleteDesignId },
       });
       expect(dbRecord).not.toBeNull();
-      expect(dbRecord?.deletedAt).not.toBeNull();
+      expect(dbRecord?.isDeleted).not.toBeNull();
     });
 
     it('should reject submitting a soft-deleted design', async () => {

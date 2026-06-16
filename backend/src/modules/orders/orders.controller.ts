@@ -56,33 +56,48 @@ export class OrdersController {
     return this.ordersService.applyCoupon(dto.code, dto.subtotal);
   }
 
-  @Post(':id/retry-payment')
-  @UseGuards(AuthGuard)
-  @ApiOperation({ summary: 'Retry payment for a failed or pending order' })
-  async retryPayment(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
-    return this.ordersService.retryPayment(id, req.user.id);
-  }
-
   @Post('verify-payment')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Verify payment signature after gateway response' })
-  async verifyPayment(@Body() dto: VerifyPaymentDto) {
-    return this.ordersService.verifyPayment(dto);
+  async verifyPayment(
+    @Body() dto: VerifyPaymentDto,
+    @Headers('x-guest-token') guestToken?: string,
+    @CurrentUser() user?: RequestUser,
+  ) {
+    return this.ordersService.verifyPayment(dto, user?.id, guestToken);
   }
 
   @Post('webhook')
   @ApiOperation({ summary: 'Razorpay webhook listener for payment capture' })
   async webhook(@Req() req: RawBodyRequest, @Headers('x-razorpay-signature') signature?: string) {
-    if (!signature) {
-      throw new UnauthorizedException('Signature header missing');
+    if (!signature || typeof signature !== 'string') {
+      throw new BadRequestException('Webhook signature header missing or invalid format');
     }
 
     const rawBody = req.rawBody ? req.rawBody.toString('utf8') : '';
-    if (!rawBody) {
-      throw new BadRequestException('Empty body');
+    if (!rawBody || rawBody.trim() === '') {
+      throw new BadRequestException('Empty webhook body');
+    }
+
+    try {
+      JSON.parse(rawBody); // Ensure it is valid JSON before passing to service
+    } catch {
+      throw new BadRequestException('Invalid JSON payload');
     }
 
     return this.ordersService.handleWebhook(rawBody, signature);
+  }
+
+  @Post(':id/retry-payment')
+  @UseGuards(OptionalAuthGuard)
+  @ApiOperation({ summary: 'Retry payment for a failed or pending order' })
+  async retryPayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-guest-token') guestToken?: string,
+    @CurrentUser() user?: RequestUser,
+  ) {
+    return this.ordersService.retryPayment(id, user?.id, guestToken);
   }
 
   @Get('me')

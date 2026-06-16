@@ -10,16 +10,21 @@ export class InventoryService {
   async reserveInventory(
     items: { variantId: string; quantity: number; sku?: string }[],
     tx: Prisma.TransactionClient,
-    force: boolean = false
+    force: boolean = false,
   ) {
-    const variantIds = items.map((item) => item.variantId);
-    if (variantIds.length === 0) return;
-    // Sort variant IDs to prevent deadlocks
-    const sortedVariantIds = [...variantIds].sort();
+    const qtyByVariant = new Map<string, number>();
+    for (const item of items) {
+      qtyByVariant.set(
+        item.variantId,
+        (qtyByVariant.get(item.variantId) || 0) + item.quantity,
+      );
+    }
+    const sortedVariantIds = Array.from(qtyByVariant.keys()).sort();
+    if (sortedVariantIds.length === 0) return;
 
     // Acquire locks on variant rows in sorted order
     await tx.$executeRawUnsafe(
-      `SELECT id FROM product_variants WHERE id IN (${sortedVariantIds.map((_, i) => `$${i + 1}`).join(',')}) FOR UPDATE`,
+      `SELECT id FROM product_variants WHERE id IN (${sortedVariantIds.map((_, i) => `$${i + 1}`).join(',')}) ORDER BY id FOR UPDATE`,
       ...sortedVariantIds,
     );
 
@@ -29,31 +34,39 @@ export class InventoryService {
     });
     const dbVariantMap = new Map(dbVariants.map((v) => [v.id, v]));
 
-    for (const item of items) {
-      const variant = dbVariantMap.get(item.variantId);
+    for (const [variantId, quantity] of qtyByVariant.entries()) {
+      const variant = dbVariantMap.get(variantId);
       if (!variant) {
-        throw new BadRequestException(`Variant ${item.variantId} not found`);
+        throw new BadRequestException(`Variant ${variantId} not found`);
       }
-      if (!force && variant.stockQuantity < item.quantity) {
+      if (variant.stockQuantity < quantity) {
         throw new BadRequestException(
-          `Insufficient stock for SKU ${item.sku || item.variantId}. Available: ${variant.stockQuantity}, requested: ${item.quantity}`,
+          `Insufficient stock for SKU ${variant.sku || variantId}. Available: ${variant.stockQuantity}, requested: ${quantity}`,
         );
       }
     }
 
     // Deduct Stock
-    await Promise.all(
-      items.map((item) => {
-        const variant = dbVariantMap.get(item.variantId);
-        if (!variant) return Promise.resolve();
-        return tx.productVariant.update({
-          where: { id: item.variantId },
+    for (const variantId of sortedVariantIds) {
+      const quantityToDeduct = qtyByVariant.get(variantId) || 0;
+      if (quantityToDeduct === 0) continue;
+
+        const updateResult = await tx.productVariant.updateMany({
+          where: {
+            id: variantId,
+            stockQuantity: { gte: quantityToDeduct },
+          },
           data: {
-            stockQuantity: { decrement: item.quantity },
+            stockQuantity: { decrement: quantityToDeduct },
           },
         });
-      })
-    );
+        
+        if (updateResult.count === 0) {
+          throw new BadRequestException(
+            `Failed to deduct stock securely for variant ${variantId}. Overselling detected.`,
+          );
+        }
+    }
   }
 
   // Locks and restores inventory for cancelled/failed order
@@ -74,7 +87,7 @@ export class InventoryService {
       if (!item.productVariantId) continue;
       qtyByVariant.set(
         item.productVariantId,
-        (qtyByVariant.get(item.productVariantId) || 0) + item.quantity
+        (qtyByVariant.get(item.productVariantId) || 0) + item.quantity,
       );
     }
 
@@ -83,19 +96,17 @@ export class InventoryService {
 
     // Acquire locks on variant rows in sorted order
     await tx.$executeRawUnsafe(
-      `SELECT id FROM product_variants WHERE id IN (${variantIds.map((_, i) => `$${i + 1}`).join(',')}) FOR UPDATE`,
+      `SELECT id FROM product_variants WHERE id IN (${variantIds.map((_, i) => `$${i + 1}`).join(',')}) ORDER BY id FOR UPDATE`,
       ...variantIds,
     );
 
-    await Promise.all(
-      variantIds.map((vid) =>
-        tx.productVariant.update({
-          where: { id: vid },
-          data: {
-            stockQuantity: { increment: qtyByVariant.get(vid) },
-          },
-        })
-      )
-    );
+    for (const vid of variantIds) {
+      const qty = qtyByVariant.get(vid);
+      if (!qty) continue;
+      await tx.productVariant.update({
+        where: { id: vid },
+        data: { stockQuantity: { increment: qty } },
+      });
+    }
   }
 }

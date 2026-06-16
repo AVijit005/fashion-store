@@ -1,12 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import { Reveal } from "@/components/ui/reveal";
+import { type Product } from "@/lib/api/catalog";
 import { ProductCard } from "@/components/product/product-card";
-import { products } from "@/lib/api/catalog";
+import { catalogApi } from "@/lib/api/catalog";
+import { useQuery } from "@tanstack/react-query";
 
 export function DropFeature() {
-  const items = products
-    .filter((p) => p.category === "oversized-tees" || p.badges.includes("limited"))
-    .slice(0, 4);
+  const { data } = useQuery({
+    queryKey: ["products", "oversized-tees"],
+    queryFn: () => catalogApi.getProducts({ category: "oversized-tees", limit: 4 }),
+  });
+  const items = data?.products || [];
   return (
     <section className="mx-auto max-w-[1480px] px-5 py-20 lg:px-10 lg:py-32">
       <Reveal>
@@ -27,7 +31,7 @@ export function DropFeature() {
         </div>
       </Reveal>
       <div className="grid grid-cols-2 gap-x-4 gap-y-10 lg:grid-cols-4 lg:gap-x-6">
-        {items.map((p, i) => (
+        {items.map((p: Product, i: number) => (
           <Reveal key={p.id} delay={i * 0.06}>
             <ProductCard product={p} />
           </Reveal>

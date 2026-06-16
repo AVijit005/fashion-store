@@ -51,16 +51,13 @@ function SalePage() {
       });
   }, []);
 
-  if (loading) {
-    return <LoadingState label="Loading sale items" />;
-  }
-
   return (
     <ProductGridShell
       eyebrow="Up to 40% off"
       title="Sale."
       description="A curated cut of the studio, marked down. Limited stock, no codes needed."
       base={list}
+      isLoading={loading}
     />
   );
 }

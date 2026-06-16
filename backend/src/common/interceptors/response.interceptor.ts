@@ -12,11 +12,16 @@ export interface Response<T> {
 export class ResponseTransformInterceptor<T> implements NestInterceptor<T, Response<T>> {
   intercept(context: ExecutionContext, next: CallHandler): Observable<Response<T>> {
     return next.handle().pipe(
-      map((data) => ({
-        success: true,
-        timestamp: new Date().toISOString(),
-        data: data === undefined ? null : data,
-      })),
+      map((data) => {
+        if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
+          return data as Response<T>;
+        }
+        return {
+          success: true,
+          timestamp: new Date().toISOString(),
+          data: data === undefined ? null : data,
+        };
+      }),
     );
   }
 }

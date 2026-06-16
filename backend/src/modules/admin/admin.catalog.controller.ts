@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
 import { AdminCatalogService } from './admin.catalog.service';
 import { CreateProductDto, UpdateProductDto } from './dto/admin.catalog.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';

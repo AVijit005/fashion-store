@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, MaxLength, IsOptional } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, IsOptional, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SignUpDto {
@@ -15,5 +15,7 @@ export class SignUpDto {
   @ApiProperty({ description: 'Guest token to link orders', required: false })
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(100, { message: 'Guest token is too long' })
   guestToken?: string;
 }

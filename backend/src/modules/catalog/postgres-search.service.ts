@@ -65,6 +65,7 @@ export class PostgresSearchService extends SearchService {
           word_similarity($${trigramParamIndex}, p.title) as trigram_rank
         FROM products p
         WHERE p.status = 'PUBLISHED'
+          AND p.is_deleted = false
           AND (p.drop_id IS NULL OR p.drop_id IN (SELECT id FROM drops WHERE release_date <= NOW() OR is_active = true))
           ${categoryFilter}
           ${collectionFilter}
@@ -73,45 +74,51 @@ export class PostgresSearchService extends SearchService {
             OR word_similarity($${trigramParamIndex}, p.title) > 0.5
           )
       ) sub
-      ORDER BY search_rank DESC
+      ORDER BY search_rank DESC, sub.id ASC
       LIMIT ${limit} OFFSET ${offset}
     `;
 
-    const products = await this.prisma.$queryRawUnsafe<Product[]>(searchSql, ...params);
+    try {
+      const products = await this.prisma.$queryRawUnsafe<Product[]>(searchSql, ...params);
 
-    // Fix High Severity: Fetch missing variants to prevent stale UI in search results
-    const productIds = products.map((p) => p.id);
-    if (productIds.length > 0) {
-      const variants = await this.prisma.productVariant.findMany({
-        where: { productId: { in: productIds } },
-      });
-      const variantsMap = new Map();
-      for (const v of variants) {
-        if (!variantsMap.has(v.productId)) variantsMap.set(v.productId, []);
-        variantsMap.get(v.productId).push(v);
+      // Fix High Severity: Fetch missing variants to prevent stale UI in search results
+      const productIds = products.map((p) => p.id);
+      if (productIds.length > 0) {
+        const variants = await this.prisma.productVariant.findMany({
+          where: { productId: { in: productIds }, isDeleted: false },
+        });
+        const variantsMap = new Map();
+        for (const v of variants) {
+          if (!variantsMap.has(v.productId)) variantsMap.set(v.productId, []);
+          variantsMap.get(v.productId).push(v);
+        }
+        for (const p of products) {
+          (p as any).variants = variantsMap.get(p.id) || [];
+        }
       }
-      for (const p of products) {
-        (p as any).variants = variantsMap.get(p.id) || [];
-      }
+      const countSql = `
+        SELECT COUNT(*)::int as count
+        FROM products p
+        WHERE p.status = 'PUBLISHED'
+          AND p.is_deleted = false
+          AND (p.drop_id IS NULL OR p.drop_id IN (SELECT id FROM drops WHERE release_date <= NOW() OR is_active = true))
+          ${categoryFilter}
+          ${collectionFilter}
+          AND (
+            to_tsvector('english', coalesce(p.title, '') || ' ' || coalesce(array_to_string(p.tags, ' '), '') || ' ' || coalesce(p.description, '')) @@ to_tsquery('english', $${ftsParamIndex})
+            OR word_similarity($${trigramParamIndex}, p.title) > 0.5
+          )
+      `;
+      const countResult = await this.prisma.$queryRawUnsafe<{ count: number }[]>(countSql, ...params);
+      const total = Number(countResult[0]?.count) || 0;
+
+      return {
+        products,
+        total,
+      };
+    } catch (e) {
+      console.warn('Search query failed:', e);
+      return { products: [], total: 0 };
     }
-    const countSql = `
-      SELECT COUNT(*)::int as count
-      FROM products p
-      WHERE p.status = 'PUBLISHED'
-        AND (p.drop_id IS NULL OR p.drop_id IN (SELECT id FROM drops WHERE release_date <= NOW() OR is_active = true))
-        ${categoryFilter}
-        ${collectionFilter}
-        AND (
-          to_tsvector('english', coalesce(p.title, '') || ' ' || coalesce(array_to_string(p.tags, ' '), '') || ' ' || coalesce(p.description, '')) @@ to_tsquery('english', $${ftsParamIndex})
-          OR word_similarity($${trigramParamIndex}, p.title) > 0.5
-        )
-    `;
-    const countResult = await this.prisma.$queryRawUnsafe<{ count: number }[]>(countSql, ...params);
-    const total = countResult[0]?.count || 0;
-
-    return {
-      products,
-      total,
-    };
   }
 }

@@ -8,6 +8,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { toast } from "sonner";
 import { cartApi } from "../api/cart";
+import { apiClient } from "../api/client";
 
 export type CartItem = {
   id: string;
@@ -38,6 +39,10 @@ type CartState = {
   subtotal: () => number;
   savings: () => number;
   count: () => number;
+  couponCode: string | null;
+  couponDiscount: number;
+  applyCoupon: (code: string) => Promise<void>;
+  removeCoupon: () => void;
 };
 
 const keyFor = (i: { id: string; size: string; color: string }) => `${i.id}-${i.size}-${i.color}`;
@@ -74,15 +79,15 @@ export const useSyncStore = create<SyncStore>()(
         return action;
       },
     }),
-    { name: "ink-cart-sync-queue", partialize: (state) => ({ queue: state.queue }) as SyncStore }
-  )
+    { name: "ink-cart-sync-queue", partialize: (state) => ({ queue: state.queue }) as SyncStore },
+  ),
 );
 
 async function processQueue() {
   const store = useSyncStore.getState();
   if (store.isSyncing || store.queue.length === 0) return;
   store.setSyncing(true);
-  
+
   while (useSyncStore.getState().queue.length > 0) {
     const action = useSyncStore.getState().queue[0];
     try {
@@ -96,10 +101,16 @@ async function processQueue() {
         await cartApi.clearCart();
       }
       useSyncStore.getState().dequeue(); // only dequeue on success
-    } catch (err) {
+    } catch (err: any) {
       console.error("[cart] Backend sync failed:", err);
-      toast.error("Failed to sync cart with server. Retrying soon.");
-      break; // stop processing queue on failure
+      // If it's a 4xx error (permanent), dequeue to prevent blocking the queue forever
+      if (err.response && err.response.status >= 400 && err.response.status < 500) {
+        console.error("Permanent error, dropping from queue");
+        useSyncStore.getState().dequeue();
+      } else {
+        toast.error("Failed to sync cart with server. Retrying soon.");
+        break; // stop processing queue on failure
+      }
     }
   }
   useSyncStore.getState().setSyncing(false);
@@ -110,20 +121,23 @@ if (typeof window !== "undefined") {
   setTimeout(processQueue, 1000);
 }
 
-function syncAdd(itemId: string, quantity: number, customData?: any) {
-  useSyncStore.getState().enqueue({ type: "add", itemId, quantity, customData });
+function syncAdd(item: CartItem, quantity: number) {
+  if (item.custom) return;
+  useSyncStore.getState().enqueue({ type: "add", itemId: item.variantId || item.id, quantity, customData: item.customData });
 }
 
-function syncUpdate(itemId: string, qty: number) {
+function syncUpdate(item: CartItem, qty: number) {
+  if (item.custom) return;
   if (qty <= 0) {
-    useSyncStore.getState().enqueue({ type: "remove", itemId });
+    useSyncStore.getState().enqueue({ type: "remove", itemId: item.variantId || item.id });
   } else {
-    useSyncStore.getState().enqueue({ type: "update", itemId, qty });
+    useSyncStore.getState().enqueue({ type: "update", itemId: item.variantId || item.id, qty });
   }
 }
 
-function syncRemove(itemId: string) {
-  useSyncStore.getState().enqueue({ type: "remove", itemId });
+function syncRemove(item: CartItem) {
+  if (item.custom) return;
+  useSyncStore.getState().enqueue({ type: "remove", itemId: item.variantId || item.id });
 }
 
 function syncClear() {
@@ -135,70 +149,103 @@ export const useCart = create<CartState>()(
     (set, get) => ({
       items: [],
       open: false,
+      couponCode: null,
+      couponDiscount: 0,
       setOpen: (v) => set({ open: v }),
       setItems: (items) => set({ items }),
 
       add: (i) => {
-        const previousItems = get().items;
-        const qty = i.qty ?? 1;
-        const k = keyFor(i);
+        let qty = i.qty ?? 1;
+        const k = keyFor(i as CartItem);
         const existing = get().items.find((it) => keyFor(it) === k);
 
         if (existing) {
-          set({
-            items: get().items.map((it) => (keyFor(it) === k ? { ...it, qty: it.qty + qty } : it)),
-            open: true,
-          });
+          if (existing.maxQty !== undefined && existing.qty + qty > existing.maxQty) {
+             toast.error(`Only ${existing.maxQty} left in stock`);
+             qty = existing.maxQty - existing.qty;
+          }
+          if (qty > 0) {
+            set({
+              items: get().items.map((it) => (keyFor(it) === k ? { ...it, qty: it.qty + qty } : it)),
+              open: true,
+              couponCode: null,
+              couponDiscount: 0,
+            });
+            syncAdd(existing, qty);
+          }
         } else {
-          set({ items: [...get().items, { ...i, qty }], open: true });
+           if (i.maxQty !== undefined && qty > i.maxQty) qty = i.maxQty;
+           const newItem = { ...(i as CartItem), qty };
+           set({ items: [...get().items, newItem], open: true, couponCode: null, couponDiscount: 0 });
+           syncAdd(newItem, qty);
         }
-
-        // Sync to backend
-        syncAdd(i.variantId || i.id, qty, i.customData);
       },
 
       remove: (k) => {
-        const previousItems = get().items;
         const item = get().items.find((it) => keyFor(it) === k);
-        set({ items: get().items.filter((it) => keyFor(it) !== k) });
+        set({ items: get().items.filter((it) => keyFor(it) !== k), couponCode: null, couponDiscount: 0 });
 
-        syncRemove(item?.variantId || k);
+        if (item) syncRemove(item);
       },
 
       setQty: (k, qty) => {
-        const previousItems = get().items;
         const item = get().items.find((it) => keyFor(it) === k);
         if (item && item.maxQty !== undefined && qty > item.maxQty) {
           toast.error(`Only ${item.maxQty} left in stock`);
           qty = item.maxQty;
         }
-        
+
         set({
           items: get()
             .items.map((it) => (keyFor(it) === k ? { ...it, qty } : it))
             .filter((it) => it.qty > 0),
+          couponCode: null,
+          couponDiscount: 0,
         });
 
         if (item) {
-          syncUpdate(item.variantId || k, qty);
+          syncUpdate(item, qty);
         }
       },
 
       clear: () => {
-        const previousItems = get().items;
-        set({ items: [] });
+        set({ items: [], couponCode: null, couponDiscount: 0 });
         syncClear();
       },
 
       subtotal: () => get().items.reduce((s, i) => s + i.price * i.qty, 0),
       savings: () => get().items.reduce((s, i) => s + (i.mrp - i.price) * i.qty, 0),
       count: () => get().items.reduce((s, i) => s + i.qty, 0),
+
+      applyCoupon: async (code: string) => {
+        try {
+          const res = await apiClient.post<{ code: string; discount: number }>(
+            "/orders/apply-coupon",
+            { code, subtotal: get().subtotal() },
+          );
+          set({ couponCode: res.code, couponDiscount: res.discount });
+          toast.success("Coupon applied");
+        } catch (err: any) {
+          toast.error(err.response?.data?.message || "Invalid coupon");
+          throw err;
+        }
+      },
+
+      removeCoupon: () => {
+        set({ couponCode: null, couponDiscount: 0 });
+        toast("Coupon removed");
+      },
     }),
     {
       name: "ink-cart",
       // Don't persist drawer-open state — avoids drawer popping on reload
       // and prevents SSR/CSR mismatches.
-      partialize: (s) => ({ items: s.items }) as CartState,
+      partialize: (s) =>
+        ({
+          items: s.items,
+          couponCode: s.couponCode,
+          couponDiscount: s.couponDiscount,
+        }) as CartState,
     },
   ),
 );
@@ -209,6 +256,9 @@ if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
     if (e.key === "ink-cart") {
       useCart.persist.rehydrate();
+    }
+    if (e.key === "ink-cart-sync-queue") {
+      useSyncStore.persist.rehydrate();
     }
   });
 }

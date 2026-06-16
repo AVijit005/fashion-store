@@ -54,7 +54,12 @@ export function PdpGallery({ images, alt, overlayBadges }: Props) {
                 idx === i ? "border-ink" : "border-transparent hover:border-line"
               }`}
             >
-              <img src={src} alt={`${alt} - view ${i + 1}`} className="h-full w-full object-cover" />
+              <img
+                src={src}
+                alt={`${alt} - view ${i + 1}`}
+                loading="lazy"
+                className="h-full w-full object-cover"
+              />
             </button>
           ))}
         </div>
@@ -137,7 +142,7 @@ export function PdpGallery({ images, alt, overlayBadges }: Props) {
                     aria-label={`Open image ${i + 1} of ${images.length}`}
                     className="h-full w-full shrink-0 snap-center"
                   >
-                    <img src={src} alt={`${alt} ${i + 1}`} className="h-full w-full object-cover" />
+                    <img src={src} alt={`${alt} ${i + 1}`} loading={i === 0 ? "eager" : "lazy"} className="h-full w-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -166,7 +171,12 @@ export function PdpGallery({ images, alt, overlayBadges }: Props) {
                     idx === i ? "border-ink" : "border-line"
                   }`}
                 >
-                  <img src={src} alt={`${alt} - view ${i + 1}`} className="h-full w-full object-cover" />
+                  <img
+                    src={src}
+                    alt={`${alt} - view ${i + 1}`}
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
                 </button>
               ))}
             </div>

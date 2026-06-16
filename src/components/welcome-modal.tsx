@@ -61,7 +61,10 @@ export function WelcomeModal() {
             </div>
             <div className="p-8 sm:p-10">
               <p className="text-[11px] uppercase tracking-[0.22em] text-mute">First visit</p>
-              <h2 id="welcome-modal-title" className="mt-2 font-display text-4xl leading-[0.95] sm:text-5xl">
+              <h2
+                id="welcome-modal-title"
+                className="mt-2 font-display text-4xl leading-[0.95] sm:text-5xl"
+              >
                 10% off your <span className="italic">first piece.</span>
               </h2>
               <p className="mt-3 text-sm text-mute">

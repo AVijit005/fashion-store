@@ -1,4 +1,9 @@
-import { Injectable, NestMiddleware, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NestMiddleware,
+  UnauthorizedException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -24,22 +29,25 @@ export class AdminAuthMiddleware implements NestMiddleware {
       const secret = this.configService.get<string>('JWT_SECRET') || process.env.JWT_SECRET;
       const payload = await this.jwtService.verifyAsync(token, { secret });
 
-      if (payload.role !== 'ADMIN') {
-        throw new ForbiddenException('Admin role required');
-      }
+      let dbRole = payload.role;
 
       if (payload.sessionId) {
         const session = await this.prisma.session.findUnique({
           where: { id: payload.sessionId },
-          select: { isRevoked: true }
+          include: { user: { select: { role: true, isDeleted: true } } },
         });
-        if (!session || session.isRevoked) {
-          throw new UnauthorizedException('Session revoked');
+        if (!session || session.isRevoked || !session.user || session.user.isDeleted) {
+          throw new UnauthorizedException('Session revoked or user invalid');
         }
+        dbRole = session.user.role;
+      }
+
+      if (dbRole !== 'ADMIN') {
+        throw new ForbiddenException('Admin role required');
       }
 
       // Attach user payload to request
-      (req as any).user = payload;
+      (req as any).user = { ...payload, role: dbRole };
       next();
     } catch (error) {
       if (error instanceof ForbiddenException) {

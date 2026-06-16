@@ -1,45 +1,53 @@
-import { IsString, IsEmail, IsNotEmpty, IsOptional, IsUUID, IsNumber, IsIn } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, IsOptional, IsUUID, IsNumber, IsIn, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CheckoutDto {
   @ApiProperty({ description: 'Contact email' })
   @IsEmail()
   @IsNotEmpty()
+  @MaxLength(255)
   shippingEmail!: string;
 
   @ApiProperty({ description: 'Full name for delivery' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   shippingName!: string;
 
   @ApiProperty({ description: 'Contact phone number' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50)
   shippingPhone!: string;
 
   @ApiProperty({ description: 'Street address' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   shippingStreet!: string;
 
   @ApiProperty({ description: 'City' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   shippingCity!: string;
 
   @ApiProperty({ description: 'State/Region' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   shippingState!: string;
 
   @ApiProperty({ description: 'Postal/Zip Code' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50)
   shippingPostalCode!: string;
 
   @ApiProperty({ description: 'Country' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   shippingCountry!: string;
 
   @ApiProperty({ description: 'Guest cart session ID (if not logged in)', required: false })
@@ -56,6 +64,7 @@ export class CheckoutDto {
   @ApiProperty({ description: 'Idempotency key to prevent duplicate orders', required: false })
   @IsString()
   @IsOptional()
+  @MaxLength(100, { message: 'Idempotency key is too long' })
   idempotencyKey?: string;
 
   @ApiProperty({ description: 'Applied coupon code', required: false })

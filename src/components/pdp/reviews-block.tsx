@@ -135,7 +135,7 @@ export function ReviewsBlock({ rating, count }: { rating: number; count: number 
                 <p className="mt-1 text-sm text-graphite">{r.b}</p>
                 {r.image && (
                   <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
-                    <img src={r.image} alt="" className="aspect-square w-full object-cover" />
+                    <img src={r.image} alt="" loading="lazy" className="aspect-square w-full object-cover" />
                   </div>
                 )}
               </li>

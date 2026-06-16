@@ -3,6 +3,7 @@ import { OrdersService } from './orders.service';
 import { PrismaService } from '../../config/prisma.service';
 import { CartService } from '../cart/cart.service';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { InventoryService } from './inventory.service';
 import { getQueueToken } from '@nestjs/bullmq';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
@@ -13,6 +14,7 @@ describe('OrdersService', () => {
   let prismaService: any;
   let cartService: any;
   let inventoryService: any;
+  let configService: any;
 
   beforeEach(async () => {
     prismaService = {
@@ -24,14 +26,16 @@ describe('OrdersService', () => {
 
     cartService = {};
     inventoryService = {};
+    configService = { get: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
         { provide: PrismaService, useValue: prismaService },
         { provide: CartService, useValue: cartService },
-        { provide: ConfigService, useValue: { get: jest.fn() } },
+        { provide: ConfigService, useValue: configService },
         { provide: InventoryService, useValue: inventoryService },
+        { provide: 'REDIS_CLIENT', useValue: { get: jest.fn(), set: jest.fn(), del: jest.fn(), incr: jest.fn(), expire: jest.fn() } },
         { provide: getQueueToken('order-expiry'), useValue: { add: jest.fn() } },
       ],
     }).compile();
@@ -55,7 +59,7 @@ describe('OrdersService', () => {
         isActive: true,
         validFrom: new Date(Date.now() - 10000),
         type: 'PERCENTAGE',
-        value: 10, // 10%
+        value: new Prisma.Decimal(10), // 10%
         code: 'TENOFF',
       });
       const result = await service.applyCoupon('TENOFF', 1000);
@@ -68,8 +72,8 @@ describe('OrdersService', () => {
         isActive: true,
         validFrom: new Date(Date.now() - 10000),
         type: 'PERCENTAGE',
-        value: 50, // 50%
-        maxDiscount: 200, // Max 200
+        value: new Prisma.Decimal(50), // 50%
+        maxDiscount: new Prisma.Decimal(200), // Max 200
         code: 'HALFOFF',
       });
       const result = await service.applyCoupon('HALFOFF', 1000);
@@ -81,7 +85,7 @@ describe('OrdersService', () => {
         isActive: true,
         validFrom: new Date(Date.now() - 10000),
         type: 'FIXED',
-        value: 150,
+        value: new Prisma.Decimal(150),
         code: 'MINUS150',
       });
       const result = await service.applyCoupon('MINUS150', 1000);
@@ -93,10 +97,12 @@ describe('OrdersService', () => {
         isActive: true,
         validFrom: new Date(Date.now() - 10000),
         type: 'FIXED',
-        value: 100,
-        minOrderValue: 2000,
+        value: new Prisma.Decimal(100),
+        minOrderValue: new Prisma.Decimal(2000),
       });
-      await expect(service.applyCoupon('TEST', 1000)).rejects.toThrow(/Order value must be at least/);
+      await expect(service.applyCoupon('TEST', 1000)).rejects.toThrow(
+        /Order value must be at least/,
+      );
     });
   });
 });

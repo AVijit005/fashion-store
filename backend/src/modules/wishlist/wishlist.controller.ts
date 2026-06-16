@@ -20,17 +20,14 @@ export class WishlistController {
   @ApiOperation({ summary: 'Toggle product in wishlist' })
   async toggleWishlistItem(
     @Param('productId') productId: string,
-    @CurrentUser() user: { id: string }
+    @CurrentUser() user: { id: string },
   ) {
     return this.wishlistService.toggleWishlistItem(user.id, productId);
   }
 
   @Post('sync')
   @ApiOperation({ summary: 'Sync local wishlist to backend' })
-  async syncWishlist(
-    @Body() body: { productIds: string[] },
-    @CurrentUser() user: { id: string }
-  ) {
+  async syncWishlist(@Body() body: { productIds: string[] }, @CurrentUser() user: { id: string }) {
     if (!body.productIds || !Array.isArray(body.productIds)) {
       return this.wishlistService.getWishlist(user.id);
     }

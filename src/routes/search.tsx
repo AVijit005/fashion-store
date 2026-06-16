@@ -17,31 +17,26 @@ export const Route = createFileRoute("/search")({
       },
     ],
   }),
+  loader: async () => {
+    try {
+      const res = await catalogApi.getProducts({ featured: true, limit: 8 });
+      return { list: res.products };
+    } catch (err) {
+      console.error(err);
+      return { list: [] as Product[] };
+    }
+  },
   component: SearchPage,
 });
 
 function SearchPage() {
   const openPalette = useCommandPalette((s) => s.setOpen);
-  const [list, setList] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { list } = Route.useLoaderData();
 
   // Auto-open the canonical command palette when arriving on this route.
   useEffect(() => {
     openPalette(true);
   }, [openPalette]);
-
-  useEffect(() => {
-    catalogApi
-      .getProducts({ featured: true, limit: 8 })
-      .then((res) => {
-        setList(res.products);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error(err);
-        setLoading(false);
-      });
-  }, []);
 
   return (
     <div className="mx-auto max-w-[1480px] px-5 py-12 lg:px-10 lg:py-16">
@@ -60,11 +55,11 @@ function SearchPage() {
       </button>
       <p className="mt-4 text-[12px] text-mute">Featured pieces</p>
 
-      {loading ? (
+      {list.length === 0 ? (
         <LoadingState label="Loading featured pieces" />
       ) : (
         <div className="mt-10 grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 lg:gap-x-6 xl:grid-cols-4">
-          {list.map((p) => (
+          {list.map((p: Product, i: number) => (
             <ProductCard key={p.id} product={p} />
           ))}
         </div>

@@ -13,9 +13,12 @@ export interface Address {
 
 export const usersApi = {
   getAddresses: () => apiClient.get<Address[]>("/users/me/addresses"),
-  addAddress: (data: Omit<Address, "id">) => apiClient.post<Address>("/users/me/addresses", { ...data, zip: data.postalCode }),
-  updateAddress: (id: string, data: Partial<Address>) => apiClient.put<Address>(`/users/me/addresses/${id}`, { ...data, zip: data.postalCode }),
-  deleteAddress: (id: string) => apiClient.delete<{ success: boolean }>(`/users/me/addresses/${id}`),
+  addAddress: (data: Omit<Address, "id">) =>
+    apiClient.post<Address>("/users/me/addresses", { ...data, zip: data.postalCode }),
+  updateAddress: (id: string, data: Partial<Address>) =>
+    apiClient.put<Address>(`/users/me/addresses/${id}`, { ...data, zip: data.postalCode }),
+  deleteAddress: (id: string) =>
+    apiClient.delete<{ success: boolean }>(`/users/me/addresses/${id}`),
   updatePreferences: (data: any) => apiClient.put<any>("/users/me/preferences", data),
 };
 
@@ -45,7 +48,8 @@ export function useAddAddress() {
 export function useUpdateAddress() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Address> }) => usersApi.updateAddress(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<Address> }) =>
+      usersApi.updateAddress(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["addresses"] });
     },

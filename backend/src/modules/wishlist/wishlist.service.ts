@@ -65,9 +65,9 @@ export class WishlistService {
       where: { id: { in: productIds } },
       select: { id: true },
     });
-    
-    const validProductIds = validProducts.map(p => p.id);
-    
+
+    const validProductIds = validProducts.map((p) => p.id);
+
     if (validProductIds.length === 0) {
       return this.getWishlist(userId);
     }
@@ -80,10 +80,10 @@ export class WishlistService {
       select: { productId: true },
     });
 
-    const existingProductIds = new Set(existingItems.map(i => i.productId));
+    const existingProductIds = new Set(existingItems.map((i) => i.productId));
     const itemsToCreate = validProductIds
-      .filter(id => !existingProductIds.has(id))
-      .map(id => ({ wishlistId: wishlist.id, productId: id }));
+      .filter((id) => !existingProductIds.has(id))
+      .map((id) => ({ wishlistId: wishlist.id, productId: id }));
 
     if (itemsToCreate.length > 0) {
       await this.prisma.wishlistItem.createMany({

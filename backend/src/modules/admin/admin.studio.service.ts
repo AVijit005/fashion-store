@@ -6,6 +6,14 @@ import { SubmissionStatus } from '@prisma/client';
 export class AdminStudioService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getSubmissions() {
+    const submissions = await this.prisma.studioSubmission.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { design: { include: { user: { select: { name: true, email: true } } } } },
+    });
+    return { success: true, data: submissions };
+  }
+
   async updateStatus(id: string, status: SubmissionStatus, notes?: string) {
     const submission = await this.prisma.studioSubmission.findUnique({
       where: { id },

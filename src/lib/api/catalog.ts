@@ -157,9 +157,6 @@ export function mapBackendProduct(p: BackendProduct): Product {
   };
 }
 
-export const products: Product[] = [];
-export const categories: any[] = [];
-
 export const catalogApi = {
   async getCategories() {
     return apiClient.get<BackendCategory[]>("/catalog/categories");
@@ -173,23 +170,22 @@ export const catalogApi = {
     category?: string;
     collection?: string;
     featured?: boolean;
+    ids?: string[];
     limit?: number;
     offset?: number;
   }) {
-    const res = await apiClient.get<any>(
-      "/catalog/products",
-      {
-        category: params?.category,
-        collection: params?.collection,
-        featured: params?.featured ? "true" : undefined,
-        limit: params?.limit,
-        offset: params?.offset,
-      },
-    );
-    
+    const res = await apiClient.get<any>("/catalog/products", {
+      category: params?.category,
+      collection: params?.collection,
+      featured: params?.featured ? "true" : undefined,
+      ids: params?.ids?.join(","),
+      limit: params?.limit,
+      offset: params?.offset,
+    });
+
     // Bulletproof parsing in case backend returns unexpected shape
     const rawProducts = Array.isArray(res) ? res : Array.isArray(res?.products) ? res.products : [];
-    const total = typeof res?.total === 'number' ? res.total : rawProducts.length;
+    const total = typeof res?.total === "number" ? res.total : rawProducts.length;
 
     return {
       products: rawProducts.map(mapBackendProduct),
@@ -203,14 +199,11 @@ export const catalogApi = {
   },
 
   async search(query: string, params?: { limit?: number; offset?: number }) {
-    const res = await apiClient.get<any>(
-      "/catalog/search",
-      {
-        q: query,
-        limit: params?.limit,
-        offset: params?.offset,
-      },
-    );
+    const res = await apiClient.get<any>("/catalog/search", {
+      q: query,
+      limit: params?.limit,
+      offset: params?.offset,
+    });
     // Bulletproof parsing for search endpoints
     const rawProducts = Array.isArray(res) ? res : Array.isArray(res?.products) ? res.products : [];
     return rawProducts.map(mapBackendProduct);

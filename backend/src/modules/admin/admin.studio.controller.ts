@@ -1,4 +1,4 @@
-import { Controller, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Param, Body, UseGuards, Get } from '@nestjs/common';
 import { AdminStudioService } from './admin.studio.service';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -9,6 +9,11 @@ import { Roles } from '../../common/decorators/roles.decorator';
 @Roles('ADMIN')
 export class AdminStudioController {
   constructor(private readonly studioService: AdminStudioService) {}
+
+  @Get()
+  async getSubmissions() {
+    return this.studioService.getSubmissions();
+  }
 
   @Post(':id/approve')
   async approveRequest(@Param('id') id: string) {

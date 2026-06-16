@@ -9,10 +9,10 @@ export function useIsMobile() {
     const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
     const onChange = () => setIsMobile(mql.matches);
     mql.addEventListener("change", onChange);
-    
+
     // Only set if different to avoid double render on mount if possible
-    setIsMobile((prev) => prev !== mql.matches ? mql.matches : prev);
-    
+    setIsMobile((prev) => (prev !== mql.matches ? mql.matches : prev));
+
     return () => mql.removeEventListener("change", onChange);
   }, []);
 

@@ -20,7 +20,11 @@ export function PdpTrustRow() {
   const [pin, setPin] = useState("");
   const [activePin, setActivePin] = useState("");
 
-  const { data: eta, isFetching, error } = useQuery({
+  const {
+    data: eta,
+    isFetching,
+    error,
+  } = useQuery({
     queryKey: ["eta", activePin],
     queryFn: () => fetchEtaFor(activePin),
     enabled: activePin.length === 6,
@@ -47,7 +51,7 @@ export function PdpTrustRow() {
             inputMode="numeric"
             className="flex-1 border-b border-line bg-transparent py-2 text-sm outline-none focus:border-ink"
           />
-          <button 
+          <button
             disabled={isFetching || pin.length !== 6}
             className="border border-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] disabled:opacity-50"
           >
@@ -63,7 +67,11 @@ export function PdpTrustRow() {
             · {eta.cod ? "COD available" : "Prepaid only"}
           </p>
         )}
-        {error && <p className="mt-3 text-sm text-accent">{(error as Error).message || "Enter a valid 6-digit pincode"}</p>}
+        {error && (
+          <p className="mt-3 text-sm text-accent">
+            {(error as Error).message || "Enter a valid 6-digit pincode"}
+          </p>
+        )}
       </form>
 
       <ul className="grid grid-cols-2 gap-3 border-y border-line py-5 text-center sm:grid-cols-4">

@@ -57,13 +57,15 @@ model User {
   id                   String                @id @default(uuid())
   email                String                @unique
   passwordHash         String                @map("password_hash")
+  name                 String?
+  phone                String?
   role                 Role                  @default(CUSTOMER)
   isVerified           Boolean               @default(false) @map("is_verified")
   verificationToken    String?               @unique @map("verification_token")
   passwordResetToken   String?               @unique @map("password_reset_token")
   passwordResetExpires DateTime?             @map("password_reset_expires")
   isDeleted            Boolean               @default(false) @map("is_deleted")
-  preferences          Json?                 @map("preferences")
+  preferences          Json?
   createdAt            DateTime              @default(now()) @map("created_at")
   updatedAt            DateTime              @updatedAt @map("updated_at")
   addresses            Address[]
@@ -93,6 +95,7 @@ model Session {
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  cart      Cart?
 
   @@index([userId])
   @@index([expiresAt])
@@ -141,6 +144,7 @@ model Collection {
   createdAt   DateTime  @default(now()) @map("created_at")
   products    Product[] @relation("ProductCollections")
 
+  @@index([isActive])
   @@map("collections")
 }
 
@@ -153,6 +157,8 @@ model Drop {
   createdAt   DateTime  @default(now()) @map("created_at")
   products    Product[]
 
+  @@index([isActive])
+  @@index([releaseDate])
   @@map("drops")
 }
 
@@ -161,7 +167,7 @@ model Product {
   categoryId      String           @map("category_id")
   category        Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   dropId          String?          @map("drop_id")
-  drop            Drop?            @relation(fields: [dropId], references: [id])
+  drop            Drop?            @relation(fields: [dropId], references: [id], onDelete: SetNull)
   title           String
   slug            String           @unique
   description     String
@@ -184,6 +190,7 @@ model Product {
   @@index([dropId])
   @@index([status])
   @@index([isDeleted])
+  @@index([isFeatured])
   @@map("products")
 }
 
@@ -223,10 +230,11 @@ model Order {
   shippingState      String               @map("shipping_state")
   shippingPostalCode String               @map("shipping_postal_code")
   shippingCountry    String               @map("shipping_country")
-  paymentProvider    String               @default("RAZORPAY") @map("payment_provider")
-  paymentStatus      String               @default("PENDING") @map("payment_status")
+  paymentProvider    PaymentProvider      @default(RAZORPAY) @map("payment_provider")
+  paymentStatus      PaymentStatus        @default(PENDING) @map("payment_status")
   razorpayOrderId    String?              @unique @map("razorpay_order_id")
   razorpayPaymentId  String?              @unique @map("razorpay_payment_id")
+  razorpaySignature  String?              @map("razorpay_signature")
   guestToken         String?              @map("guest_token")
   couponCode         String?              @map("coupon_code")
   createdAt          DateTime             @default(now()) @map("created_at")
@@ -234,10 +242,10 @@ model Order {
   items              OrderItem[]
   statusHistory      OrderStatusHistory[]
 
-  @@index([userId])
   @@index([guestToken])
   @@index([status, createdAt])
   @@index([userId, status, createdAt])
+  @@index([shippingEmail, status])
   @@map("orders")
 }
 
@@ -246,7 +254,7 @@ model OrderItem {
   orderId          String          @map("order_id")
   order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productVariantId String?         @map("product_variant_id")
-  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
   customData       Json?           @map("custom_data")
   quantity         Int
   priceAtPurchase  Decimal         @map("price_at_purchase") @db.Decimal(10, 2)
@@ -270,7 +278,6 @@ model Asset {
   createdAt  DateTime    @default(now()) @map("created_at")
 
   @@index([userId])
-  @@index([storageKey])
   @@map("assets")
 }
 
@@ -282,7 +289,7 @@ model StudioDesign {
   description     String?
   status          DesignStatus       @default(DRAFT)
   previewImageUrl String?            @map("preview_image_url")
-  deletedAt       DateTime?          @map("deleted_at")
+  isDeleted       Boolean            @default(false) @map("is_deleted")
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
   versions        DesignVersion[]
@@ -303,14 +310,13 @@ model DesignVersion {
   createdAt        DateTime          @default(now()) @map("created_at")
 
   @@unique([designId, versionNumber])
-  @@index([designId])
   @@map("design_versions")
 }
 
 model CreatorTemplate {
   id              String         @id @default(uuid())
   userId          String         @map("user_id")
-  user            User           @relation(fields: [userId], references: [id])
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   title           String
   description     String?
   previewImage    String?        @map("preview_image")
@@ -333,7 +339,7 @@ model StudioSubmission {
   designId   String                @map("design_id")
   design     StudioDesign          @relation(fields: [designId], references: [id], onDelete: Cascade)
   reviewerId String?               @map("reviewer_id")
-  reviewer   User?                 @relation("ReviewerSubmissions", fields: [reviewerId], references: [id])
+  reviewer   User?                 @relation("ReviewerSubmissions", fields: [reviewerId], references: [id], onDelete: SetNull)
   status     SubmissionStatus      @default(SUBMITTED)
   notes      String?
   createdAt  DateTime              @default(now()) @map("created_at")
@@ -353,7 +359,7 @@ model StudioStatusHistory {
   oldStatus    SubmissionStatus? @map("old_status")
   newStatus    SubmissionStatus  @map("new_status")
   userId       String            @map("user_id")
-  user         User              @relation(fields: [userId], references: [id])
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   notes        String?
   createdAt    DateTime          @default(now()) @map("created_at")
 
@@ -365,7 +371,7 @@ model StudioStatusHistory {
 model Review {
   id         String   @id @default(uuid())
   userId     String   @map("user_id")
-  user       User     @relation(fields: [userId], references: [id])
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   productId  String   @map("product_id")
   product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   rating     Int
@@ -383,7 +389,7 @@ model Review {
 model AuditLog {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   action    String
   details   Json?
   ipAddress String?  @map("ip_address")
@@ -404,6 +410,7 @@ model OrderStatusHistory {
   createdAt DateTime     @default(now()) @map("created_at")
 
   @@index([orderId])
+  @@index([changedBy])
   @@map("order_status_histories")
 }
 
@@ -412,12 +419,11 @@ model Cart {
   userId    String?    @unique @map("user_id")
   user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessionId String?    @unique @map("session_id")
+  session   Session?   @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   items     CartItem[]
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
-  @@index([userId])
-  @@index([sessionId])
   @@map("carts")
 }
 
@@ -433,7 +439,6 @@ model CartItem {
   updatedAt        DateTime        @updatedAt @map("updated_at")
 
   @@unique([cartId, productVariantId])
-  @@index([cartId])
   @@index([productVariantId])
   @@map("cart_items")
 }
@@ -444,6 +449,7 @@ model WebhookEvent {
   payload   Json
   createdAt DateTime @default(now()) @map("created_at")
 
+  @@index([status])
   @@map("webhook_events")
 }
 
@@ -453,6 +459,7 @@ model IdempotencyKey {
   createdAt DateTime @default(now()) @map("created_at")
   expiresAt DateTime @map("expires_at")
 
+  @@index([expiresAt])
   @@map("idempotency_keys")
 }
 
@@ -464,7 +471,6 @@ model Wishlist {
   createdAt DateTime       @default(now()) @map("created_at")
   updatedAt DateTime       @updatedAt @map("updated_at")
 
-  @@index([userId])
   @@map("wishlists")
 }
 
@@ -477,7 +483,6 @@ model WishlistItem {
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@unique([wishlistId, productId])
-  @@index([wishlistId])
   @@index([productId])
   @@map("wishlist_items")
 }
@@ -502,5 +507,19 @@ model Coupon {
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
+  @@index([isActive])
   @@map("coupons")
+}
+
+enum PaymentProvider {
+  RAZORPAY
+  COD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  COD
 }

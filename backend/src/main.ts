@@ -11,15 +11,14 @@ import { AppModule } from './app.module';
 import { loggerConfig } from './config/logger.config';
 import { AllExceptionsFilter } from './common/filters/global-exception.filter';
 import { ResponseTransformInterceptor } from './common/interceptors/response.interceptor';
+import { configureApp } from './app.setup';
 
 async function bootstrap() {
   Sentry.init({
     dsn: process.env.SENTRY_DSN || '',
-    integrations: [
-      nodeProfilingIntegration(),
-    ],
-    tracesSampleRate: 1.0,
-    profilesSampleRate: 1.0,
+    integrations: [nodeProfilingIntegration()],
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+    profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
   });
 
   const app = await NestFactory.create(AppModule, {
@@ -29,24 +28,7 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
-  app.use(helmet());
-  app.use(cookieParser());
-
-  app.useGlobalFilters(new AllExceptionsFilter());
-  app.useGlobalInterceptors(new ResponseTransformInterceptor());
-
-  app.enableCors({
-    origin: configService.get<string>('FRONTEND_ORIGINS')?.split(',') || false,
-    credentials: true,
-  });
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true,
-    }),
-  );
+  configureApp(app, configService);
 
   // Swagger API documentation — available in development/staging only.
   // In production, /docs returns 404 to avoid exposing internal API schemas.
@@ -62,10 +44,9 @@ async function bootstrap() {
     SwaggerModule.setup('docs', app, document);
   }
 
-  app.enableShutdownHooks();
-
   const port = configService.get<number>('PORT') || 3000;
-  await app.listen(port, '0.0.0.0');
+  const host = configService.get<string>('NODE_ENV') === 'production' ? '0.0.0.0' : '127.0.0.1';
+  await app.listen(port, host);
   console.log(`🚀 Aura Streetwear Backend is running on: http://localhost:${port}`);
   if (configService.get<string>('NODE_ENV') !== 'production') {
     console.log(`📖 API Documentation available at: http://localhost:${port}/docs`);

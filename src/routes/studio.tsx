@@ -1,7 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Type, Image as ImageIcon, Trash2, Plus, ShoppingBag, LayoutTemplate, Save } from "lucide-react";
+import {
+  Type,
+  Image as ImageIcon,
+  Trash2,
+  Plus,
+  ShoppingBag,
+  LayoutTemplate,
+  Save,
+} from "lucide-react";
 import { useCart } from "@/lib/store/cart";
 import { inr } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
@@ -212,7 +220,9 @@ function Studio() {
             </div>
           ) : (
             <div>
-              <p className="mb-3 text-[11px] uppercase tracking-[0.22em] text-mute">Creator Templates</p>
+              <p className="mb-3 text-[11px] uppercase tracking-[0.22em] text-mute">
+                Creator Templates
+              </p>
               {templates.length === 0 ? (
                 <p className="text-sm text-mute">No templates available yet.</p>
               ) : (
@@ -231,9 +241,13 @@ function Studio() {
                     >
                       <div className="aspect-square overflow-hidden bg-fog flex items-center justify-center">
                         {t.previewImage ? (
-                           <img src={t.previewImage} alt={t.title} className="h-full w-full object-cover" />
+                          <img
+                            src={t.previewImage}
+                            alt={t.title}
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
-                           <LayoutTemplate className="h-8 w-8 text-mute opacity-50" />
+                          <LayoutTemplate className="h-8 w-8 text-mute opacity-50" />
                         )}
                       </div>
                       <p className="mt-2 text-[12px] truncate">{t.title}</p>
@@ -419,24 +433,24 @@ function Studio() {
                         Position (X, Y)
                       </p>
                       <div className="flex gap-2">
-                      <input
-                        type="number"
-                        value={Math.round(sel.x)}
-                        onChange={(e) => update(sel.id, { x: +e.target.value })}
-                        className="w-full border-b border-line bg-transparent py-1 text-sm outline-none focus:border-ink"
-                        min={0}
-                        max={100}
-                      />
-                      <input
-                        type="number"
-                        value={Math.round(sel.y)}
-                        onChange={(e) => update(sel.id, { y: +e.target.value })}
-                        className="w-full border-b border-line bg-transparent py-1 text-sm outline-none focus:border-ink"
-                        min={0}
-                        max={100}
-                      />
+                        <input
+                          type="number"
+                          value={Math.round(sel.x)}
+                          onChange={(e) => update(sel.id, { x: +e.target.value })}
+                          className="w-full border-b border-line bg-transparent py-1 text-sm outline-none focus:border-ink"
+                          min={0}
+                          max={100}
+                        />
+                        <input
+                          type="number"
+                          value={Math.round(sel.y)}
+                          onChange={(e) => update(sel.id, { y: +e.target.value })}
+                          className="w-full border-b border-line bg-transparent py-1 text-sm outline-none focus:border-ink"
+                          min={0}
+                          max={100}
+                        />
+                      </div>
                     </div>
-                  </div>
                   </>
                 )}
                 <button

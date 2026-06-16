@@ -8,6 +8,6 @@ import { AuthModule } from '../auth/auth.module';
   imports: [AuthModule],
   controllers: [WishlistController],
   providers: [WishlistService, PrismaService],
-  exports: [WishlistService]
+  exports: [WishlistService],
 })
 export class WishlistModule {}

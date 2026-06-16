@@ -61,19 +61,18 @@ export class AssetsController {
     if (dto.size > 10 * 1024 * 1024) {
       throw new BadRequestException('File size exceeds 10MB limit');
     }
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedMimeTypes.includes(dto.mimeType)) {
+    const allowedMimeTypes: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+    };
+    if (!allowedMimeTypes[dto.mimeType]) {
       throw new BadRequestException('Invalid file type');
     }
 
     const userId = req.user.id;
-    // Generate a unique storage key
-    const extension =
-      dto.filename
-        .split('.')
-        .pop()
-        ?.toLowerCase()
-        .replace(/[^a-z0-9]/g, '') || '';
+    // Generate a unique storage key using the securely mapped extension
+    const extension = allowedMimeTypes[dto.mimeType];
     const storageKey = `assets/${userId}/${crypto.randomUUID()}.${extension}`;
 
     // Create the asset record in the database

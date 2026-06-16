@@ -42,7 +42,10 @@ export function CategoryRail() {
               >
                 <div className="relative aspect-square overflow-hidden bg-fog">
                   <img
-                    src={c.thumbnailUrl || "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&q=80&w=600"}
+                    src={
+                      c.thumbnailUrl ||
+                      "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&q=80&w=600"
+                    }
                     alt={c.name}
                     loading="lazy"
                     className="h-full w-full object-cover transition duration-[900ms] group-hover:scale-105"

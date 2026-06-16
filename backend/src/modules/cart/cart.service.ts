@@ -1,5 +1,6 @@
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Inject, HttpException, NotFoundException } from '@nestjs/common';
 import Redis from 'ioredis';
+import * as crypto from 'crypto';
 import { PrismaService } from '../../config/prisma.service';
 import { ProductStatus, Prisma } from '@prisma/client';
 
@@ -36,7 +37,6 @@ export interface HydratedCart {
 export class CartService {
   private readonly redisPrefix = 'cart:';
   private readonly cacheTtl = 1209600; // 14 days in seconds
-  private readonly promiseMap = new Map<string, Promise<CachedCartItem[]>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -58,24 +58,34 @@ export class CartService {
   // Retrieve minimal cached array of variant IDs and quantities
   async getCartItems(userId?: string, sessionId?: string): Promise<CachedCartItem[]> {
     const cacheKey = this.getCacheKey(userId, sessionId);
-    
-    if (this.promiseMap.has(cacheKey)) {
-      return this.promiseMap.get(cacheKey)!;
-    }
-    if (this.promiseMap.size > 5000) {
-      throw new BadRequestException('Server is busy handling cart requests');
+
+    let cached = null;
+    try {
+      cached = await this.redis.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached) as CachedCartItem[];
+      }
+    } catch (error) {
+      console.warn(`Redis GET failed for ${cacheKey}`, error);
     }
 
-    const promise = (async () => {
-      let cached = null;
+    // Cache miss: attempt to acquire lock to populate cache
+    const lockKey = `${cacheKey}:lock`;
+    const lockAcquired = await this.redis.set(lockKey, 'locked', 'EX', 10, 'NX');
 
-      try {
-        cached = await this.redis.get(cacheKey);
-        if (cached) {
-          return JSON.parse(cached) as CachedCartItem[];
-        }
-      } catch (error) {
-        console.warn(`Redis GET failed for ${cacheKey}`, error);
+    if (!lockAcquired) {
+      // 503 instead of 400
+      throw new HttpException(
+        'Server is currently fetching the cart, please try again.',
+        503,
+      );
+    }
+
+    try {
+      // Re-check cache in case another pod just populated it
+      cached = await this.redis.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached) as CachedCartItem[];
       }
 
       // Cache miss or Redis failure, load from DB
@@ -87,6 +97,11 @@ export class CartService {
       });
 
       if (!cart) {
+        try {
+          await this.redis.set(cacheKey, '[]', 'EX', this.cacheTtl);
+        } catch (error) {
+          console.warn(`Redis SET failed for ${cacheKey}`, error);
+        }
         return [];
       }
 
@@ -102,13 +117,11 @@ export class CartService {
       } catch (error) {
         console.warn(`Redis SET failed for ${cacheKey}`, error);
       }
-      return items;
-    })().finally(() => {
-      this.promiseMap.delete(cacheKey);
-    });
 
-    this.promiseMap.set(cacheKey, promise);
-    return promise;
+      return items;
+    } finally {
+      await this.redis.del(lockKey).catch(() => null);
+    }
   }
 
   // Retrieve fully hydrated cart with live prices and stock availability
@@ -144,7 +157,7 @@ export class CartService {
       const customProducts = await this.prisma.product.findMany({
         where: { id: { in: customProductIds }, status: ProductStatus.PUBLISHED },
       });
-      customProductsMap = new Map(customProducts.map(p => [p.id, p]));
+      customProductsMap = new Map(customProducts.map((p) => [p.id, p]));
     }
 
     let totalAmount = new Prisma.Decimal(0);
@@ -162,7 +175,7 @@ export class CartService {
           const customPrice = basePrice.add(new Prisma.Decimal(200));
           const itemTotal = customPrice.mul(item.quantity);
           totalAmount = totalAmount.add(itemTotal);
-          
+
           return {
             id: item.id,
             variantId: null,
@@ -217,11 +230,20 @@ export class CartService {
     };
   }
 
-  async addItem(itemId: string, quantity: number, userId?: string, sessionId?: string, customData?: any) {
+  async addItem(
+    itemId: string,
+    quantity: number,
+    userId?: string,
+    sessionId?: string,
+    customData?: any,
+  ) {
     if (quantity <= 0) {
       throw new BadRequestException('Quantity must be greater than zero');
     }
     if (customData) {
+      if (!customData.productId || typeof customData.productId !== 'string') {
+        throw new BadRequestException('customData must contain a valid productId');
+      }
       await this.prisma.$transaction(async (tx) => {
         const cart = await this.getOrCreateCart(tx, userId, sessionId);
         // For custom items, just create a new row
@@ -258,7 +280,7 @@ export class CartService {
 
     await this.prisma.$transaction(async (tx) => {
       const cart = await this.getOrCreateCart(tx, userId, sessionId);
-      
+
       // Use atomic SQL to fix TOCTOU race conditions (Bug 1 Audit)
       const updatedCount = await tx.$executeRawUnsafe(
         `
@@ -318,6 +340,11 @@ export class CartService {
         SET quantity = $1, updated_at = NOW()
         WHERE id = $2
         AND $1 <= (SELECT stock_quantity FROM product_variants WHERE id = $3)
+        AND EXISTS (
+          SELECT 1 FROM product_variants pv
+          JOIN products p ON pv.product_id = p.id
+          WHERE pv.id = $3 AND p.status = 'PUBLISHED'
+        )
         `,
         quantity,
         item.id,
@@ -385,20 +412,31 @@ export class CartService {
   }
 
   async mergeCart(guestSessionId: string, userId: string) {
-    const guestCart = await this.prisma.cart.findUnique({
-      where: { sessionId: guestSessionId },
-      include: { items: true },
-    });
-
-    if (!guestCart || guestCart.items.length === 0) {
-      return this.getCart(userId);
-    }
-
     // Merge items transactionally
     await this.prisma.$transaction(async (tx) => {
+      // BE-006: Acquire advisory lock on userId to prevent concurrent merge races
+      const lockHash = crypto.createHash('sha256').update(`cart_merge_${userId}`).digest();
+      const lockId = lockHash.readInt32LE(0);
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockId})`;
+
+      const guestCart = await tx.cart.findUnique({
+        where: { sessionId: guestSessionId },
+        include: { items: true },
+      });
+
+      if (!guestCart || guestCart.items.length === 0) {
+        return;
+      }
+
       const userCart = await this.getOrCreateCart(tx, userId);
       const variants = await tx.productVariant.findMany({
-        where: { id: { in: guestCart.items.map((item) => item.productVariantId).filter((id): id is string => id !== null) } },
+        where: {
+          id: {
+            in: guestCart.items
+              .map((item) => item.productVariantId)
+              .filter((id): id is string => id !== null),
+          },
+        },
         select: { id: true, stockQuantity: true },
       });
       const stockByVariant = new Map(
@@ -408,10 +446,19 @@ export class CartService {
       const existingUserItems = await tx.cartItem.findMany({
         where: { cartId: userCart.id },
       });
-      const existingUserItemMap = new Map(existingUserItems.map(i => [i.productVariantId, i]));
+      const existingUserItemMap = new Map(existingUserItems.map((i) => [i.productVariantId, i]));
 
       const mergePromises = guestCart.items.map((guestItem) => {
         if (!guestItem.productVariantId) {
+          const existingCustom = existingUserItems.find(
+            (i) => !i.productVariantId && JSON.stringify(i.customData) === JSON.stringify(guestItem.customData)
+          );
+          if (existingCustom) {
+            return tx.cartItem.update({
+              where: { id: existingCustom.id },
+              data: { quantity: existingCustom.quantity + guestItem.quantity },
+            });
+          }
           return tx.cartItem.create({
             data: {
               cartId: userCart.id,
@@ -421,27 +468,19 @@ export class CartService {
           });
         }
 
-        const existing = existingUserItemMap.get(guestItem.productVariantId);
         const stock = stockByVariant.get(guestItem.productVariantId) ?? 0;
-        const mergedQuantity = Math.min(stock, (existing?.quantity || 0) + guestItem.quantity);
-        if (mergedQuantity <= 0) {
-          return Promise.resolve();
-        }
-        
-        if (existing) {
-          return tx.cartItem.update({
-            where: { id: existing.id },
-            data: { quantity: mergedQuantity },
-          });
-        } else {
-          return tx.cartItem.create({
-            data: {
-              cartId: userCart.id,
-              productVariantId: guestItem.productVariantId,
-              quantity: mergedQuantity,
-            },
-          });
-        }
+        return tx.$executeRawUnsafe(
+          `
+          INSERT INTO cart_items (id, cart_id, product_variant_id, quantity, updated_at)
+          VALUES (gen_random_uuid(), $1, $2, $3, NOW())
+          ON CONFLICT (cart_id, product_variant_id) DO UPDATE
+          SET quantity = LEAST(cart_items.quantity + EXCLUDED.quantity, $4), updated_at = NOW()
+          `,
+          userCart.id,
+          guestItem.productVariantId,
+          guestItem.quantity,
+          stock,
+        );
       });
       await Promise.all(mergePromises);
 

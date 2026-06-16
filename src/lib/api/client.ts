@@ -1,14 +1,17 @@
 // Typed HTTP API Client wrapper around native fetch.
 // Communicates with NestJS API running on http://localhost:3000.
 
-const isVercelPreview = typeof window !== "undefined" && window.location.hostname.includes("vercel.app") && !window.location.hostname.startsWith("fashion-store");
+const isVercelPreview =
+  typeof window !== "undefined" &&
+  window.location.hostname.includes("vercel.app") &&
+  !window.location.hostname.startsWith("fashion-store");
 const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3000";
 
 import { toast } from "sonner";
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
-  validate?: (data: unknown) => boolean;
+  validate?: (data: unknown) => any;
 }
 
 export class APIError extends Error {
@@ -25,13 +28,19 @@ export class APIError extends Error {
 
 let refreshPromise: Promise<void> | null = null;
 
-function unwrapApiData<T>(parsed: unknown, validate?: (data: unknown) => boolean): T {
+function unwrapApiData<T>(parsed: unknown, validate?: (data: unknown) => any): T {
   let data = parsed;
   if (parsed && typeof parsed === "object" && "success" in parsed && "data" in parsed) {
     data = (parsed as Record<string, unknown>).data;
   }
-  if (validate && !validate(data)) {
-    throw new TypeError("API response payload failed runtime type validation");
+  if (validate) {
+    const res = validate(data);
+    if (res === false) {
+      throw new TypeError("API response payload failed runtime type validation");
+    }
+    if (res !== true && res !== undefined) {
+      return res as T;
+    }
   }
   return data as T;
 }
@@ -93,59 +102,70 @@ export const apiClient = {
         if (typeof window !== "undefined" && localStorage.getItem("ink_logged_in") === "true") {
           if (!refreshPromise) {
             refreshPromise = (async () => {
-                const refreshUrl = new URL(`${BASE_URL}/auth/refresh`);
-                const refreshRes = await fetch(refreshUrl.toString(), {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  credentials: "include",
-                });
+              const refreshUrl = new URL(`${BASE_URL}/auth/refresh`);
+              const refreshRes = await fetch(refreshUrl.toString(), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+              });
 
-                if (!refreshRes.ok) {
-                  if (typeof window !== "undefined") {
-                    localStorage.removeItem("ink_logged_in");
-                  }
-                  throw new Error("Refresh failed");
+              if (!refreshRes.ok) {
+                if (typeof window !== "undefined") {
+                  localStorage.removeItem("ink_logged_in");
                 }
-              })()
-                .catch((err) => {
-                  console.error("Background token rotation failed:", err);
-                })
-                .finally(() => {
-                  refreshPromise = null;
-                });
-            }
-
-            try {
-              await refreshPromise;
-              const retryResponse = await fetch(url.toString(), config);
-              if (retryResponse.ok) {
-                if (retryResponse.status === 204) {
-                  return null as unknown as T;
-                }
-                return unwrapApiData<T>(await retryResponse.json(), options.validate);
+                throw new Error("Refresh failed");
               }
-            } catch (err) {
-              console.error("Token rotation failed inside interceptor:", err);
+              const data = await refreshRes.json();
+              if (data && data.success && data.data && data.data.accessToken) {
+                const { useAuthStore } = await import("../store/auth");
+                useAuthStore.setState({ accessToken: data.data.accessToken });
+              }
+            })();
+          }
+
+          try {
+            await refreshPromise;
+          } catch (err) {
+            refreshPromise = null;
+            console.error("Token rotation failed inside interceptor:", err);
+            // Let it fall through to returning 401
+          } finally {
+            refreshPromise = null;
+          }
+
+          try {
+            const { useAuthStore } = await import("../store/auth");
+            const token = useAuthStore.getState().accessToken;
+            if (token) {
+              headers.set("Authorization", `Bearer ${token}`);
             }
+            const retryConfig: RequestInit = { ...options, headers, credentials: "include" };
+            const retryResponse = await fetch(url.toString(), retryConfig);
+            if (retryResponse.ok) {
+              if (retryResponse.status === 204) {
+                return null as unknown as T;
+              }
+              return unwrapApiData<T>(await retryResponse.json(), options.validate);
+            }
+          } catch (err) {
+            console.error("Token rotation retry failed:", err);
           }
         }
-
+      }
 
       let errorData: unknown;
+      let textBody = "";
       try {
-        errorData = await response.json();
+        textBody = await response.text();
+        errorData = JSON.parse(textBody);
       } catch {
-        try {
-          errorData = await response.text();
-        } catch {
-          errorData = null;
-        }
+        errorData = textBody || null;
       }
       let errorMessage = `API request failed with status ${response.status}`;
       if (errorData && typeof errorData === "object" && "message" in errorData) {
         errorMessage = String((errorData as Record<string, unknown>).message);
       }
-      
+
       if (typeof window !== "undefined") {
         if (response.status === 403) {
           toast.error("Access denied. You do not have permission.");
@@ -153,7 +173,7 @@ export const apiClient = {
           toast.error("Server error: " + errorMessage);
         }
       }
-      
+
       throw new APIError(errorMessage, response.status, errorData);
     }
 

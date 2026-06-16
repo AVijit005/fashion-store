@@ -58,7 +58,7 @@ export class AdminCustomersService {
 
     const total = Number(totalRows[0]?.count || 0);
 
-    const mapped = rawUsers.map(user => ({
+    const mapped = rawUsers.map((user) => ({
       id: user.id,
       name: user.email.split('@')[0],
       email: user.email,
@@ -69,7 +69,9 @@ export class AdminCustomersService {
       orders: Number(user.orders_count),
       spend: Number(user.total_spend),
       joinedAt: user.joined_at.toISOString(),
-      lastOrderAt: user.last_order_at ? user.last_order_at.toISOString() : user.joined_at.toISOString(),
+      lastOrderAt: user.last_order_at
+        ? user.last_order_at.toISOString()
+        : user.joined_at.toISOString(),
       vip: user.segment === 'vip',
       notes: null,
       supportTickets: Math.floor(Math.random() * 3), // Mock
@@ -88,6 +90,6 @@ export class AdminCustomersService {
 
   async addNote(id: string, note: string) {
     // User schema doesn't have notes yet, so we simulate a successful save or store in audit logs
-    return { success: true, message: "Note added successfully" };
+    return { success: true, message: 'Note added successfully' };
   }
 }

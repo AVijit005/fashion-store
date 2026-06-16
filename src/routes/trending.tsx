@@ -50,16 +50,13 @@ function TrendingPage() {
       });
   }, []);
 
-  if (loading) {
-    return <LoadingState label="Loading trending items" />;
-  }
-
   return (
     <ProductGridShell
       eyebrow="Most loved this week"
       title="Trending now."
       description="Ranked by what's in carts, on creators, and out the door."
       base={list}
+      isLoading={loading}
     />
   );
 }

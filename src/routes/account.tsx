@@ -44,14 +44,19 @@ function Account() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isRetrying, setIsRetrying] = useState<string | null>(null);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
-  
+
   const { data: addresses = [], isLoading: loadingAddresses } = useAddresses();
   const deleteAddress = useDeleteAddress();
   const updatePreferences = useUpdatePreferences();
   const { isAuthenticated, user, logout, setAuthModalOpen, isLoading } = useAuthStore();
-  
+
   const prefs = (user as any)?.preferences || {};
-  const notifs = prefs.notifications || { orderUpdates: true, dropAlerts: true, restocks: true, sales: false };
+  const notifs = prefs.notifications || {
+    orderUpdates: true,
+    dropAlerts: true,
+    restocks: true,
+    sales: false,
+  };
 
   const handlePrefChange = (key: string, val: any) => {
     const newPrefs = { ...prefs, [key]: val };
@@ -59,7 +64,7 @@ function Account() {
       onSuccess: (updatedUser) => {
         useAuthStore.setState({ user: updatedUser });
         toast.success("Preferences updated");
-      }
+      },
     });
   };
 
@@ -69,7 +74,7 @@ function Account() {
       onSuccess: (updatedUser) => {
         useAuthStore.setState({ user: updatedUser });
         toast.success("Notifications updated");
-      }
+      },
     });
   };
 
@@ -96,7 +101,7 @@ function Account() {
     try {
       const razorpayKeyId = (import.meta.env.VITE_RAZORPAY_KEY_ID as string) ?? "";
       const res = await apiClient.post<any>(`/orders/${orderId}/retry-payment`, {});
-      
+
       if (!window.Razorpay) throw new Error("Payment SDK failed to load");
 
       const rzp = new window.Razorpay({
@@ -125,8 +130,8 @@ function Account() {
           ondismiss: () => {
             setIsRetrying(null);
             toast.info("Payment retry cancelled.");
-          }
-        }
+          },
+        },
       });
       rzp.open();
     } catch (err: any) {
@@ -177,7 +182,9 @@ function Account() {
         <div className="mt-8 border border-line bg-fog/40 p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <p className="font-display text-2xl">Admin Dashboard</p>
-            <p className="text-sm text-mute mt-1">Manage products, orders, customers, and site settings.</p>
+            <p className="text-sm text-mute mt-1">
+              Manage products, orders, customers, and site settings.
+            </p>
           </div>
           <Link
             to="/admin"
@@ -222,7 +229,8 @@ function Account() {
                   <div>
                     <p className="text-[14px]">INK-{o.id.substring(0, 8).toUpperCase()}</p>
                     <p className="text-[12px] text-mute">
-                      {new Date(o.createdAt).toLocaleDateString()} · {o.items?.length || 0} item{(o.items?.length || 0) > 1 ? "s" : ""}
+                      {new Date(o.createdAt).toLocaleDateString()} · {o.items?.length || 0} item
+                      {(o.items?.length || 0) > 1 ? "s" : ""}
                     </p>
                   </div>
                   <p
@@ -237,22 +245,30 @@ function Account() {
                 </button>
                 {openOrder === o.id && (
                   <div className="mt-6 border border-line bg-fog/40 p-6">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Status details</p>
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-mute">
+                      Status details
+                    </p>
                     <p className="mt-1 font-display text-2xl">{o.status.replace("_", " ")}</p>
-                    {(o.status === "FAILED" || o.status === "PAYMENT_PENDING") && o.paymentProvider === "RAZORPAY" && (
-                      <button 
-                        onClick={() => handleRetryPayment(o.id)}
-                        disabled={isRetrying === o.id}
-                        className="mt-4 bg-ink text-paper px-6 py-3 text-[12px] uppercase tracking-[0.22em] hover:bg-ink/90 disabled:opacity-50"
-                      >
-                        {isRetrying === o.id ? "Processing..." : "Retry Payment"}
-                      </button>
-                    )}
+                    {(o.status === "FAILED" || o.status === "PAYMENT_PENDING") &&
+                      o.paymentProvider === "RAZORPAY" && (
+                        <button
+                          onClick={() => handleRetryPayment(o.id)}
+                          disabled={isRetrying === o.id}
+                          className="mt-4 bg-ink text-paper px-6 py-3 text-[12px] uppercase tracking-[0.22em] hover:bg-ink/90 disabled:opacity-50"
+                        >
+                          {isRetrying === o.id ? "Processing..." : "Retry Payment"}
+                        </button>
+                      )}
                     <ol className="mt-6 space-y-3">
                       {trackingSteps.map((s, i) => {
-                        const reachedIdx = o.status === "DELIVERED" ? trackingSteps.length - 1 : 
-                                         (o.status === "SHIPPED" ? 3 : 
-                                         (o.status === "PROCESSING" ? 2 : 1));
+                        const reachedIdx =
+                          o.status === "DELIVERED"
+                            ? trackingSteps.length - 1
+                            : o.status === "SHIPPED"
+                              ? 3
+                              : o.status === "PROCESSING"
+                                ? 2
+                                : 1;
                         const done = i <= reachedIdx;
                         return (
                           <li key={s} className="flex items-center gap-3">
@@ -275,25 +291,34 @@ function Account() {
 
         {/* Returns */}
         <TabsContent value="returns" className="mt-8">
-          {orders.filter(o => o.status === "DELIVERED").length > 0 ? (
+          {orders.filter((o) => o.status === "DELIVERED").length > 0 ? (
             <div className="grid gap-4">
               <p className="text-mute mb-2">Select a delivered order to initiate a return:</p>
-              {orders.filter(o => o.status === "DELIVERED").map((o) => (
-                <div key={o.id} className="border border-line p-6 flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <p className="font-medium text-[14px]">INK-{o.id.substring(0, 8).toUpperCase()}</p>
-                    <p className="text-[12px] text-mute">Delivered on {new Date(o.updatedAt).toLocaleDateString()}</p>
-                  </div>
-                  <button 
-                    onClick={() => {
-                      window.location.href = `mailto:support@inkstudio.com?subject=Return Request for Order INK-${o.id.substring(0, 8).toUpperCase()}&body=Please provide the reason for return:%0A%0A`;
-                    }}
-                    className="border border-line px-4 py-2 text-[12px] uppercase tracking-[0.18em] hover:border-ink hover:text-ink transition-colors"
+              {orders
+                .filter((o) => o.status === "DELIVERED")
+                .map((o) => (
+                  <div
+                    key={o.id}
+                    className="border border-line p-6 flex flex-wrap items-center justify-between gap-4"
                   >
-                    Request Return
-                  </button>
-                </div>
-              ))}
+                    <div>
+                      <p className="font-medium text-[14px]">
+                        INK-{o.id.substring(0, 8).toUpperCase()}
+                      </p>
+                      <p className="text-[12px] text-mute">
+                        Delivered on {new Date(o.updatedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        window.location.href = `mailto:support@inkstudio.com?subject=Return Request for Order INK-${o.id.substring(0, 8).toUpperCase()}&body=Please provide the reason for return:%0A%0A`;
+                      }}
+                      className="border border-line px-4 py-2 text-[12px] uppercase tracking-[0.18em] hover:border-ink hover:text-ink transition-colors"
+                    >
+                      Request Return
+                    </button>
+                  </div>
+                ))}
             </div>
           ) : (
             <div className="border border-line bg-paper p-8 text-center">
@@ -310,7 +335,10 @@ function Account() {
           {isAddingAddress ? (
             <div className="border border-line p-6 max-w-xl">
               <h3 className="font-display text-2xl mb-4">Add new address</h3>
-              <AddressForm onCancel={() => setIsAddingAddress(false)} onSuccess={() => setIsAddingAddress(false)} />
+              <AddressForm
+                onCancel={() => setIsAddingAddress(false)}
+                onSuccess={() => setIsAddingAddress(false)}
+              />
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
@@ -324,13 +352,17 @@ function Account() {
                 addresses.map((a) => (
                   <div key={a.id} className="border border-line p-6">
                     {a.isDefault && (
-                      <p className="text-[11px] uppercase tracking-[0.22em] text-mute mb-2">Default</p>
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-mute mb-2">
+                        Default
+                      </p>
                     )}
                     <p className="font-medium">{a.street}</p>
-                    <p className="mt-1 text-sm text-mute">{a.city}, {a.state} {a.postalCode}</p>
+                    <p className="mt-1 text-sm text-mute">
+                      {a.city}, {a.state} {a.postalCode}
+                    </p>
                     <p className="mt-1 text-sm text-mute">{a.country}</p>
                     <div className="mt-4 flex gap-3 text-[12px] uppercase tracking-[0.18em]">
-                      <button 
+                      <button
                         onClick={() => deleteAddress.mutate(a.id)}
                         className="text-mute hover:text-red-500 transition-colors"
                         disabled={deleteAddress.isPending}
@@ -342,7 +374,7 @@ function Account() {
                 ))
               )}
               {!isAddingAddress && (
-                <button 
+                <button
                   onClick={() => setIsAddingAddress(true)}
                   className="flex min-h-[160px] items-center justify-center border border-dashed border-line text-[12px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink transition-colors"
                 >
@@ -359,7 +391,8 @@ function Account() {
             <CreditCard className="mx-auto h-8 w-8 text-mute mb-4" />
             <p className="font-display text-2xl">No saved payments</p>
             <p className="mt-2 text-mute max-w-sm mx-auto">
-              Your securely saved cards and payment methods will appear here after your next checkout.
+              Your securely saved cards and payment methods will appear here after your next
+              checkout.
             </p>
           </div>
         </TabsContent>

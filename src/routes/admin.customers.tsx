@@ -31,9 +31,15 @@ function CustomersPage() {
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
-  const { data: response, isLoading } = useQuery<{ data: Customer[]; meta: { total: number; totalPages: number } }>({
+  const { data: response, isLoading } = useQuery<{
+    data: Customer[];
+    meta: { total: number; totalPages: number };
+  }>({
     queryKey: ["admin-customers", page, q, seg],
-    queryFn: () => apiClient.get(`/admin/customers?page=${page}&limit=${pageSize}&q=${encodeURIComponent(q)}&segment=${seg}`),
+    queryFn: () =>
+      apiClient.get(
+        `/admin/customers?page=${page}&limit=${pageSize}&q=${encodeURIComponent(q)}&segment=${seg}`,
+      ),
   });
 
   const baseList = response?.data || [];
@@ -62,7 +68,7 @@ function CustomersPage() {
         description="Lifetime value, segments, support history and loyalty tiers."
         actions={
           <>
-            <button 
+            <button
               onClick={() => exportToCSV("customers", list)}
               className="press border border-line bg-paper px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-mute hover:border-ink hover:text-ink"
             >
@@ -79,7 +85,9 @@ function CustomersPage() {
         <MiniStat label="Total LTV" value={compactInr(totalSpend)} delta="+12.4%" />
         <MiniStat
           label="Avg orders"
-          value={(baseList.reduce((s, c) => s + (c.orders || 0), 0) / (baseList.length || 1)).toFixed(1)}
+          value={(
+            baseList.reduce((s, c) => s + (c.orders || 0), 0) / (baseList.length || 1)
+          ).toFixed(1)}
         />
         <MiniStat label="Repeat rate" value="48%" delta="+3.2%" />
         <MiniStat
@@ -114,81 +122,84 @@ function CustomersPage() {
 
       <Panel bodyClassName="p-0">
         <div className="overflow-x-auto w-full">
-        <table className="w-full text-[13px]">
-          <thead className="border-b border-line bg-fog/40 text-left">
-            <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
-              <th className="px-3 py-2.5 font-normal">Customer</th>
-              <th className="px-3 py-2.5 font-normal">Segment</th>
-              <th className="px-3 py-2.5 font-normal">Loyalty</th>
-              <th className="px-3 py-2.5 text-right font-normal">Orders</th>
-              <th className="px-3 py-2.5 text-right font-normal">Spend</th>
-              <th className="px-3 py-2.5 font-normal">Last order</th>
-              <th className="px-3 py-2.5 font-normal">City</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((c) => (
-              <tr
-                key={c.id}
-                onClick={() => setActive(c)}
-                className="cursor-pointer border-b border-line/60 transition hover:bg-fog/40"
-              >
-                <td className="px-3 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-[10px] font-medium text-paper">
-                      {(c.name || "Unknown")
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .slice(0, 2)}
-                    </span>
-                    <div>
-                      <p className="flex items-center gap-1.5 text-ink">
-                        {c.name}
-                        {c.vip && <Crown className="h-3 w-3 text-accent" aria-label="VIP" />}
-                      </p>
-                      <p className="text-[11px] text-mute">{c.email}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-3 py-3">
-                  <StatusChip
-                    label={c.segment}
-                    tone={c.segment === "vip" ? "warn" : c.segment === "lapsed" ? "muted" : "info"}
-                  />
-                </td>
-                <td className="px-3 py-3">
-                  <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-mute">
-                    {c.loyalty}
-                  </span>
-                </td>
-                <td className="px-3 py-3 text-right font-mono tabular-nums">{c.orders}</td>
-                <td className="px-3 py-3 text-right font-mono tabular-nums">
-                  {compactInr(c.spend)}
-                </td>
-                <td className="px-3 py-3 text-mute">{relTime(c.lastOrderAt)}</td>
-                <td className="px-3 py-3 text-mute">{c.city}</td>
+          <table className="w-full text-[13px]">
+            <thead className="border-b border-line bg-fog/40 text-left">
+              <tr className="text-[10px] font-mono uppercase tracking-[0.18em] text-mute">
+                <th className="px-3 py-2.5 font-normal">Customer</th>
+                <th className="px-3 py-2.5 font-normal">Segment</th>
+                <th className="px-3 py-2.5 font-normal">Loyalty</th>
+                <th className="px-3 py-2.5 text-right font-normal">Orders</th>
+                <th className="px-3 py-2.5 text-right font-normal">Spend</th>
+                <th className="px-3 py-2.5 font-normal">Last order</th>
+                <th className="px-3 py-2.5 font-normal">City</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.map((c) => (
+                <tr
+                  key={c.id}
+                  onClick={() => setActive(c)}
+                  className="cursor-pointer border-b border-line/60 transition hover:bg-fog/40"
+                >
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-[10px] font-medium text-paper">
+                        {(c.name || "Unknown")
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .slice(0, 2)}
+                      </span>
+                      <div>
+                        <p className="flex items-center gap-1.5 text-ink">
+                          {c.name}
+                          {c.vip && <Crown className="h-3 w-3 text-accent" aria-label="VIP" />}
+                        </p>
+                        <p className="text-[11px] text-mute">{c.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <StatusChip
+                      label={c.segment}
+                      tone={
+                        c.segment === "vip" ? "warn" : c.segment === "lapsed" ? "muted" : "info"
+                      }
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-mute">
+                      {c.loyalty}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-right font-mono tabular-nums">{c.orders}</td>
+                  <td className="px-3 py-3 text-right font-mono tabular-nums">
+                    {compactInr(c.spend)}
+                  </td>
+                  <td className="px-3 py-3 text-mute">{relTime(c.lastOrderAt)}</td>
+                  <td className="px-3 py-3 text-mute">{c.city}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
         {meta.total > pageSize && (
           <div className="flex items-center justify-between border-t border-line bg-fog/20 px-4 py-3 text-[12px]">
             <p className="text-mute">
-              Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, meta.total)} of {meta.total} customers
+              Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, meta.total)} of{" "}
+              {meta.total} customers
             </p>
             <div className="flex gap-2">
               <button
                 disabled={page === 1}
-                onClick={() => setPage(p => p - 1)}
+                onClick={() => setPage((p) => p - 1)}
                 className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
               >
                 Previous
               </button>
               <button
                 disabled={page >= meta.totalPages}
-                onClick={() => setPage(p => p + 1)}
+                onClick={() => setPage((p) => p + 1)}
                 className="border border-line bg-paper px-3 py-1 text-mute hover:text-ink disabled:opacity-50"
               >
                 Next
@@ -214,11 +225,12 @@ function CustomersPage() {
 function CustomerDetail({ customer }: { customer: Customer }) {
   const queryClient = useQueryClient();
   const notesMutation = useMutation({
-    mutationFn: async ({ id, note }: { id: string, note: string }) => apiClient.post(`/admin/customers/${id}/notes`, { note }),
+    mutationFn: async ({ id, note }: { id: string; note: string }) =>
+      apiClient.post(`/admin/customers/${id}/notes`, { note }),
     onSuccess: () => {
       toast.success("Note added successfully");
       queryClient.invalidateQueries({ queryKey: ["admin-customers"] });
-    }
+    },
   });
 
   return (
@@ -251,19 +263,20 @@ function CustomerDetail({ customer }: { customer: Customer }) {
         </p>
         <div className="mt-2 space-y-3">
           <p className="border border-line bg-fog/40 p-3 text-[13px] text-ink">
-            {customer.notes ?? "No notes yet. Add internal observations, sizing preferences, or stylist references."}
+            {customer.notes ??
+              "No notes yet. Add internal observations, sizing preferences, or stylist references."}
           </p>
           <div>
             <textarea
               placeholder="Add a new note…"
               rows={3}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   const note = e.currentTarget.value;
                   if (note.trim()) {
                     notesMutation.mutate({ id: customer.id, note });
-                    e.currentTarget.value = '';
+                    e.currentTarget.value = "";
                   }
                 }
               }}

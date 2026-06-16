@@ -36,24 +36,14 @@ export const Route = createFileRoute("/shop")({
 import { useQuery } from "@tanstack/react-query";
 
 function ShopPage() {
-  const { data: list = [], isLoading, isError } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["products", "all"],
-    queryFn: async () => {
-      const res = await catalogApi.getProducts({ limit: 100 });
-      return res.products || [];
-    },
+    queryFn: () => catalogApi.getProducts({ limit: 100 }),
   });
+  const items = data?.products || [];
 
   if (isLoading) {
     return <LoadingState label="Loading products" />;
-  }
-
-  if (isError) {
-    return (
-      <div className="py-20 text-center">
-        <p className="text-red-500">Failed to load products.</p>
-      </div>
-    );
   }
 
   return (
@@ -61,7 +51,8 @@ function ShopPage() {
       eyebrow="All collections"
       title="Shop everything."
       description="Every drop, every collab, every staple. Filter your way in."
-      base={list}
+      base={items}
+      isLoading={isLoading}
     />
   );
 }

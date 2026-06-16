@@ -53,7 +53,11 @@ export class CreatorTemplateController {
   @Roles(Role.CREATOR, Role.ADMIN)
   @Patch(':id')
   @ApiOperation({ summary: 'Update a template (Owner/Admin only)' })
-  update(@CurrentUser() user: RequestUser, @Param('id') id: string, @Body() updateDto: UpdateCreatorTemplateDto) {
+  update(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Body() updateDto: UpdateCreatorTemplateDto,
+  ) {
     return this.templateService.update(user.id, user.role as Role, id, updateDto);
   }
 

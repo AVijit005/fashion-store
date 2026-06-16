@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, HttpStatus } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { configureApp } from '../src/app.setup';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../src/config/prisma.service';
 
 describe('CartModule (e2e)', () => {
@@ -22,6 +24,7 @@ describe('CartModule (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    configureApp(app, app.get(ConfigService));
     await app.init();
     prisma = app.get(PrismaService);
   });

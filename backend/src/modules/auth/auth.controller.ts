@@ -32,16 +32,14 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new customer' })
   @ApiResponse({ status: 201, description: 'User successfully registered' })
   async signUp(@Body() signUpDto: SignUpDto) {
-    const data = await this.authService.signUp(signUpDto);
-    return { success: true, data };
+    return this.authService.signUp(signUpDto);
   }
 
   @Get('me')
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Get current logged in user details' })
   async getMe(@Req() req: any) {
-    const data = await this.authService.getMe(req.user.id);
-    return { success: true, data };
+    return this.authService.getMe(req.user.id);
   }
 
   @Post('login')
@@ -62,7 +60,7 @@ export class AuthController {
     this.setRefreshTokenCookie(res, tokens.refreshToken);
     this.setAccessTokenCookie(res, tokens.accessToken);
 
-    return { success: true, data: { accessToken: tokens.accessToken } };
+    return { accessToken: tokens.accessToken };
   }
 
   @Post('refresh')
@@ -83,7 +81,7 @@ export class AuthController {
     this.setRefreshTokenCookie(res, tokens.refreshToken);
     this.setAccessTokenCookie(res, tokens.accessToken);
 
-    return { success: true, data: { accessToken: tokens.accessToken } };
+    return { accessToken: tokens.accessToken };
   }
 
   @Post('logout')
@@ -96,7 +94,7 @@ export class AuthController {
     }
     this.clearRefreshTokenCookie(res);
     this.clearAccessTokenCookie(res);
-    return { success: true, message: 'Logged out successfully' };
+    return { message: 'Logged out successfully' };
   }
 
   private setRefreshTokenCookie(res: Response, token: string) {
@@ -106,7 +104,7 @@ export class AuthController {
     res.cookie('refresh_token', token, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/auth',
       maxAge: expiryDays * 24 * 60 * 60 * 1000,
     });
@@ -117,7 +115,8 @@ export class AuthController {
     res.cookie('refresh_token', '', {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite: 'strict',
+      path: '/auth',
       expires: new Date(0),
     });
   }
@@ -127,7 +126,8 @@ export class AuthController {
     res.cookie('access_token', token, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite: 'strict',
+      path: '/',
       maxAge: 15 * 60 * 1000, // 15 minutes
     });
   }
@@ -137,7 +137,8 @@ export class AuthController {
     res.cookie('access_token', '', {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
+      sameSite: 'strict',
+      path: '/',
       expires: new Date(0),
     });
   }

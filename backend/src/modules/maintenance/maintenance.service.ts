@@ -51,7 +51,7 @@ export class MaintenanceService {
     this.logger.log('Starting cleanup of orphaned S3 assets...');
     try {
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      
+
       const orphanedAssets = await this.prisma.asset.findMany({
         where: {
           status: 'PENDING',

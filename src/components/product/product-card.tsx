@@ -7,9 +7,10 @@ import { useWishlist } from "@/lib/store/wishlist";
 import { useCart } from "@/lib/store/cart";
 import { useFlyToCart } from "@/lib/store/fly-to-cart";
 import { QuickViewDialog } from "@/components/product/quick-view-dialog";
-import type { Product } from "@/lib/api/catalog";
 import { inr, pct } from "@/lib/format";
 import { EASE } from "@/lib/motion";
+import { useHydrated } from "@/hooks/use-hydrated";
+import type { Product } from "@/lib/api/catalog";
 
 const badgeStyles: Record<string, string> = {
   new: "bg-ink text-paper",
@@ -37,23 +38,29 @@ export const ProductCard = memo(function ProductCard({
 }) {
   const [hover, setHover] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
-  const { has, toggle } = useWishlist();
+  const toggle = useWishlist((s) => s.toggle);
+  const hydrated = useHydrated();
+  const _wished = useWishlist((s) => s.ids.includes(product.id));
+  const wished = hydrated ? _wished : false;
   const add = useCart((s) => s.add);
   const launch = useFlyToCart((s) => s.launch);
   const cardRef = useRef<HTMLDivElement>(null);
-  const wished = has(product.id);
   const discount = pct(product.price, product.mrp);
   const hint = stockHint(product.id);
 
   const quickAdd = (size: string) => {
     const color = product.colors[0].name;
-    const selectedVariant = product.variants?.find((v) => v.size === size && v.color === color);
+    const selectedVariant = product.variants?.find((v: any) => v.size === size && v.color === color);
     if (!selectedVariant || selectedVariant.stockQuantity <= 0) {
       toast.error("This size/color combination is out of stock");
       return;
     }
     const rect = cardRef.current?.getBoundingClientRect();
-    if (rect) launch(product.images?.[0] || "https://placehold.co/600x800/f5f3ee/0d0d0d?text=No+Image", rect);
+    if (rect)
+      launch(
+        product.images?.[0] || "https://placehold.co/600x800/f5f3ee/0d0d0d?text=No+Image",
+        rect,
+      );
     add({
       id: product.id,
       variantId: selectedVariant.id,
@@ -78,7 +85,9 @@ export const ProductCard = memo(function ProductCard({
         <Link to="/p/$slug" params={{ slug: product.slug }} className="block">
           <div className="relative aspect-[3/4] overflow-hidden bg-fog">
             <img
-              src={product.images?.[0] || "https://placehold.co/600x800/f5f3ee/0d0d0d?text=No+Image"}
+              src={
+                product.images?.[0] || "https://placehold.co/600x800/f5f3ee/0d0d0d?text=No+Image"
+              }
               alt={product.name}
               width={600}
               height={800}
@@ -101,7 +110,7 @@ export const ProductCard = memo(function ProductCard({
             )}
 
             <div className="absolute left-3 top-3 flex flex-col gap-1">
-              {product.badges.map((b) => (
+              {product.badges.map((b: string) => (
                 <span
                   key={b}
                   className={`px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${badgeStyles[b]}`}
@@ -159,7 +168,7 @@ export const ProductCard = memo(function ProductCard({
               className="absolute bottom-3 left-3 right-3 hidden gap-1.5 md:flex"
               onClick={(e) => e.preventDefault()}
             >
-              {product.sizes.slice(0, 5).map((s) => (
+              {product.sizes.slice(0, 5).map((s: string) => (
                 <button
                   key={s}
                   onClick={() => quickAdd(s)}
@@ -201,7 +210,7 @@ export const ProductCard = memo(function ProductCard({
           </div>
 
           <div className="mt-2 flex items-center gap-1.5">
-            {product.colors.slice(0, 5).map((c) => (
+            {product.colors.slice(0, 5).map((c: any) => (
               <span
                 key={c.name}
                 className="h-3 w-3 rounded-full border border-line"

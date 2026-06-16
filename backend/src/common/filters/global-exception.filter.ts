@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import * as Sentry from '@sentry/node';
+import { Prisma } from '@prisma/client';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -18,13 +19,26 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const status =
+    let status =
       exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    const message =
+    let message: any =
       exception instanceof HttpException
         ? (exception.getResponse() as { message?: string | string[] }).message || exception.message
         : 'Internal server error';
+
+    if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      if (exception.code === 'P2002') {
+        status = HttpStatus.CONFLICT;
+        message = `Unique constraint failed`;
+      } else if (exception.code === 'P2025') {
+        status = HttpStatus.NOT_FOUND;
+        message = 'Record not found';
+      } else {
+        status = HttpStatus.BAD_REQUEST;
+        message = `Database error: ${exception.code}`;
+      }
+    }
 
     // Log the error with stack traces for 500s
     if (status === HttpStatus.INTERNAL_SERVER_ERROR) {

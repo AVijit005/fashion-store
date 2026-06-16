@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { validateEnv } from './config/env.config';
@@ -18,6 +19,7 @@ import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
+import { CsrfGuard } from './common/guards/csrf.guard';
 
 @Module({
   imports: [
@@ -25,16 +27,29 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
       isGlobal: true,
       validate: validateEnv,
     }),
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 300,
-    }]),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [{ ttl: 60000, limit: 300 }],
+        storage: new ThrottlerStorageRedisService(config.get<string>('REDIS_URL') || 'redis://localhost:6379'),
+      }),
+    }),
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
+        const clusterNodesStr = configService.get<string>('REDIS_CLUSTER_NODES');
+        if (clusterNodesStr) {
+          const nodes = clusterNodesStr.split(',').map((node) => {
+            const [host, port] = node.split(':');
+            return { host, port: parseInt(port, 10) };
+          });
+          const Redis = require('ioredis');
+          return { connection: new Redis.Cluster(nodes) };
+        }
+
         const redisUrl = configService.get<string>('REDIS_URL');
         if (!redisUrl) {
-          throw new Error('REDIS_URL config is missing');
+          throw new Error('REDIS_URL or REDIS_CLUSTER_NODES config is missing');
         }
         const url = new URL(redisUrl);
         return {
@@ -43,7 +58,7 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
             port: parseInt(url.port || '6379', 10),
             username: url.username || undefined,
             password: url.password || undefined,
-            tls: url.protocol === 'rediss:' ? { rejectUnauthorized: false } : undefined,
+            tls: url.protocol === 'rediss:' ? { rejectUnauthorized: process.env.NODE_ENV === 'production' } : undefined,
           },
         };
       },
@@ -67,6 +82,10 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: CsrfGuard,
     },
   ],
 })

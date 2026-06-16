@@ -14,8 +14,6 @@ export class CatalogController {
     private readonly searchService: SearchService,
   ) {}
 
-
-
   @Get('categories')
   @ApiOperation({ summary: 'Get all product categories' })
   async getCategories() {
@@ -33,17 +31,25 @@ export class CatalogController {
   @ApiQuery({ name: 'category', required: false, description: 'Category slug' })
   @ApiQuery({ name: 'collection', required: false, description: 'Collection slug' })
   @ApiQuery({ name: 'featured', required: false, description: 'Filter only featured products' })
+  @ApiQuery({ name: 'ids', required: false, description: 'Comma separated list of product IDs' })
   @ApiQuery({ name: 'limit', required: false, description: 'Pagination limit' })
   @ApiQuery({ name: 'offset', required: false, description: 'Pagination offset' })
   async getProducts(
     @Query('category') categorySlug?: string,
     @Query('collection') collectionSlug?: string,
     @Query('featured') isFeaturedStr?: string,
+    @Query('ids') idsStr?: string,
     @Query('limit') limitStr?: string,
     @Query('offset') offsetStr?: string,
   ) {
     const isFeatured =
       isFeaturedStr === 'true' ? true : isFeaturedStr === 'false' ? false : undefined;
+    const ids = idsStr
+      ? idsStr
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : undefined;
     const limit = this.parsePaginationValue(limitStr, 20, 1, 100, 'limit');
     const offset = this.parsePaginationValue(offsetStr, 0, 0, 10000, 'offset');
 
@@ -51,6 +57,7 @@ export class CatalogController {
       categorySlug,
       collectionSlug,
       isFeatured,
+      ids,
       limit,
       offset,
     });

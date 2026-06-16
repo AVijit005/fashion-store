@@ -4,6 +4,7 @@ import { PrismaService } from '../../config/prisma.service';
 import { OrdersService } from '../orders/orders.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
+import { InventoryService } from '../orders/inventory.service';
 
 describe('AdminOrdersService', () => {
   let service: AdminOrdersService;
@@ -26,6 +27,7 @@ describe('AdminOrdersService', () => {
         AdminOrdersService,
         { provide: PrismaService, useValue: prismaService },
         { provide: OrdersService, useValue: ordersService },
+        { provide: InventoryService, useValue: {} },
       ],
     }).compile();
 
@@ -71,7 +73,7 @@ describe('AdminOrdersService', () => {
         'id-1',
         OrderStatus.SHIPPED,
         'ADMIN',
-        'Status updated manually by admin'
+        'Status updated manually by admin',
       );
     });
   });
@@ -97,7 +99,7 @@ describe('AdminOrdersService', () => {
         'id-1',
         OrderStatus.REFUNDED,
         'ADMIN',
-        'Order refunded manually by admin'
+        'Order refunded manually by admin',
       );
     });
   });

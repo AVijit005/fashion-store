@@ -10,6 +10,7 @@ import {
   Banknote,
   AlertCircle,
   Loader2,
+  X,
 } from "lucide-react";
 import * as Sentry from "@sentry/react";
 import { z } from "zod";
@@ -18,6 +19,7 @@ import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
 import { getOrCreateCartSessionId } from "@/lib/api/cart";
 import { inr } from "@/lib/format";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 // ---------------------------------------------------------------------------
 // Razorpay SDK type declaration
@@ -115,8 +117,23 @@ function useRazorpayScript() {
 function CheckoutPage() {
   useRazorpayScript();
 
+  const hydrated = useHydrated();
+
   const navigate = useNavigate();
-  const { items, subtotal, savings, clear } = useCart();
+  const _items = useCart((s) => s.items);
+  const _subtotal = useCart((s) => s.subtotal);
+  const _savings = useCart((s) => s.savings);
+  const clear = useCart((s) => s.clear);
+  const applyCartCoupon = useCart((s) => s.applyCoupon);
+  const removeCartCoupon = useCart((s) => s.removeCoupon);
+  const _appliedCouponCode = useCart((s) => s.couponCode);
+  const _appliedCouponDiscount = useCart((s) => s.couponDiscount);
+
+  const items = hydrated ? _items : [];
+  const sub = hydrated ? _subtotal() : 0;
+  const savingsAmt = hydrated ? _savings() : 0;
+  const appliedCouponCode = hydrated ? _appliedCouponCode : null;
+  const appliedCouponDiscount = hydrated ? _appliedCouponDiscount : 0;
 
   const [step, setStep] = useState(0);
   const [shipping, setShipping] = useState("standard");
@@ -126,34 +143,32 @@ function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [idempotencyKey] = useState(() => {
-    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
     const arr = new Uint8Array(16);
     crypto.getRandomValues(arr);
-    return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('-');
+    return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("-");
   });
   const [couponCode, setCouponCode] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<{code: string, discount: number} | null>(null);
   const [couponError, setCouponError] = useState("");
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
-  const sub = subtotal();
   const ship = sub > 999 || sub === 0 ? 0 : 79;
-  const total = sub + ship - (appliedCoupon?.discount || 0);
+  const total = sub + ship - appliedCouponDiscount;
 
   const applyCoupon = async () => {
     if (!couponCode.trim()) return;
     setIsApplyingCoupon(true);
     setCouponError("");
     try {
-      const res = await apiClient.post<{code: string, discount: number}>("/orders/apply-coupon", {
-        code: couponCode,
-        subtotal: sub,
-      });
-      setAppliedCoupon(res);
+      await applyCartCoupon(couponCode.trim());
       setCouponCode("");
     } catch (e: any) {
-      let msg = e.message || "Invalid coupon";
-      if (msg.includes("P2002") || msg.toLowerCase().includes("internal server") || msg.includes("unexpected")) {
+      let msg = e.response?.data?.message || e.message || "Invalid coupon";
+      if (
+        msg.includes("P2002") ||
+        msg.toLowerCase().includes("internal server") ||
+        msg.includes("unexpected")
+      ) {
         msg = "An unexpected error occurred while processing your request. Please try again.";
       }
       setCouponError(msg);
@@ -163,7 +178,7 @@ function CheckoutPage() {
   };
 
   const removeCoupon = () => {
-    setAppliedCoupon(null);
+    removeCartCoupon();
   };
 
   const setField = (k: keyof Address) => (v: string) => {
@@ -219,7 +234,7 @@ function CheckoutPage() {
         guestSessionId,
         paymentMethod: pay,
         idempotencyKey,
-        couponCode: appliedCoupon?.code,
+        couponCode: appliedCouponCode || undefined,
       });
 
       // Persist guest token so order confirmation page can look up the order
@@ -273,9 +288,14 @@ function CheckoutPage() {
             clear();
 
             // 4. Navigate to success
-            navigate({ to: "/checkout/success", search: { orderId: checkoutRes.orderId, cod: false } });
+            navigate({
+              to: "/checkout/success",
+              search: { orderId: checkoutRes.orderId, cod: false },
+            });
           } catch (err) {
-            toast.error("Payment failed. Please try a different card, UPI app, or select Cash on Delivery.");
+            toast.error(
+              "Payment failed. Please try a different card, UPI app, or select Cash on Delivery.",
+            );
             setIsSubmitting(false);
           }
         },
@@ -292,7 +312,11 @@ function CheckoutPage() {
       rzp.open();
     } catch (err: any) {
       let msg = err.message || "Failed to initiate payment";
-      if (msg.includes("P2002") || msg.toLowerCase().includes("internal server") || msg.includes("unexpected")) {
+      if (
+        msg.includes("P2002") ||
+        msg.toLowerCase().includes("internal server") ||
+        msg.includes("unexpected")
+      ) {
         msg = "An unexpected error occurred while processing your request. Please try again.";
       }
       Sentry.captureException(err);
@@ -330,7 +354,10 @@ function CheckoutPage() {
         <h1 className="mt-2 font-display text-5xl">Almost yours.</h1>
 
         {/* Stepper */}
-        <ol className="mt-8 flex flex-wrap items-center justify-center sm:justify-start gap-4" aria-label="Checkout steps">
+        <ol
+          className="mt-8 flex flex-wrap items-center justify-center sm:justify-start gap-4"
+          aria-label="Checkout steps"
+        >
           {STEPS.map((s, i) => {
             const done = i < step;
             const current = i === step;
@@ -464,7 +491,14 @@ function CheckoutPage() {
                 role="radiogroup"
                 aria-label="Shipping method"
               >
-                {[{ id: "standard", t: "Standard (India Only)", d: "3–5 business days", p: subtotal() > 999 ? 0 : 79 }].map((o) => (
+                {[
+                  {
+                    id: "standard",
+                    t: "Standard (India Only)",
+                    d: "3–5 business days",
+                    p: sub > 999 ? 0 : 79,
+                  },
+                ].map((o) => (
                   <label
                     key={o.id}
                     className={`flex cursor-pointer items-center justify-between gap-4 border p-5 transition ${shipping === o.id ? "border-ink" : "border-line hover:border-graphite"}`}
@@ -559,7 +593,7 @@ function CheckoutPage() {
         {/* Navigation */}
         <div className="mt-10">
           {step < 2 ? (
-             <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
               <button
                 onClick={() => setStep(Math.max(0, step - 1))}
                 disabled={step === 0 || isSubmitting}
@@ -573,7 +607,7 @@ function CheckoutPage() {
               >
                 Continue →
               </button>
-             </div>
+            </div>
           ) : (
             <button
               id="place-order-btn"
@@ -605,7 +639,10 @@ function CheckoutPage() {
           </div>
           <ul className="max-h-[260px] overflow-y-auto">
             {items.map((it, i) => (
-              <li key={it.variantId ?? it.cartItemId ?? i} className="flex gap-3 border-b border-line p-4">
+              <li
+                key={it.variantId ?? it.id ?? i}
+                className="flex gap-3 border-b border-line p-4"
+              >
                 <img
                   src={it.image}
                   alt=""
@@ -623,30 +660,38 @@ function CheckoutPage() {
               </li>
             ))}
           </ul>
-          
+
           <div className="p-5 border-b border-line space-y-3">
             <div className="flex gap-2">
               <input
                 type="text"
                 value={couponCode}
-                onChange={e => { setCouponCode(e.target.value); setCouponError(""); }}
+                onChange={(e) => {
+                  setCouponCode(e.target.value);
+                  setCouponError("");
+                }}
                 placeholder="Discount code"
                 className="h-10 w-full border border-line bg-paper px-3 text-[12px] uppercase outline-none focus:border-ink"
-                disabled={!!appliedCoupon}
+                disabled={!!appliedCouponCode}
               />
               <button
                 onClick={applyCoupon}
-                disabled={isApplyingCoupon || !!appliedCoupon || !couponCode}
+                disabled={isApplyingCoupon || !!appliedCouponCode || !couponCode}
                 className="bg-ink px-4 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50 transition"
               >
                 {isApplyingCoupon ? "..." : "Apply"}
               </button>
             </div>
             {couponError && <p className="text-[11px] text-accent">{couponError}</p>}
-            {appliedCoupon && (
-              <div className="flex items-center justify-between bg-fog/30 px-3 py-2 text-[12px]">
-                <span className="font-mono text-ink tracking-[0.1em]">{appliedCoupon.code}</span>
-                <button onClick={removeCoupon} className="text-mute hover:text-ink">✕</button>
+            {appliedCouponCode && (
+              <div className="flex items-center justify-between border border-ink bg-fog/30 px-3 py-2 text-[12px]">
+                <div>
+                  <span className="font-mono text-ink tracking-[0.1em]">{appliedCouponCode}</span>
+                  <p className="text-[11px] text-accent">−{inr(appliedCouponDiscount)}</p>
+                </div>
+                <button onClick={removeCoupon} className="text-mute hover:text-ink">
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             )}
           </div>
@@ -656,16 +701,10 @@ function CheckoutPage() {
               <dt className="text-mute">Subtotal</dt>
               <dd className="tabular-nums">{inr(sub)}</dd>
             </div>
-            {savings() > 0 && (
+            {savingsAmt > 0 && (
               <div className="flex justify-between text-accent">
                 <dt>Savings</dt>
-                <dd className="tabular-nums">−{inr(savings())}</dd>
-              </div>
-            )}
-            {appliedCoupon && (
-              <div className="flex justify-between text-accent">
-                <dt>Discount ({appliedCoupon.code})</dt>
-                <dd className="tabular-nums">−{inr(appliedCoupon.discount)}</dd>
+                <dd className="tabular-nums">−{inr(savingsAmt)}</dd>
               </div>
             )}
             <div className="flex justify-between">

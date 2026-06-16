@@ -23,13 +23,11 @@ export function AuthModal() {
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
-    if (authModalOpen) {
-      setEmail("");
-      setPassword("");
-      setConfirmPassword("");
-      setErrorMsg("");
-    }
-  }, [authModalOpen]);
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+    setErrorMsg("");
+  }, [authModalOpen, authModalView]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
