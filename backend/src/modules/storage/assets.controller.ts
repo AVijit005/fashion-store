@@ -126,6 +126,14 @@ export class AssetsController {
       throw new BadRequestException('Uploaded file is empty or missing from storage');
     }
 
+    if (metadata.ContentType !== asset.mimeType) {
+      await this.prisma.asset.update({
+        where: { id },
+        data: { status: 'FAILED' },
+      });
+      throw new BadRequestException('Uploaded file type does not match the requested asset type');
+    }
+
     const result = await this.prisma.asset.updateMany({
       where: { id, status: 'PENDING' },
       data: { status: 'UPLOADED', size: metadata.ContentLength },

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Minus, Plus, ShoppingBag, X } from "lucide-react";
 import { useState } from "react";
 import { useCart, itemKey } from "@/lib/store/cart";
@@ -42,8 +43,9 @@ export function CartDrawer() {
     try {
       await applyCoupon(localCoupon.trim());
       setLocalCoupon("");
-    } catch {
-      // toast already shown by store
+    } catch (err) {
+      console.error("Failed to apply coupon:", err);
+      toast.error("Failed to apply coupon");
     } finally {
       setApplying(false);
     }
@@ -126,8 +128,9 @@ export function CartDrawer() {
                             <div className="flex items-center border border-line">
                               <button
                                 onClick={() => setQty(k, it.qty - 1)}
+                                disabled={it.qty <= 1}
                                 aria-label={`Decrease quantity of ${it.name}`}
-                                className="flex h-8 w-8 items-center justify-center transition hover:bg-fog focus-ink-inset"
+                                className="flex h-8 w-8 items-center justify-center transition hover:bg-fog focus-ink-inset disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Minus className="h-3.5 w-3.5" />
                               </button>

@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service';
 
 @Injectable()
 export class AdminDropsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async getDrops() {
     const drops = await this.prisma.drop.findMany({
@@ -23,8 +24,7 @@ export class AdminDropsService {
     const dropIds = drops.map((d) => d.id);
     let orderStats: any[] = [];
     if (dropIds.length > 0) {
-      orderStats = await this.prisma.$queryRawUnsafe<any[]>(
-        `
+      orderStats = await this.prisma.$queryRaw`
         SELECT 
           p.drop_id as "dropId",
           COALESCE(SUM(oi.quantity), 0) as "sold",
@@ -33,12 +33,10 @@ export class AdminDropsService {
         JOIN product_variants pv ON pv.product_id = p.id
         JOIN order_items oi ON oi.product_variant_id = pv.id
         JOIN orders o ON o.id = oi.order_id
-        WHERE p.drop_id IN (${dropIds.map((_, i) => `$${i + 1}`).join(',')})
+        WHERE p.drop_id IN (${Prisma.join(dropIds)})
           AND o.status NOT IN ('PAYMENT_PENDING', 'CANCELLED', 'FAILED')
         GROUP BY p.drop_id
-        `,
-        ...dropIds,
-      );
+      `;
     }
 
     const statsByDropId = new Map(orderStats.map((stat) => [stat.dropId, stat]));
@@ -84,7 +82,7 @@ export class AdminDropsService {
         sold,
         revenue,
         units,
-        conversion: sold > 0 ? Math.random() * 5 + 1 : 0, // Mock conversion rate
+        conversion: capsuleSize > 0 ? (sold / capsuleSize) * 100 : 0, // Sell-through rate
       };
     });
   }

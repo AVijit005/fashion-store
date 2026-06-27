@@ -6,13 +6,13 @@ import {
   ValidateNested,
   IsEmail,
   Min,
+  IsUUID,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class OrderItemDto {
-  @IsOptional()
-  @IsString()
-  id?: string;
+  @IsUUID()
+  id!: string;
 
   @IsNumber()
   @Min(1)
@@ -38,7 +38,7 @@ import { OrderStatus } from '@prisma/client';
 
 export class UpdateBulkStatusDto {
   @IsArray()
-  @IsString({ each: true })
+  @IsUUID('4', { each: true })
   orderIds!: string[];
 
   @IsString()

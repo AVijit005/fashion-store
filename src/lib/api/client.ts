@@ -74,7 +74,9 @@ export const apiClient = {
         if (token) {
           headers.set("Authorization", `Bearer ${token}`);
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error("Failed to load auth token:", err);
+      }
 
       // Attach Guest Session ID for Cart identification
       const guestSessionId = localStorage.getItem("ink_cart_session_id");
@@ -98,7 +100,7 @@ export const apiClient = {
     }
 
     if (!response.ok) {
-      if (response.status === 401 && path !== "/auth/refresh" && path !== "/auth/login") {
+      if (response.status === 401 && path !== "/auth/refresh" && path !== "/auth/login" && !(options.body instanceof FormData)) {
         if (typeof window !== "undefined" && localStorage.getItem("ink_logged_in") === "true") {
           if (!refreshPromise) {
             refreshPromise = (async () => {
@@ -120,17 +122,16 @@ export const apiClient = {
                 const { useAuthStore } = await import("../store/auth");
                 useAuthStore.setState({ accessToken: data.data.accessToken });
               }
-            })();
+            })().finally(() => {
+              refreshPromise = null;
+            });
           }
 
           try {
             await refreshPromise;
           } catch (err) {
-            refreshPromise = null;
             console.error("Token rotation failed inside interceptor:", err);
             // Let it fall through to returning 401
-          } finally {
-            refreshPromise = null;
           }
 
           try {
@@ -143,7 +144,7 @@ export const apiClient = {
             const retryResponse = await fetch(url.toString(), retryConfig);
             if (retryResponse.ok) {
               if (retryResponse.status === 204) {
-                return null as unknown as T;
+                return null as T;
               }
               return unwrapApiData<T>(await retryResponse.json(), options.validate);
             }
@@ -158,7 +159,8 @@ export const apiClient = {
       try {
         textBody = await response.text();
         errorData = JSON.parse(textBody);
-      } catch {
+      } catch (err) {
+        console.error("Failed to parse error JSON:", err);
         errorData = textBody || null;
       }
       let errorMessage = `API request failed with status ${response.status}`;
@@ -178,7 +180,7 @@ export const apiClient = {
     }
 
     if (response.status === 204) {
-      return null as unknown as T;
+      return null as T;
     }
 
     try {
@@ -226,7 +228,7 @@ export const apiClient = {
     });
   },
 
-  delete<T>(path: string, options?: RequestOptions): Promise<T> {
+  delete<T = void>(path: string, options?: RequestOptions): Promise<T> {
     return this.request<T>(path, { ...options, method: "DELETE" });
   },
 };

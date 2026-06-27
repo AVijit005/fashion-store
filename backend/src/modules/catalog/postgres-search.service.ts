@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { Product } from '@prisma/client';
+import { Prisma, Product } from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service';
 import { SearchService } from './search.service';
 
@@ -32,27 +32,19 @@ export class PostgresSearchService extends SearchService {
       .map((word) => `${word}:*`)
       .join(' & ');
 
-    let categoryFilter = '';
-    let collectionFilter = '';
+    let categoryFilter = Prisma.empty;
+    let collectionFilter = Prisma.empty;
     const params: (string | number)[] = [];
 
     if (categoryId) {
-      params.push(categoryId);
-      categoryFilter = `AND p.category_id = $${params.length}`;
+      categoryFilter = Prisma.sql`AND p.category_id = ${categoryId}`;
     }
 
     if (collectionId) {
-      params.push(collectionId);
-      collectionFilter = `AND p.id IN (SELECT "B" FROM "_ProductCollections" WHERE "A" = $${params.length})`;
+      collectionFilter = Prisma.sql`AND p.id IN (SELECT "B" FROM "_ProductCollections" WHERE "A" = ${collectionId})`;
     }
 
-    params.push(formattedQuery);
-    const ftsParamIndex = params.length;
-
-    params.push(cleanQuery);
-    const trigramParamIndex = params.length;
-
-    const searchSql = `
+    const searchSql = Prisma.sql`
       SELECT *, (fts_rank * 0.7 + trigram_rank * 0.3) as search_rank
       FROM (
         SELECT p.*, 
@@ -60,9 +52,9 @@ export class PostgresSearchService extends SearchService {
             setweight(to_tsvector('english', coalesce(p.title, '')), 'A') ||
             setweight(to_tsvector('english', coalesce(array_to_string(p.tags, ' '), '')), 'B') ||
             setweight(to_tsvector('english', coalesce(p.description, '')), 'C'),
-            to_tsquery('english', $${ftsParamIndex})
+            to_tsquery('english', ${formattedQuery})
           ) as fts_rank,
-          word_similarity($${trigramParamIndex}, p.title) as trigram_rank
+          word_similarity(${cleanQuery}, p.title) as trigram_rank
         FROM products p
         WHERE p.status = 'PUBLISHED'
           AND p.is_deleted = false
@@ -70,8 +62,8 @@ export class PostgresSearchService extends SearchService {
           ${categoryFilter}
           ${collectionFilter}
           AND (
-            to_tsvector('english', coalesce(p.title, '') || ' ' || coalesce(array_to_string(p.tags, ' '), '') || ' ' || coalesce(p.description, '')) @@ to_tsquery('english', $${ftsParamIndex})
-            OR word_similarity($${trigramParamIndex}, p.title) > 0.5
+            to_tsvector('english', coalesce(p.title, '') || ' ' || coalesce(array_to_string(p.tags, ' '), '') || ' ' || coalesce(p.description, '')) @@ to_tsquery('english', ${formattedQuery})
+            OR word_similarity(${cleanQuery}, p.title) > 0.5
           )
       ) sub
       ORDER BY search_rank DESC, sub.id ASC
@@ -79,7 +71,7 @@ export class PostgresSearchService extends SearchService {
     `;
 
     try {
-      const products = await this.prisma.$queryRawUnsafe<Product[]>(searchSql, ...params);
+      const products = await this.prisma.$queryRaw<Product[]>(searchSql);
 
       // Fix High Severity: Fetch missing variants to prevent stale UI in search results
       const productIds = products.map((p) => p.id);
@@ -96,7 +88,7 @@ export class PostgresSearchService extends SearchService {
           (p as any).variants = variantsMap.get(p.id) || [];
         }
       }
-      const countSql = `
+      const countSql = Prisma.sql`
         SELECT COUNT(*)::int as count
         FROM products p
         WHERE p.status = 'PUBLISHED'
@@ -105,11 +97,11 @@ export class PostgresSearchService extends SearchService {
           ${categoryFilter}
           ${collectionFilter}
           AND (
-            to_tsvector('english', coalesce(p.title, '') || ' ' || coalesce(array_to_string(p.tags, ' '), '') || ' ' || coalesce(p.description, '')) @@ to_tsquery('english', $${ftsParamIndex})
-            OR word_similarity($${trigramParamIndex}, p.title) > 0.5
+            to_tsvector('english', coalesce(p.title, '') || ' ' || coalesce(array_to_string(p.tags, ' '), '') || ' ' || coalesce(p.description, '')) @@ to_tsquery('english', ${formattedQuery})
+            OR word_similarity(${cleanQuery}, p.title) > 0.5
           )
       `;
-      const countResult = await this.prisma.$queryRawUnsafe<{ count: number }[]>(countSql, ...params);
+      const countResult = await this.prisma.$queryRaw<{ count: number }[]>(countSql);
       const total = Number(countResult[0]?.count) || 0;
 
       return {

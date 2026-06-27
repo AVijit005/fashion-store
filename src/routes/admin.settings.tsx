@@ -76,7 +76,11 @@ function SettingsPage() {
 
   const { data: serverSettings, isLoading } = useQuery({
     queryKey: ["admin-settings"],
-    queryFn: () => apiClient.get("/admin/settings").catch(() => null),
+    queryFn: () => apiClient.get("/admin/settings").catch((err) => {
+      console.error("Failed to fetch settings:", err);
+      toast.error("Failed to load settings from server. Using defaults.");
+      return null;
+    }),
   });
 
   useEffect(() => {
@@ -87,7 +91,10 @@ function SettingsPage() {
 
   const saveMutation = useMutation({
     mutationFn: (newSettings: typeof DEFAULT_SETTINGS) =>
-      apiClient.put("/admin/settings", newSettings).catch(() => newSettings),
+      apiClient.put("/admin/settings", newSettings).catch((err) => {
+        console.error("Failed to save settings:", err);
+        throw err;
+      }),
     onSuccess: () => {
       toast.success("Settings saved successfully");
     },

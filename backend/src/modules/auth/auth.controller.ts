@@ -98,14 +98,13 @@ export class AuthController {
   }
 
   private setRefreshTokenCookie(res: Response, token: string) {
-    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
     const expiryDays = this.configService.get<number>('REFRESH_TOKEN_EXPIRES_IN_DAYS') || 7;
 
     res.cookie('refresh_token', token, {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: 'strict',
-      path: '/auth',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/api/v1/auth/refresh',
+      sameSite: 'lax',
       maxAge: expiryDays * 24 * 60 * 60 * 1000,
     });
   }

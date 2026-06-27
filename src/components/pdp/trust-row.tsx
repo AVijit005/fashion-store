@@ -5,15 +5,19 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 
 async function fetchEtaFor(pincode: string) {
-  // Simulating an external logistics API call (e.g. Shiprocket)
-  // In a real scenario, this hits our backend which proxies to the provider
+  // TODO: Replace with real logistics API call to backend (e.g., Shiprocket)
+  if (!/^\d{6}$/.test(pincode)) {
+    throw new Error("Invalid pincode");
+  }
+  
   await new Promise((r) => setTimeout(r, 600));
-  const n = pincode.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
-  const start = 2 + (n % 3);
-  const end = start + 2;
-  // Throw mock error for some pincodes to simulate unserviceable areas
-  if (pincode.startsWith("00")) throw new Error("Unserviceable area");
-  return { start, end, cod: start <= 3 };
+
+  if (pincode.startsWith("00")) {
+    throw new Error("Unserviceable area");
+  }
+
+  // Fallback static ETA since API is not implemented
+  return { start: 3, end: 5, cod: true };
 }
 
 export function PdpTrustRow() {

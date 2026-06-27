@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Inject, HttpException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, Inject, HttpException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import Redis from 'ioredis';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../config/prisma.service';
@@ -41,7 +41,7 @@ export class CartService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
-  ) {}
+  ) { }
 
   private getCacheKey(userId?: string, sessionId?: string): string {
     if (userId) {
@@ -71,7 +71,28 @@ export class CartService {
 
     // Cache miss: attempt to acquire lock to populate cache
     const lockKey = `${cacheKey}:lock`;
-    const lockAcquired = await this.redis.set(lockKey, 'locked', 'EX', 10, 'NX');
+    let lockAcquired: string | null = null;
+    let redisDown = false;
+    try {
+      lockAcquired = await this.redis.set(lockKey, 'locked', 'EX', 10, 'NX');
+    } catch (error) {
+      console.warn(`Redis lock acquisition failed for ${cacheKey}`, error);
+      redisDown = true;
+    }
+
+    if (redisDown) {
+      const cart = await this.prisma.cart.findFirst({
+        where: userId ? { userId } : { sessionId },
+        include: { items: true },
+      });
+      if (!cart) return [];
+      return cart.items.map((item) => ({
+        id: item.id,
+        variantId: item.productVariantId,
+        quantity: item.quantity,
+        customData: item.customData,
+      }));
+    }
 
     if (!lockAcquired) {
       // 503 instead of 400
@@ -137,8 +158,10 @@ export class CartService {
     const variants = await this.prisma.productVariant.findMany({
       where: {
         id: { in: variantIds },
+        isDeleted: false,
         product: {
           status: ProductStatus.PUBLISHED,
+          isDeleted: false,
         },
       },
       include: {
@@ -264,8 +287,10 @@ export class CartService {
     const variant = await this.prisma.productVariant.findFirst({
       where: {
         id: variantId,
+        isDeleted: false,
         product: {
           status: ProductStatus.PUBLISHED,
+          isDeleted: false,
         },
       },
     });
@@ -282,19 +307,14 @@ export class CartService {
       const cart = await this.getOrCreateCart(tx, userId, sessionId);
 
       // Use atomic SQL to fix TOCTOU race conditions (Bug 1 Audit)
-      const updatedCount = await tx.$executeRawUnsafe(
-        `
+      const updatedCount = await tx.$executeRaw`
         INSERT INTO cart_items (id, cart_id, product_variant_id, quantity, updated_at)
-        SELECT gen_random_uuid(), $1, $2, $3, NOW()
-        WHERE $3 <= (SELECT stock_quantity FROM product_variants WHERE id = $2)
+        SELECT gen_random_uuid(), ${cart.id}, ${variantId}, ${quantity}, NOW()
+        WHERE ${quantity} <= (SELECT stock_quantity FROM product_variants WHERE id = ${variantId} AND is_deleted = false)
         ON CONFLICT (cart_id, product_variant_id) DO UPDATE
         SET quantity = cart_items.quantity + EXCLUDED.quantity, updated_at = NOW()
-        WHERE cart_items.quantity + EXCLUDED.quantity <= (SELECT stock_quantity FROM product_variants WHERE id = EXCLUDED.product_variant_id)
-        `,
-        cart.id,
-        variantId,
-        quantity,
-      );
+        WHERE cart_items.quantity + EXCLUDED.quantity <= (SELECT stock_quantity FROM product_variants WHERE id = EXCLUDED.product_variant_id AND is_deleted = false)
+      `;
 
       if (updatedCount === 0) {
         throw new BadRequestException('Requested quantity exceeds available stock');
@@ -334,22 +354,17 @@ export class CartService {
     }
 
     if (item.productVariantId) {
-      const updatedCount = await this.prisma.$executeRawUnsafe(
-        `
+      const updatedCount = await this.prisma.$executeRaw`
         UPDATE cart_items
-        SET quantity = $1, updated_at = NOW()
-        WHERE id = $2
-        AND $1 <= (SELECT stock_quantity FROM product_variants WHERE id = $3)
+        SET quantity = ${quantity}, updated_at = NOW()
+        WHERE id = ${item.id}
+        AND ${quantity} <= (SELECT stock_quantity FROM product_variants WHERE id = ${item.productVariantId})
         AND EXISTS (
           SELECT 1 FROM product_variants pv
           JOIN products p ON pv.product_id = p.id
-          WHERE pv.id = $3 AND p.status = 'PUBLISHED'
+          WHERE pv.id = ${item.productVariantId} AND pv.is_deleted = false AND p.status = 'PUBLISHED' AND p.is_deleted = false
         )
-        `,
-        quantity,
-        item.id,
-        item.productVariantId,
-      );
+      `;
 
       if (updatedCount === 0) {
         throw new BadRequestException('Requested quantity exceeds available stock');
@@ -390,6 +405,7 @@ export class CartService {
       }
     } catch (error) {
       console.error(`Failed to remove item ${itemId} from cart`, error);
+      throw new InternalServerErrorException('Failed to remove item from cart');
     }
 
     await this.invalidateCache(userId, sessionId);
@@ -448,41 +464,37 @@ export class CartService {
       });
       const existingUserItemMap = new Map(existingUserItems.map((i) => [i.productVariantId, i]));
 
-      const mergePromises = guestCart.items.map((guestItem) => {
+      for (const guestItem of guestCart.items) {
         if (!guestItem.productVariantId) {
           const existingCustom = existingUserItems.find(
             (i) => !i.productVariantId && JSON.stringify(i.customData) === JSON.stringify(guestItem.customData)
           );
           if (existingCustom) {
-            return tx.cartItem.update({
+            await tx.cartItem.update({
               where: { id: existingCustom.id },
               data: { quantity: existingCustom.quantity + guestItem.quantity },
             });
+          } else {
+            await tx.cartItem.create({
+              data: {
+                cartId: userCart.id,
+                quantity: guestItem.quantity,
+                customData: guestItem.customData || undefined,
+              },
+            });
           }
-          return tx.cartItem.create({
-            data: {
-              cartId: userCart.id,
-              quantity: guestItem.quantity,
-              customData: guestItem.customData || undefined,
-            },
-          });
+        } else {
+          const stock = stockByVariant.get(guestItem.productVariantId) ?? 0;
+          if (stock <= 0) continue;
+          const finalQty = Math.min(guestItem.quantity, stock);
+          await tx.$executeRaw`
+            INSERT INTO cart_items (id, cart_id, product_variant_id, quantity, updated_at)
+            VALUES (gen_random_uuid(), ${userCart.id}, ${guestItem.productVariantId}, ${finalQty}, NOW())
+            ON CONFLICT (cart_id, product_variant_id) DO UPDATE
+            SET quantity = LEAST(cart_items.quantity + EXCLUDED.quantity, ${stock}), updated_at = NOW()
+          `;
         }
-
-        const stock = stockByVariant.get(guestItem.productVariantId) ?? 0;
-        return tx.$executeRawUnsafe(
-          `
-          INSERT INTO cart_items (id, cart_id, product_variant_id, quantity, updated_at)
-          VALUES (gen_random_uuid(), $1, $2, $3, NOW())
-          ON CONFLICT (cart_id, product_variant_id) DO UPDATE
-          SET quantity = LEAST(cart_items.quantity + EXCLUDED.quantity, $4), updated_at = NOW()
-          `,
-          userCart.id,
-          guestItem.productVariantId,
-          guestItem.quantity,
-          stock,
-        );
-      });
-      await Promise.all(mergePromises);
+      }
 
       // Delete the guest cart items
       await tx.cartItem.deleteMany({

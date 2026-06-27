@@ -20,8 +20,7 @@ export class AdminStudioService {
     });
 
     if (!submission) {
-      // Return success anyway for mock data purposes
-      return { success: true, status, notes, message: 'Status updated (mock)' };
+      throw new NotFoundException('Studio submission not found');
     }
 
     const updated = await this.prisma.studioSubmission.update({

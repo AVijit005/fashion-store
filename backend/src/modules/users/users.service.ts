@@ -39,9 +39,15 @@ export class UsersService {
   }
 
   async softDelete(id: string): Promise<User> {
-    return this.prisma.user.update({
-      where: { id },
-      data: { isDeleted: true },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.session.updateMany({
+        where: { userId: id, isRevoked: false },
+        data: { isRevoked: true },
+      });
+      return tx.user.update({
+        where: { id },
+        data: { isDeleted: true },
+      });
     });
   }
 }

@@ -88,32 +88,35 @@ async function processQueue() {
   if (store.isSyncing || store.queue.length === 0) return;
   store.setSyncing(true);
 
-  while (useSyncStore.getState().queue.length > 0) {
-    const action = useSyncStore.getState().queue[0];
-    try {
-      if (action.type === "add") {
-        await cartApi.addItem(action.itemId, action.quantity, action.customData);
-      } else if (action.type === "update") {
-        await cartApi.updateItem(action.itemId, action.qty);
-      } else if (action.type === "remove") {
-        await cartApi.removeItem(action.itemId);
-      } else if (action.type === "clear") {
-        await cartApi.clearCart();
-      }
-      useSyncStore.getState().dequeue(); // only dequeue on success
-    } catch (err: any) {
-      console.error("[cart] Backend sync failed:", err);
-      // If it's a 4xx error (permanent), dequeue to prevent blocking the queue forever
-      if (err.response && err.response.status >= 400 && err.response.status < 500) {
-        console.error("Permanent error, dropping from queue");
-        useSyncStore.getState().dequeue();
-      } else {
-        toast.error("Failed to sync cart with server. Retrying soon.");
-        break; // stop processing queue on failure
+  try {
+    while (useSyncStore.getState().queue.length > 0) {
+      const action = useSyncStore.getState().queue[0];
+      try {
+        if (action.type === "add") {
+          await cartApi.addItem(action.itemId, action.quantity, action.customData);
+        } else if (action.type === "update") {
+          await cartApi.updateItem(action.itemId, action.qty);
+        } else if (action.type === "remove") {
+          await cartApi.removeItem(action.itemId);
+        } else if (action.type === "clear") {
+          await cartApi.clearCart();
+        }
+        useSyncStore.getState().dequeue(); // only dequeue on success
+      } catch (err: any) {
+        console.error("[cart] Backend sync failed:", err);
+        // If it's a 4xx error (permanent), dequeue to prevent blocking the queue forever
+        if (err.status >= 400 && err.status < 500) {
+          console.error("Permanent error, dropping from queue");
+          useSyncStore.getState().dequeue();
+        } else {
+          toast.error("Failed to sync cart with server. Retrying soon.");
+          break; // stop processing queue on failure
+        }
       }
     }
+  } finally {
+    useSyncStore.getState().setSyncing(false);
   }
-  useSyncStore.getState().setSyncing(false);
 }
 
 if (typeof window !== "undefined") {

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -79,48 +79,53 @@ export class AdminCatalogService {
 
     const { variantsData, images, image, categoryId, collectionId, dropId, name, price, isActive, compareAtPrice, slug, description, isFeatured } = data;
 
-    if (variantsData) {
-      await this.prisma.productVariant.updateMany({
-        where: {
-          productId: id,
-          id: { notIn: variantsData.map((v: any) => v.id).filter(Boolean) },
-        },
-        data: { isDeleted: true },
-      });
-      for (const v of variantsData) {
-        if (v.id) {
-          await this.prisma.productVariant.update({
-            where: { id: v.id },
-            data: { sku: v.sku, size: v.size, color: v.color || '', stockQuantity: v.stock || 0 },
-          });
-        } else {
-          await this.prisma.productVariant.create({
-            data: {
-              productId: id,
-              sku: v.sku,
-              size: v.size,
-              color: v.color || '',
-              stockQuantity: v.stock || 0,
-            },
-          });
+    return this.prisma.$transaction(async (tx) => {
+      if (variantsData) {
+        await tx.productVariant.updateMany({
+          where: {
+            productId: id,
+            id: { notIn: variantsData.map((v: any) => v.id).filter(Boolean) },
+          },
+          data: { isDeleted: true },
+        });
+        for (const v of variantsData) {
+          if (v.id) {
+            const updated = await tx.productVariant.updateMany({
+              where: { id: v.id, productId: id },
+              data: { sku: v.sku, size: v.size, color: v.color || '', stockQuantity: v.stock || 0 },
+            });
+            if (updated.count === 0) {
+              throw new BadRequestException(`Variant ${v.id} does not belong to product`);
+            }
+          } else {
+            await tx.productVariant.create({
+              data: {
+                productId: id,
+                sku: v.sku,
+                size: v.size,
+                color: v.color || '',
+                stockQuantity: v.stock || 0,
+              },
+            });
+          }
         }
       }
-    }
 
-    return this.prisma.product.update({
-      where: { id },
-      data: {
-        ...(name && { title: name }),
-        ...(slug && { slug }),
-        ...(description !== undefined && { description }),
-        ...(price !== undefined && { basePrice: price }),
-        ...(isActive !== undefined && { status: isActive ? 'PUBLISHED' : 'DRAFT' }),
-        ...(isFeatured !== undefined && { isFeatured }),
-        categoryId,
-        dropId,
-        collections: collectionId ? { set: [{ id: collectionId }] } : undefined,
-        mediaUrls: images ? images : (image ? [image] : undefined),
-      },
+      return tx.product.update({
+        where: { id },
+        data: {
+          ...(name && { title: name }),
+          ...(slug && { slug }),
+          ...(description !== undefined && { description }),
+          ...(price !== undefined && { basePrice: price }),
+          ...(isActive !== undefined && { status: isActive ? 'PUBLISHED' : 'DRAFT' }),
+          ...(isFeatured !== undefined && { isFeatured }),
+          categoryId,
+          dropId,
+          collections: collectionId ? { set: [{ id: collectionId }] } : undefined,
+          mediaUrls: images ? images : (image ? [image] : undefined),
+        },
+      });
     });
   }
 

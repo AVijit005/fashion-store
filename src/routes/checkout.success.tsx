@@ -1,6 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
+import { useAuthStore } from "@/lib/store/auth";
 
 export const Route = createFileRoute("/checkout/success")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -13,11 +16,34 @@ export const Route = createFileRoute("/checkout/success")({
   component: Success,
 });
 
-import { useAuthStore } from "@/lib/store/auth";
-
 function Success() {
   const { orderId, cod } = Route.useSearch();
   const { isAuthenticated, setAuthModalOpen } = useAuthStore();
+
+  const { data: order, isLoading, isError } = useQuery({
+    queryKey: ["order", orderId],
+    queryFn: async () => {
+      if (!orderId) throw new Error("No order ID");
+      const guestToken = typeof window !== "undefined" ? sessionStorage.getItem("ink_order_guest_token") : null;
+      const res = await apiClient.get(`/orders/${orderId}`, {
+        headers: guestToken ? { "x-guest-token": guestToken } : undefined,
+      });
+      return res.data;
+    },
+    retry: false,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto flex min-h-[70vh] items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-ink/20 border-t-ink"></div>
+      </div>
+    );
+  }
+
+  if (isError || !order || (order.paymentStatus !== "PAID" && order.paymentStatus !== "COD" && order.paymentStatus !== "PROCESSING")) {
+    return <Navigate to="/" />;
+  }
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-6 py-20 text-center">

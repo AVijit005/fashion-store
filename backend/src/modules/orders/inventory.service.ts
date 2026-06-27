@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   // Locks and reserves inventory for checkout
   async reserveInventory(
@@ -23,10 +23,11 @@ export class InventoryService {
     if (sortedVariantIds.length === 0) return;
 
     // Acquire locks on variant rows in sorted order
-    await tx.$executeRawUnsafe(
-      `SELECT id FROM product_variants WHERE id IN (${sortedVariantIds.map((_, i) => `$${i + 1}`).join(',')}) ORDER BY id FOR UPDATE`,
-      ...sortedVariantIds,
-    );
+    await tx.$executeRaw`
+      SELECT id FROM product_variants 
+      WHERE id IN (${Prisma.join(sortedVariantIds)}) 
+      ORDER BY id FOR UPDATE
+    `;
 
     // Verify stock levels under lock
     const dbVariants = await tx.productVariant.findMany({
@@ -39,7 +40,7 @@ export class InventoryService {
       if (!variant) {
         throw new BadRequestException(`Variant ${variantId} not found`);
       }
-      if (variant.stockQuantity < quantity) {
+      if (!force && variant.stockQuantity < quantity) {
         throw new BadRequestException(
           `Insufficient stock for SKU ${variant.sku || variantId}. Available: ${variant.stockQuantity}, requested: ${quantity}`,
         );
@@ -51,21 +52,23 @@ export class InventoryService {
       const quantityToDeduct = qtyByVariant.get(variantId) || 0;
       if (quantityToDeduct === 0) continue;
 
-        const updateResult = await tx.productVariant.updateMany({
-          where: {
-            id: variantId,
-            stockQuantity: { gte: quantityToDeduct },
-          },
-          data: {
-            stockQuantity: { decrement: quantityToDeduct },
-          },
-        });
-        
-        if (updateResult.count === 0) {
-          throw new BadRequestException(
-            `Failed to deduct stock securely for variant ${variantId}. Overselling detected.`,
-          );
-        }
+      const updateResult = await tx.productVariant.updateMany({
+        where: force 
+          ? { id: variantId } 
+          : {
+              id: variantId,
+              stockQuantity: { gte: quantityToDeduct },
+            },
+        data: {
+          stockQuantity: { decrement: quantityToDeduct },
+        },
+      });
+
+      if (updateResult.count === 0) {
+        throw new BadRequestException(
+          `Failed to deduct stock securely for variant ${variantId}. Overselling detected.`,
+        );
+      }
     }
   }
 
@@ -95,10 +98,11 @@ export class InventoryService {
     if (variantIds.length === 0) return;
 
     // Acquire locks on variant rows in sorted order
-    await tx.$executeRawUnsafe(
-      `SELECT id FROM product_variants WHERE id IN (${variantIds.map((_, i) => `$${i + 1}`).join(',')}) ORDER BY id FOR UPDATE`,
-      ...variantIds,
-    );
+    await tx.$executeRaw`
+      SELECT id FROM product_variants 
+      WHERE id IN (${Prisma.join(variantIds)}) 
+      ORDER BY id FOR UPDATE
+    `;
 
     for (const vid of variantIds) {
       const qty = qtyByVariant.get(vid);

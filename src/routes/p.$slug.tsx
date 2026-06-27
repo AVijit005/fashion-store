@@ -25,7 +25,13 @@ export const Route = createFileRoute("/p/$slug")({
   loader: async ({ params }) => {
     try {
       const product = await catalogApi.getProductBySlug(params.slug);
-      return { product };
+      const [relatedRes, lookRes] = await Promise.all([
+        catalogApi.getProducts({ category: product.category, limit: 5 }),
+        catalogApi.getProducts({ limit: 4 })
+      ]);
+      const related = relatedRes.products.filter((p: Product) => p.id !== product.id).slice(0, 4);
+      const look = lookRes.products.filter((p: Product) => p.id !== product.id).slice(0, 3);
+      return { product, related, look };
     } catch (err) {
       throw notFound();
     }
@@ -93,7 +99,7 @@ export const Route = createFileRoute("/p/$slug")({
 // Real stock computation handled in component
 
 function ProductPage() {
-  const { product } = Route.useLoaderData();
+  const { product, related, look } = Route.useLoaderData();
   const pushRecent = useRecentlyViewed((s) => s.push);
 
   useEffect(() => {
@@ -114,30 +120,7 @@ function ProductPage() {
   const launch = useFlyToCart((s) => s.launch);
   const addBtnRef = useRef<HTMLButtonElement>(null);
 
-  const [related, setRelated] = useState<Product[]>([]);
-  const [look, setLook] = useState<Product[]>([]);
 
-  useEffect(() => {
-    let active = true;
-    catalogApi
-      .getProducts({ category: product.category, limit: 5 })
-      .then((res) => {
-        if (active)
-          setRelated(res.products.filter((p: Product) => p.id !== product.id).slice(0, 4));
-      })
-      .catch((err) => console.error(err));
-
-    catalogApi
-      .getProducts({ limit: 4 })
-      .then((res) => {
-        if (active) setLook(res.products.filter((p: Product) => p.id !== product.id).slice(0, 3));
-      })
-      .catch((err) => console.error(err));
-
-    return () => {
-      active = false;
-    };
-  }, [product]);
 
   const selectedVariant = product.variants?.find((v: any) => v.size === size && v.color === color);
   const displayPrice = selectedVariant?.priceOverride
@@ -349,10 +332,11 @@ function ProductPage() {
                 if (navigator.share) {
                   navigator
                     .share({ title: product.name, url: window.location.href })
-                    .catch(() => {});
+                    .catch((e) => console.error("Share failed", e));
                 } else {
-                  navigator.clipboard.writeText(window.location.href);
-                  toast("Link copied");
+                  navigator.clipboard.writeText(window.location.href)
+                    .then(() => toast("Link copied"))
+                    .catch(() => toast.error("Failed to copy link"));
                 }
               }}
               className="flex items-center gap-1.5 hover:text-ink"
@@ -366,10 +350,11 @@ function ProductPage() {
                 if (navigator.share) {
                   navigator
                     .share({ title: "Gift hint", text: hintText, url: window.location.href })
-                    .catch(() => {});
+                    .catch((e) => console.error("Share failed", e));
                 } else {
-                  navigator.clipboard.writeText(hintText);
-                  toast.success("Hint text & link copied to clipboard");
+                  navigator.clipboard.writeText(hintText)
+                    .then(() => toast.success("Hint text & link copied to clipboard"))
+                    .catch(() => toast.error("Failed to copy hint"));
                 }
               }}
               className="flex items-center gap-1.5 hover:text-ink"

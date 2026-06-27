@@ -5,8 +5,18 @@ import { useCountdown } from "@/hooks/use-countdown";
 import { drops } from "@/lib/data/editorials";
 import { useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
+import { apiClient } from "@/lib/api/client";
 
 export const Route = createFileRoute("/drops")({
+  loader: async () => {
+    try {
+      const res = await apiClient.get("/catalog/drops");
+      return { dynamicDrops: res.data };
+    } catch (err) {
+      console.error(err);
+      return { dynamicDrops: [] };
+    }
+  },
   head: () => ({
     meta: [
       { title: "Limited drops — Ink Studio" },
@@ -33,14 +43,8 @@ export const Route = createFileRoute("/drops")({
   component: DropsPage,
 });
 
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api/client";
-
 function DropsPage() {
-  const { data: dynamicDrops } = useQuery({
-    queryKey: ["drops"],
-    queryFn: () => apiClient.get("/catalog/drops").then((res: any) => res.data),
-  });
+  const { dynamicDrops } = Route.useLoaderData();
 
   const [target, setTarget] = useState<number | null>(null);
   useEffect(() => setTarget(Date.now() + 1000 * 60 * 60 * 62), []);

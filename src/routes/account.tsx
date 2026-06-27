@@ -124,6 +124,8 @@ function Account() {
             fetchOrders();
           } catch (err) {
             toast.error("Payment verification failed");
+          } finally {
+            setIsRetrying(null);
           }
         },
         modal: {

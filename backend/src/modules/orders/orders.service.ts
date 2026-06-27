@@ -21,7 +21,7 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PENDING]: [OrderStatus.PAYMENT_PENDING, OrderStatus.CANCELLED, OrderStatus.FAILED],
   [OrderStatus.PAYMENT_PENDING]: [OrderStatus.PAID, OrderStatus.CANCELLED, OrderStatus.FAILED],
   [OrderStatus.PAID]: [OrderStatus.PROCESSING, OrderStatus.REFUNDED],
-  [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.REFUNDED],
+  [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.REFUNDED, OrderStatus.FAILED],
   [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
   [OrderStatus.DELIVERED]: [OrderStatus.REFUNDED],
   [OrderStatus.CANCELLED]: [],
@@ -40,7 +40,7 @@ export class OrdersService {
     private readonly inventoryService: InventoryService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
     @InjectQueue('order-expiry') private readonly orderExpiryQueue: Queue,
-  ) {}
+  ) { }
 
   async applyCoupon(code: string, subtotal: number) {
     const coupon = await this.prisma.coupon.findUnique({
@@ -89,7 +89,7 @@ export class OrdersService {
   // Checkout and reserve inventory
   async checkout(dto: CheckoutDto, userId?: string) {
     const { guestSessionId, idempotencyKey } = dto;
-    
+
     if (idempotencyKey) {
       try {
         await this.prisma.idempotencyKey.create({
@@ -106,7 +106,12 @@ export class OrdersService {
           if (existingKey?.response) {
             return existingKey.response;
           }
-          throw new BadRequestException('Checkout is already in progress for this request.');
+          if (existingKey && Date.now() - existingKey.createdAt.getTime() > 30000) {
+            // Zombie key detected (older than 30s with no response due to crash).
+            // Bypass throw and allow checkout to proceed safely.
+          } else {
+            throw new BadRequestException('Checkout is already in progress for this request.');
+          }
         }
         throw err;
       }
@@ -117,161 +122,190 @@ export class OrdersService {
 
     try {
 
-    // 1. Fetch current cart
-    const cart = await this.cartService.getCart(activeUserId, activeSessionId);
-    if (!cart.items || cart.items.length === 0) {
-      throw new BadRequestException('Cannot checkout with an empty cart');
-    }
-
-    const hasOutofStockItems = cart.items.some((item) => !item.isAvailable);
-    if (hasOutofStockItems) {
-      throw new BadRequestException(
-        'Some items in your cart exceed available stock. Please review your cart.',
-      );
-    }
-
-    // Variant IDs are extracted inside the transaction for sorted locking.
-
-    // Coupon validation will be performed safely inside the transaction with a lock
-    let initialDiscountAmount = new Prisma.Decimal(0);
-    if (dto.couponCode) {
-      try {
-        const couponRes = await this.applyCoupon(dto.couponCode, cart.totalAmount);
-        initialDiscountAmount = new Prisma.Decimal(couponRes.discount);
-      } catch (e: any) {
-        throw new BadRequestException(`Coupon error: ${e.message}`);
+      // 1. Fetch current cart
+      const cart = await this.cartService.getCart(activeUserId, activeSessionId);
+      if (!cart.items || cart.items.length === 0) {
+        throw new BadRequestException('Cannot checkout with an empty cart');
       }
-    }
 
-    // Dynamic inclusive GST calculation of 18%
-    const totalDecimal = new Prisma.Decimal(cart.totalAmount);
-    const shippingFee = totalDecimal.greaterThan(999) || totalDecimal.equals(0) 
-      ? new Prisma.Decimal(0) 
-      : new Prisma.Decimal(79);
-    const totalAmountBase = totalDecimal;
-    const discountedBase = totalAmountBase.sub(initialDiscountAmount);
-    // Inclusive tax = Base * (18 / 118)
-    const tax = discountedBase.mul(18).div(118);
-    const totalAmount = discountedBase.add(shippingFee);
-
-    const guestToken = activeUserId ? null : (guestSessionId || crypto.randomBytes(16).toString('hex'));
-
-    // 2. Perform DB Transaction for inventory locking and order creation
-    const createdOrder = await this.prisma.$transaction(async (tx) => {
-      // Delegate sorted locking and reservation logic to InventoryService
-      // Only reserve inventory for standard variant items
-      const inventoryItems = cart.items
-        .filter((item) => item.variantId !== null)
-        .map((item) => ({
-          variantId: item.variantId as string,
-          quantity: item.quantity,
-          sku: item.sku as string,
-        }));
-        
-      const existingPendingOrders = await tx.order.findMany({
-        where: {
-          status: OrderStatus.PAYMENT_PENDING,
-          ...(activeUserId ? { userId: activeUserId } : { shippingEmail: dto.shippingEmail }),
-        },
-      });
-
-      if (existingPendingOrders.length > 0) {
-        // Bulk cancel to avoid N+1 queries
-        await tx.order.updateMany({
-          where: { id: { in: existingPendingOrders.map((o) => o.id) } },
-          data: { status: OrderStatus.CANCELLED },
-        });
-        
-        await tx.orderStatusHistory.createMany({
-          data: existingPendingOrders.map((o) => ({
-            orderId: o.id,
-            oldStatus: OrderStatus.PAYMENT_PENDING,
-            newStatus: OrderStatus.CANCELLED,
-            changedBy: 'SYSTEM',
-            reason: 'Auto-cancelled due to new checkout initiation',
-          })),
-        });
-
-        // Restore inventory for all cancelled orders in one bulk operation
-        await this.inventoryService.restoreBulkInventory(
-          existingPendingOrders.map((o) => o.id),
-          tx,
+      const hasOutofStockItems = cart.items.some((item) => !item.isAvailable);
+      if (hasOutofStockItems) {
+        throw new BadRequestException(
+          'Some items in your cart exceed available stock. Please review your cart.',
         );
+      }
 
-        // Decrement coupon usage counts if applicable
-        const couponCodes = existingPendingOrders
-          .map((o) => o.couponCode)
-          .filter((c): c is string => !!c);
-        if (couponCodes.length > 0) {
-          await tx.coupon.updateMany({
-            where: { code: { in: couponCodes } },
-            data: { usageCount: { decrement: 1 } },
+      // Variant IDs are extracted inside the transaction for sorted locking.
+
+      // Coupon validation will be performed safely inside the transaction with a lock
+      let initialDiscountAmount = new Prisma.Decimal(0);
+      if (dto.couponCode) {
+        try {
+          const couponRes = await this.applyCoupon(dto.couponCode, cart.totalAmount);
+          initialDiscountAmount = new Prisma.Decimal(couponRes.discount);
+        } catch (e: any) {
+          throw new BadRequestException(`Coupon error: ${e.message}`);
+        }
+      }
+
+      // Dynamic inclusive GST calculation of 18%
+      const totalDecimal = new Prisma.Decimal(cart.totalAmount);
+      const totalAmountBase = totalDecimal;
+      const discountedBase = totalAmountBase.sub(initialDiscountAmount);
+
+      const shippingFee = discountedBase.greaterThan(999) || discountedBase.equals(0)
+        ? new Prisma.Decimal(0)
+        : new Prisma.Decimal(79);
+
+      // Inclusive tax = Base * (18 / 118)
+      const tax = discountedBase.mul(18).div(118);
+      const totalAmount = discountedBase.add(shippingFee);
+
+      const guestToken = activeUserId ? null : (guestSessionId || crypto.randomBytes(16).toString('hex'));
+
+      // 2. Perform DB Transaction for inventory locking and order creation
+      const createdOrder = await this.prisma.$transaction(async (tx) => {
+        if (dto.paymentMethod === 'cod') {
+          const pendingCodCount = await tx.order.count({
+            where: {
+              paymentProvider: 'COD',
+              status: OrderStatus.PROCESSING,
+              ...(activeUserId ? { userId: activeUserId } : { shippingEmail: dto.shippingEmail }),
+            }
+          });
+          if (pendingCodCount >= 2) {
+            throw new BadRequestException('You have too many unfulfilled COD orders. Please wait for them to be delivered.');
+          }
+        }
+
+        // Delegate sorted locking and reservation logic to InventoryService
+        // Only reserve inventory for standard variant items
+        const inventoryItems = cart.items
+          .filter((item) => item.variantId !== null)
+          .map((item) => ({
+            variantId: item.variantId as string,
+            quantity: item.quantity,
+            sku: item.sku as string,
+          }));
+
+        const existingPendingOrders = await tx.order.findMany({
+          where: {
+            status: OrderStatus.PAYMENT_PENDING,
+            ...(activeUserId ? { userId: activeUserId } : { shippingEmail: dto.shippingEmail }),
+          },
+        });
+
+        if (existingPendingOrders.length > 0) {
+          // Bulk cancel to avoid N+1 queries
+          await tx.order.updateMany({
+            where: { id: { in: existingPendingOrders.map((o) => o.id) } },
+            data: { status: OrderStatus.CANCELLED },
+          });
+
+          await tx.orderStatusHistory.createMany({
+            data: existingPendingOrders.map((o) => ({
+              orderId: o.id,
+              oldStatus: OrderStatus.PAYMENT_PENDING,
+              newStatus: OrderStatus.CANCELLED,
+              changedBy: 'SYSTEM',
+              reason: 'Auto-cancelled due to new checkout initiation',
+            })),
+          });
+
+          // Restore inventory for all cancelled orders in one bulk operation
+          await this.inventoryService.restoreBulkInventory(
+            existingPendingOrders.map((o) => o.id),
+            tx,
+          );
+
+          // Decrement coupon usage counts if applicable
+          const couponCodes = existingPendingOrders
+            .map((o) => o.couponCode)
+            .filter((c): c is string => !!c);
+          if (couponCodes.length > 0) {
+            const counts = couponCodes.reduce((acc, code) => {
+              acc[code] = (acc[code] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>);
+            
+            for (const [code, count] of Object.entries(counts)) {
+              await tx.coupon.updateMany({
+                where: { code, usageCount: { gte: count } },
+                data: { usageCount: { decrement: count } },
+              });
+            }
+          }
+        }
+
+        if (inventoryItems.length > 0) {
+          // 1. Reserve inventory
+          await this.inventoryService.reserveInventory(inventoryItems, tx);
+        }
+
+        if (dto.couponCode) {
+          const couponCode = dto.couponCode.toUpperCase();
+          const coupons = await tx.$queryRaw<any[]>`SELECT * FROM coupons WHERE code = ${couponCode} FOR UPDATE`;
+          const coupon = coupons[0];
+          if (!coupon) throw new BadRequestException('Invalid coupon code');
+          if (!coupon.is_active) throw new BadRequestException('This coupon is no longer active');
+          
+          const now = new Date();
+          if (now < coupon.valid_from || (coupon.valid_until && now > coupon.valid_until)) {
+            throw new BadRequestException('This coupon is expired or not yet valid');
+          }
+          if (coupon.usage_limit && coupon.usage_count >= coupon.usage_limit) {
+            throw new BadRequestException('This coupon has reached its usage limit');
+          }
+          if (coupon.min_order_value && cart.totalAmount < parseFloat(coupon.min_order_value)) {
+            throw new BadRequestException(`Order value must be at least ₹${coupon.min_order_value} to use this coupon`);
+          }
+          
+          await tx.coupon.update({
+            where: { code: couponCode },
+            data: { usageCount: { increment: 1 } },
           });
         }
-      }
 
-      if (inventoryItems.length > 0) {
-        // 1. Reserve inventory
-        await this.inventoryService.reserveInventory(inventoryItems, tx);
-      }
-
-      if (dto.couponCode) {
-        const coupon = await tx.$queryRawUnsafe<any[]>(
-          `SELECT * FROM coupons WHERE code = $1 FOR UPDATE`,
-          dto.couponCode.toUpperCase()
-        );
-        if (!coupon || !coupon[0]) throw new BadRequestException('Invalid coupon code');
-        if (coupon[0].usage_limit && coupon[0].usage_count >= coupon[0].usage_limit) {
-          throw new BadRequestException('This coupon has reached its usage limit');
-        }
-        await tx.coupon.update({
-          where: { code: dto.couponCode.toUpperCase() },
-          data: { usageCount: { increment: 1 } },
-        });
-      }
-
-      // Create Order
-      return tx.order.create({
-        data: {
-          userId: activeUserId || null,
-          guestToken,
-          couponCode: dto.couponCode ? dto.couponCode.toUpperCase() : null,
-          status: dto.paymentMethod === 'cod' ? OrderStatus.PROCESSING : OrderStatus.PAYMENT_PENDING,
-          totalAmount,
-          shippingFee,
-          tax,
-          shippingName: dto.shippingName,
-          shippingEmail: dto.shippingEmail,
-          shippingPhone: dto.shippingPhone,
-          shippingStreet: dto.shippingStreet,
-          shippingCity: dto.shippingCity,
-          shippingState: dto.shippingState,
-          shippingPostalCode: dto.shippingPostalCode,
-          shippingCountry: dto.shippingCountry,
-          paymentProvider: dto.paymentMethod === 'cod' ? 'COD' : 'RAZORPAY',
-          paymentStatus: dto.paymentMethod === 'cod' ? 'COD' : 'PENDING',
-          items: {
-            create: cart.items.map((item) => ({
-              productVariantId: item.variantId || undefined,
-              quantity: item.quantity,
-              priceAtPurchase: new Prisma.Decimal(item.unitPrice),
-              customData: item.customData ? (item.customData as any) : Prisma.JsonNull,
-            })),
-          },
-          statusHistory: {
-            create: {
-              newStatus: dto.paymentMethod === 'cod' ? OrderStatus.PROCESSING : OrderStatus.PAYMENT_PENDING,
-              changedBy: activeUserId ? 'USER' : 'GUEST',
-              reason: dto.paymentMethod === 'cod' ? 'COD checkout completed.' : 'Checkout started, stock reserved.',
+        // Create Order
+        return tx.order.create({
+          data: {
+            userId: activeUserId || null,
+            guestToken,
+            couponCode: dto.couponCode ? dto.couponCode.toUpperCase() : null,
+            status: dto.paymentMethod === 'cod' ? OrderStatus.PROCESSING : OrderStatus.PAYMENT_PENDING,
+            totalAmount,
+            shippingFee,
+            tax,
+            shippingName: dto.shippingName,
+            shippingEmail: dto.shippingEmail,
+            shippingPhone: dto.shippingPhone,
+            shippingStreet: dto.shippingStreet,
+            shippingCity: dto.shippingCity,
+            shippingState: dto.shippingState,
+            shippingPostalCode: dto.shippingPostalCode,
+            shippingCountry: dto.shippingCountry,
+            paymentProvider: dto.paymentMethod === 'cod' ? 'COD' : 'RAZORPAY',
+            paymentStatus: dto.paymentMethod === 'cod' ? 'COD' : 'PENDING',
+            items: {
+              create: cart.items.map((item) => ({
+                productVariantId: item.variantId || undefined,
+                quantity: item.quantity,
+                priceAtPurchase: new Prisma.Decimal(item.unitPrice),
+                customData: item.customData ? (item.customData as any) : Prisma.JsonNull,
+              })),
+            },
+            statusHistory: {
+              create: {
+                newStatus: dto.paymentMethod === 'cod' ? OrderStatus.PROCESSING : OrderStatus.PAYMENT_PENDING,
+                changedBy: activeUserId ? 'USER' : 'GUEST',
+                reason: dto.paymentMethod === 'cod' ? 'COD checkout completed.' : 'Checkout started, stock reserved.',
+              },
             },
           },
-        },
-      });
-    }, { timeout: 8000 });
+        });
+      }, { timeout: 8000 });
 
-    // Schedule expiry job BEFORE making the Razorpay API call (Fix Deadlock)
-    // Schedule expiry job ONLY if not COD
-    if (dto.paymentMethod !== 'cod') {
+      // Schedule expiry job BEFORE making the Razorpay API call (Fix Deadlock)
       try {
         await this.orderExpiryQueue.add(
           'expire',
@@ -285,152 +319,147 @@ export class OrdersService {
             removeOnFail: false,
           },
         );
-      } catch (error) {
-        this.logger.error(
-          `Failed to schedule expiry job for orderId=${createdOrder.id}`,
-          error instanceof Error ? error.stack : String(error),
-        );
+      } catch (err: any) {
+        this.logger.error(`Failed to add order ${createdOrder.id} to expiry queue: ${err.message}`);
       }
-    }
 
-    // 3. Create Razorpay order (mocked if keys are local mock values)
-    if (dto.paymentMethod === 'cod') {
-      await this.cartService.clearCart(activeUserId, activeSessionId);
-      return {
+      // 3. Create Razorpay order (mocked if keys are local mock values)
+      if (dto.paymentMethod === 'cod') {
+        await this.cartService.clearCart(activeUserId, activeSessionId);
+        return {
+          orderId: createdOrder.id,
+          razorpayOrderId: '',
+          amount: totalAmount.toNumber(),
+          currency: 'INR',
+          guestToken,
+        };
+      }
+
+      const keyId = this.configService.get<string>('RAZORPAY_KEY_ID') || '';
+      const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
+      let razorpayOrderId = `rzp_mock_${crypto.randomUUID().replace(/-/g, '')}`;
+
+      if (!keyId.startsWith('mock')) {
+        if (!/^rzp_(test|live)_/.test(keyId) || keySecret.length < 8) {
+          await this.prisma.$transaction(async (tx) => {
+            await this.transitionStatus(
+              createdOrder.id,
+              OrderStatus.FAILED,
+              'SYSTEM',
+              'Razorpay credentials are not configured.',
+              tx,
+            );
+          }, { timeout: 8000 });
+          throw new InternalServerErrorException('Payment gateway is not configured');
+        }
+        try {
+          const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+          const idempotencyKeyReq = `req_${crypto.randomUUID()}`;
+
+          const failuresKey = `razorpay:failures`;
+          const cbKey = `razorpay:circuitOpenUntil`;
+          const circuitOpenUntil = await this.redis.get(cbKey);
+          if (circuitOpenUntil && parseInt(circuitOpenUntil) > Date.now()) {
+            throw new Error('Circuit breaker open. Payment gateway is temporarily unavailable.');
+          }
+
+          let response: Response | undefined;
+          let lastErr: any;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s per attempt
+
+            try {
+              response = await fetch('https://api.razorpay.com/v1/orders', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Basic ${auth}`,
+                  'Content-Type': 'application/json',
+                  'Idempotency-Key': idempotencyKeyReq,
+                },
+                body: JSON.stringify({
+                  amount: totalAmount.mul(100).round().toNumber(), // convert to paise precisely using Decimal
+                  currency: 'INR',
+                  receipt: createdOrder.id,
+                }),
+                signal: controller.signal,
+              });
+              if (response.ok) {
+                await this.redis.del(failuresKey);
+              } else {
+                // If it's a 5xx error, count it as a failure
+                if (response.status >= 500) throw new Error(`Gateway Error: ${response.status}`);
+              }
+              break;
+            } catch (e) {
+              lastErr = e;
+              const failures = await this.redis.incr(failuresKey);
+              if (failures >= 5) {
+                await this.redis.set(cbKey, Date.now() + 60000, 'EX', 60); // Open circuit for 60 seconds
+              } else {
+                await this.redis.expire(failuresKey, 60);
+              }
+              if (attempt === 3) throw e;
+              await new Promise((res) => setTimeout(res, attempt * 1000));
+            } finally {
+              clearTimeout(timeoutId);
+            }
+          }
+
+
+          if (!response || !response.ok) {
+            const errBody = response ? await response.text() : String(lastErr);
+            throw new Error(`Razorpay API error: ${errBody}`);
+          }
+
+          const data = (await response.json()) as { id: string };
+          razorpayOrderId = data.id;
+        } catch (err) {
+          // Rollback DB order creation manually if Razorpay API integration fails
+          await this.prisma.$transaction(async (tx) => {
+            await this.transitionStatus(
+              createdOrder.id,
+              OrderStatus.FAILED,
+              'SYSTEM',
+              `Razorpay integration failed: ${(err as Error).message}`,
+              tx,
+            );
+          }, { timeout: 8000 });
+
+          throw new InternalServerErrorException(
+            `Could not create gateway transaction: ${(err as Error).message}`,
+          );
+        }
+      }
+
+      // Save gateway order ID to database
+      await this.prisma.order.update({
+        where: { id: createdOrder.id },
+        data: { razorpayOrderId },
+      });
+
+
+
+      const responseObj = {
         orderId: createdOrder.id,
-        razorpayOrderId: '',
+        razorpayOrderId,
         amount: totalAmount.toNumber(),
         currency: 'INR',
         guestToken,
       };
-    }
 
-    const keyId = this.configService.get<string>('RAZORPAY_KEY_ID') || '';
-    const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
-    let razorpayOrderId = `rzp_mock_${crypto.randomUUID().replace(/-/g, '')}`;
-
-    if (!keyId.startsWith('mock')) {
-      if (!/^rzp_(test|live)_/.test(keyId) || keySecret.length < 8) {
-        await this.prisma.$transaction(async (tx) => {
-          await this.transitionStatus(
-            createdOrder.id,
-            OrderStatus.FAILED,
-            'SYSTEM',
-            'Razorpay credentials are not configured.',
-            tx,
-          );
-        }, { timeout: 8000 });
-        throw new InternalServerErrorException('Payment gateway is not configured');
-      }
-      try {
-        const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-        const idempotencyKeyReq = `req_${crypto.randomUUID()}`;
-        
-        const failuresKey = `razorpay:failures`;
-        const cbKey = `razorpay:circuitOpenUntil`;
-        const circuitOpenUntil = await this.redis.get(cbKey);
-        if (circuitOpenUntil && parseInt(circuitOpenUntil) > Date.now()) {
-          throw new Error('Circuit breaker open. Payment gateway is temporarily unavailable.');
-        }
-
-        let response: Response | undefined;
-        let lastErr: any;
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s per attempt
-
-          try {
-            response = await fetch('https://api.razorpay.com/v1/orders', {
-              method: 'POST',
-              headers: {
-                Authorization: `Basic ${auth}`,
-                'Content-Type': 'application/json',
-                'Idempotency-Key': idempotencyKeyReq,
-              },
-              body: JSON.stringify({
-                amount: totalAmount.mul(100).round().toNumber(), // convert to paise precisely using Decimal
-                currency: 'INR',
-                receipt: createdOrder.id,
-              }),
-              signal: controller.signal,
-            });
-            if (response.ok) {
-              await this.redis.del(failuresKey);
-            } else {
-              // If it's a 5xx error, count it as a failure
-              if (response.status >= 500) throw new Error(`Gateway Error: ${response.status}`);
-            }
-            break;
-          } catch (e) {
-            lastErr = e;
-            const failures = await this.redis.incr(failuresKey);
-            if (failures >= 5) {
-              await this.redis.set(cbKey, Date.now() + 60000, 'EX', 60); // Open circuit for 60 seconds
-            } else {
-              await this.redis.expire(failuresKey, 60);
-            }
-            if (attempt === 3) throw e;
-            await new Promise((res) => setTimeout(res, attempt * 1000));
-          } finally {
-            clearTimeout(timeoutId);
-          }
-        }
-
-
-        if (!response || !response.ok) {
-          const errBody = response ? await response.text() : String(lastErr);
-          throw new Error(`Razorpay API error: ${errBody}`);
-        }
-
-        const data = (await response.json()) as { id: string };
-        razorpayOrderId = data.id;
-      } catch (err) {
-        // Rollback DB order creation manually if Razorpay API integration fails
-        await this.prisma.$transaction(async (tx) => {
-          await this.transitionStatus(
-            createdOrder.id,
-            OrderStatus.FAILED,
-            'SYSTEM',
-            `Razorpay integration failed: ${(err as Error).message}`,
-            tx,
-          );
-        }, { timeout: 8000 });
-
-        throw new InternalServerErrorException(
-          `Could not create gateway transaction: ${(err as Error).message}`,
-        );
-      }
-    }
-
-    // Save gateway order ID to database
-    await this.prisma.order.update({
-      where: { id: createdOrder.id },
-      data: { razorpayOrderId },
-    });
-
-
-
-    const responseObj = {
-      orderId: createdOrder.id,
-      razorpayOrderId,
-      amount: totalAmount.toNumber(),
-      currency: 'INR',
-      guestToken,
-    };
-
-    if (idempotencyKey) {
-      await this.prisma.idempotencyKey.update({
-        where: { key: idempotencyKey },
-        data: { response: responseObj as any },
-      }).catch(() => null);
-    }
-
-    return responseObj;
-    } catch (error: any) {
       if (idempotencyKey) {
         await this.prisma.idempotencyKey.update({
           where: { key: idempotencyKey },
-          data: { response: { error: error.message || 'Checkout failed' } },
+          data: { response: responseObj as any },
+        }).catch(() => null);
+      }
+
+      return responseObj;
+    } catch (error: any) {
+      if (idempotencyKey) {
+        await this.prisma.idempotencyKey.delete({
+          where: { key: idempotencyKey },
         }).catch(() => null);
       }
       throw error;
@@ -511,28 +540,25 @@ export class OrdersService {
 
     // Update order status transactionally with SELECT FOR UPDATE
     const result = await this.prisma.$transaction(async (tx) => {
-      const orders = await tx.$queryRawUnsafe<Order[]>(
-        `SELECT * FROM orders WHERE "razorpay_order_id" = $1 FOR UPDATE`,
-        dto.razorpayOrderId,
-      );
+      const orders = await tx.$queryRaw<any[]>`SELECT * FROM orders WHERE "razorpay_order_id" = ${dto.razorpayOrderId} FOR UPDATE`;
       const order = orders[0];
 
       if (!order) {
         throw new NotFoundException('Order matching payment ID not found');
       }
 
-      if (order.userId) {
-        if (order.userId !== userId) {
+      if (order.user_id) {
+        if (order.user_id !== userId) {
           throw new NotFoundException('Order matching payment ID not found');
         }
       } else {
-        if (!guestToken || order.guestToken !== guestToken) {
+        if (!guestToken || order.guest_token !== guestToken) {
           throw new NotFoundException('Order matching payment ID not found');
         }
       }
 
       if (order.status === OrderStatus.PAID) {
-        if (order.razorpayPaymentId && order.razorpayPaymentId !== dto.razorpayPaymentId) {
+        if (order.razorpay_payment_id && order.razorpay_payment_id !== dto.razorpayPaymentId) {
           throw new BadRequestException('Order has already been paid with a different payment');
         }
         return { success: true, orderId: order.id, status: order.status, order };
@@ -561,8 +587,8 @@ export class OrdersService {
     // Clear the cart securely after payment confirmation transaction completes
     if (result.order) {
       await this.cartService.clearCart(
-        result.order.userId || undefined,
-        result.order.guestToken || undefined,
+        result.order.user_id || undefined,
+        result.order.guest_token || undefined,
       );
     }
 
@@ -631,7 +657,7 @@ export class OrdersService {
           if (!razorpayOrderId) {
             result = 'skipped';
           } else {
-            const orders = await tx.$queryRawUnsafe<Order[]>(
+            const orders = await tx.$queryRawUnsafe<any[]>(
               `SELECT * FROM orders WHERE "razorpay_order_id" = $1 FOR UPDATE`,
               razorpayOrderId,
             );
@@ -656,7 +682,7 @@ export class OrdersService {
                 },
               });
 
-              cartToClear = { userId: order.userId || undefined, guestToken: order.guestToken || undefined };
+              cartToClear = { userId: order.user_id || undefined, guestToken: order.guest_token || undefined };
             }
           }
         } else {
@@ -713,7 +739,7 @@ export class OrdersService {
       take: limit,
       skip: offset,
     });
-    
+
     // Map out sensitive internal database fields
     return orders.map(order => ({
       id: order.id,
@@ -806,7 +832,7 @@ export class OrdersService {
   ) {
     const execute = async (client: Prisma.TransactionClient) => {
       // Fetch order with write lock
-      const orders = await client.$queryRawUnsafe<Order[]>(
+      const orders = await client.$queryRawUnsafe<any[]>(
         `SELECT * FROM orders WHERE id = $1 FOR UPDATE`,
         orderId,
       );
@@ -831,9 +857,9 @@ export class OrdersService {
       // If order transitions to FAILED or CANCELLED, return stock to inventory
       if (newStatus === OrderStatus.FAILED || newStatus === OrderStatus.CANCELLED) {
         await this.inventoryService.restoreInventory(orderId, client);
-        if (order.couponCode) {
-          await client.coupon.update({
-            where: { code: order.couponCode },
+        if (order.coupon_code) {
+          await client.coupon.updateMany({
+            where: { code: order.coupon_code, usageCount: { gte: 1 } },
             data: { usageCount: { decrement: 1 } },
           }).catch(() => null);
         }
@@ -848,11 +874,11 @@ export class OrdersService {
             variantId: item.productVariantId as string,
             quantity: item.quantity,
           }));
-          const allowNegativeStock = newStatus === OrderStatus.PAID;
+          const allowNegativeStock = false;
           try {
             await this.inventoryService.reserveInventory(inventoryItems, client, allowNegativeStock);
           } catch (error) {
-             throw new BadRequestException('Cannot retry payment: one or more items have sold out.');
+            throw new BadRequestException('Cannot retry payment: one or more items have sold out.');
           }
         }
       }
@@ -880,5 +906,34 @@ export class OrdersService {
       return execute(tx);
     }
     return this.prisma.$transaction(execute, { timeout: 8000 });
+  }
+
+  async processRazorpayRefund(paymentId: string, amount: number) {
+    const keyId = this.configService.get<string>('RAZORPAY_KEY_ID') || '';
+    const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
+
+    if (!keyId || !keySecret) {
+      this.logger.warn('Razorpay keys not configured. Skipping refund API call.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}/refund`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`,
+        },
+        body: JSON.stringify({ amount: Math.round(amount * 100) }),
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`Razorpay refund API error: ${errBody}`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to process Razorpay refund: ${(error as Error).message}`, (error as Error).stack);
+      throw error;
+    }
   }
 }

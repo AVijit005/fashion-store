@@ -152,8 +152,9 @@ function CheckoutPage() {
   const [couponError, setCouponError] = useState("");
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
-  const ship = sub > 999 || sub === 0 ? 0 : 79;
-  const total = sub + ship - appliedCouponDiscount;
+  const grandTotal = Math.max(sub - appliedCouponDiscount, 0);
+  const ship = grandTotal > 999 || grandTotal === 0 ? 0 : 79;
+  const total = grandTotal + ship;
 
   const applyCoupon = async () => {
     if (!couponCode.trim()) return;
@@ -232,7 +233,7 @@ function CheckoutPage() {
         shippingPostalCode: addr.pin,
         shippingCountry: "IN",
         guestSessionId,
-        paymentMethod: pay,
+        paymentMethod: pay === "cod" ? "cod" : "razorpay",
         idempotencyKey,
         couponCode: appliedCouponCode || undefined,
       });
@@ -282,6 +283,8 @@ function CheckoutPage() {
               razorpayOrderId: response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
+            }, {
+              headers: checkoutRes.guestToken ? { "x-guest-token": checkoutRes.guestToken } : undefined
             });
 
             // 3. Clear local + backend cart only after confirmed payment
@@ -296,6 +299,7 @@ function CheckoutPage() {
             toast.error(
               "Payment failed. Please try a different card, UPI app, or select Cash on Delivery.",
             );
+          } finally {
             setIsSubmitting(false);
           }
         },
@@ -496,7 +500,7 @@ function CheckoutPage() {
                     id: "standard",
                     t: "Standard (India Only)",
                     d: "3–5 business days",
-                    p: sub > 999 ? 0 : 79,
+                    p: grandTotal > 999 ? 0 : 79,
                   },
                 ].map((o) => (
                   <label

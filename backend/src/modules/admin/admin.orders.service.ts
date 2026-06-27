@@ -3,6 +3,7 @@ import { PrismaService } from '../../config/prisma.service';
 import { OrderStatus, PaymentProvider, PaymentStatus } from '@prisma/client';
 import { OrdersService } from '../orders/orders.service';
 import { InventoryService } from '../orders/inventory.service';
+import { CreatePosOrderDto } from './dto/admin.orders.dto';
 
 @Injectable()
 export class AdminOrdersService {
@@ -36,7 +37,9 @@ export class AdminOrdersService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          user: true,
+          user: {
+            select: { id: true, email: true, firstName: true, lastName: true, role: true }
+          },
           items: {
             include: {
               productVariant: { include: { product: true } },
@@ -58,7 +61,7 @@ export class AdminOrdersService {
     };
   }
 
-  async createOrder(data: any) {
+  async createOrder(data: CreatePosOrderDto) {
     const { email, items } = data; // items: [{ id, qty }]
 
     return this.prisma.$transaction(async (tx) => {
@@ -120,8 +123,9 @@ export class AdminOrdersService {
     });
   }
 
-  async updateOrderStatus(id: string, status: OrderStatus) {
-    const order = await this.prisma.order.findUnique({ where: { id } });
+  async updateOrderStatus(id: string, status: OrderStatus, tx?: Prisma.TransactionClient) {
+    const client = tx || this.prisma;
+    const order = await client.order.findUnique({ where: { id } });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
@@ -131,6 +135,7 @@ export class AdminOrdersService {
       status,
       'ADMIN',
       'Status updated manually by admin',
+      tx,
     );
   }
 
@@ -141,6 +146,10 @@ export class AdminOrdersService {
     }
     if (order.status !== OrderStatus.PAID) {
       throw new BadRequestException('Order is not paid');
+    }
+
+    if (order.paymentProvider === 'RAZORPAY' && order.razorpayPaymentId) {
+      await this.ordersService.processRazorpayRefund(order.razorpayPaymentId, Number(order.totalAmount));
     }
 
     // Process refund using OrdersService to ensure inventory restoration
@@ -160,18 +169,19 @@ export class AdminOrdersService {
       throw new BadRequestException('Cannot bulk update more than 100 orders at once');
     }
 
-    const results = { success: 0, failed: 0, errors: [] as any[] };
+    return this.prisma.$transaction(async (tx) => {
+      const results = { success: 0, failed: 0, errors: [] as any[] };
 
-    for (const id of orderIds) {
-      try {
-        await this.updateOrderStatus(id, status);
-        results.success++;
-      } catch (error: any) {
-        results.failed++;
-        results.errors.push({ id, message: error.message });
+      for (const id of orderIds) {
+        try {
+          await this.updateOrderStatus(id, status, tx);
+          results.success++;
+        } catch (error: any) {
+          throw new BadRequestException(`Bulk update failed at order ${id}: ${error.message}`);
+        }
       }
-    }
 
-    return results;
+      return results;
+    });
   }
 }

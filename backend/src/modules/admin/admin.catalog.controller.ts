@@ -8,6 +8,7 @@ import {
   Param,
   UseGuards,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { AdminCatalogService } from './admin.catalog.service';
 import { CreateProductDto, UpdateProductDto } from './dto/admin.catalog.dto';
@@ -39,12 +40,12 @@ export class AdminCatalogController {
   }
 
   @Patch('products/:id')
-  async updateProduct(@Param('id') id: string, @Body() data: UpdateProductDto) {
+  async updateProduct(@Param('id', ParseUUIDPipe) id: string, @Body() data: UpdateProductDto) {
     return this.catalogService.updateProduct(id, data);
   }
 
   @Delete('products/:id')
-  async deleteProduct(@Param('id') id: string) {
+  async deleteProduct(@Param('id', ParseUUIDPipe) id: string) {
     return this.catalogService.deleteProduct(id);
   }
 }

@@ -74,7 +74,7 @@ export class AdminCustomersService {
         : user.joined_at.toISOString(),
       vip: user.segment === 'vip',
       notes: null,
-      supportTickets: Math.floor(Math.random() * 3), // Mock
+      supportTickets: 0, // TODO: Implement support tickets API
     }));
 
     return {

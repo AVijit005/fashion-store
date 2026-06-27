@@ -28,26 +28,34 @@ export class WishlistService {
       create: { userId },
     });
 
-    const existingItem = await this.prisma.wishlistItem.findUnique({
-      where: {
-        wishlistId_productId: {
-          wishlistId: wishlist.id,
-          productId,
-        },
-      },
-    });
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const existingItem = await tx.wishlistItem.findUnique({
+          where: {
+            wishlistId_productId: {
+              wishlistId: wishlist.id,
+              productId,
+            },
+          },
+        });
 
-    if (existingItem) {
-      await this.prisma.wishlistItem.delete({
-        where: { id: existingItem.id },
+        if (existingItem) {
+          await tx.wishlistItem.delete({
+            where: { id: existingItem.id },
+          });
+        } else {
+          await tx.wishlistItem.create({
+            data: {
+              wishlistId: wishlist.id,
+              productId,
+            },
+          });
+        }
       });
-    } else {
-      await this.prisma.wishlistItem.create({
-        data: {
-          wishlistId: wishlist.id,
-          productId,
-        },
-      });
+    } catch (err: any) {
+      if (err.code !== 'P2002' && err.code !== 'P2025') {
+        throw err;
+      }
     }
 
     return this.getWishlist(userId);

@@ -1,4 +1,4 @@
-import { Controller, Get, Head, Inject } from '@nestjs/common';
+import { Controller, Get, Head, Inject, Res } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import Redis from 'ioredis';
 
@@ -16,7 +16,7 @@ export class HealthController {
   }
 
   @Get('health')
-  async checkHealth() {
+  async checkHealth(@Res({ passthrough: true }) res: any) {
     let dbStatus = 'UP';
     let redisStatus = 'UP';
     const errors: string[] = [];
@@ -42,6 +42,10 @@ export class HealthController {
     }
 
     const isHealthy = dbStatus === 'UP' && redisStatus === 'UP';
+
+    if (!isHealthy) {
+      res.status(503);
+    }
 
     return {
       status: isHealthy ? 'OK' : 'ERROR',

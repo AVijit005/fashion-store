@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Patch, Param, Body, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Put, Post, Patch, Param, Body, UseGuards, Query, ParseUUIDPipe } from '@nestjs/common';
 import { AdminOrdersService } from './admin.orders.service';
 import { CreatePosOrderDto, UpdateBulkStatusDto } from './dto/admin.orders.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
@@ -30,12 +30,12 @@ export class AdminOrdersController {
   }
 
   @Put(':id/status')
-  async updateOrderStatus(@Param('id') id: string, @Body('status') status: OrderStatus) {
+  async updateOrderStatus(@Param('id', ParseUUIDPipe) id: string, @Body('status') status: OrderStatus) {
     return this.ordersService.updateOrderStatus(id, status);
   }
 
   @Post(':id/refund')
-  async processRefund(@Param('id') id: string) {
+  async processRefund(@Param('id', ParseUUIDPipe) id: string) {
     return this.ordersService.processRefund(id);
   }
 

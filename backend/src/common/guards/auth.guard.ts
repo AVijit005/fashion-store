@@ -40,7 +40,7 @@ export class AuthGuard implements CanActivate {
 
       const session = await this.prisma.session.findUnique({
         where: { id: sessionId },
-        select: { isRevoked: true, expiresAt: true, user: { select: { id: true, role: true } } },
+        select: { isRevoked: true, expiresAt: true, user: { select: { id: true, role: true, isDeleted: true } } },
       });
 
       if (!session || session.isRevoked || session.expiresAt < new Date()) {
@@ -48,6 +48,9 @@ export class AuthGuard implements CanActivate {
       }
       if (!session.user) {
         throw new UnauthorizedException('User no longer exists');
+      }
+      if (session.user.isDeleted) {
+        throw new UnauthorizedException('User account is deactivated');
       }
 
       request.user = {

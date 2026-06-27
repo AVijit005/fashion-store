@@ -11,10 +11,12 @@ export const Route = createFileRoute("/cart")({
 
 function CartPage() {
   const hydrated = useHydrated();
-  const { items: _items, setQty, remove, subtotal, savings } = useCart();
+  const { items: _items, setQty, remove, subtotal, savings, couponDiscount: _couponDiscount } = useCart();
   const items = hydrated ? _items : [];
   const sub = hydrated ? subtotal() : 0;
-  const ship = sub > 999 || sub === 0 ? 0 : 79;
+  const couponDiscount = hydrated ? _couponDiscount : 0;
+  const grandTotal = Math.max(sub - couponDiscount, 0);
+  const ship = grandTotal > 999 || grandTotal === 0 ? 0 : 79;
   const savingsAmt = hydrated ? savings() : 0;
 
   return (
@@ -116,7 +118,7 @@ function CartPage() {
                 </div>
                 <div className="mt-3 flex items-baseline justify-between border-t border-line pt-3">
                   <dt className="text-[11px] uppercase tracking-[0.22em] text-mute">Total</dt>
-                  <dd className="font-display text-3xl tabular-nums">{inr(sub + ship)}</dd>
+                  <dd className="font-display text-3xl tabular-nums">{inr(grandTotal + ship)}</dd>
                 </div>
               </dl>
               <Link

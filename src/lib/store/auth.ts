@@ -142,16 +142,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await syncWishlistOnLogin();
     } catch (error) {
       console.error("Failed to restore auth session:", error);
-      // If token is invalid/expired, try rotating
-      try {
-        const res = await apiClient.post<{ accessToken: string }>("/auth/refresh");
-        get().setTokens(res.accessToken);
-        const user = await apiClient.get<UserProfile>("/auth/me");
-        set({ user, isAuthenticated: true });
-        await syncWishlistOnLogin();
-      } catch {
-        await get().logout();
-      }
+      await get().logout();
     } finally {
       set({ isLoading: false });
     }

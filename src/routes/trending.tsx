@@ -7,6 +7,14 @@ import { type Product } from "@/lib/api/catalog";
 import { LoadingState } from "@/components/state/loading";
 
 export const Route = createFileRoute("/trending")({
+  loader: async () => {
+    const res = await catalogApi.getProducts({ limit: 100 });
+    return {
+      products: res.products.filter(
+        (p: Product) => p.badges.includes("trending") || p.badges.includes("bestseller")
+      ),
+    };
+  },
   head: () => ({
     meta: [
       { title: "Trending now — Ink Studio" },
@@ -30,33 +38,15 @@ export const Route = createFileRoute("/trending")({
 });
 
 function TrendingPage() {
-  const [list, setList] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    catalogApi
-      .getProducts({ limit: 100 })
-      .then((res) => {
-        setList(
-          res.products.filter(
-            (p: Product) => p.badges.includes("trending") || p.badges.includes("bestseller"),
-          ),
-        );
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error(err);
-        setLoading(false);
-      });
-  }, []);
+  const { products } = Route.useLoaderData();
 
   return (
     <ProductGridShell
       eyebrow="Most loved this week"
       title="Trending now."
       description="Ranked by what's in carts, on creators, and out the door."
-      base={list}
-      isLoading={loading}
+      base={products}
+      isLoading={false}
     />
   );
 }

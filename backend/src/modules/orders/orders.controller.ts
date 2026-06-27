@@ -38,6 +38,7 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post('checkout')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Initialize checkout and create gateway order' })
   async checkout(@Body() dto: CheckoutDto, @CurrentUser() user?: RequestUser) {

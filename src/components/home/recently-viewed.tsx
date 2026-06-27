@@ -10,12 +10,13 @@ export function RecentlyViewed() {
   const ids = useRecentlyViewed((s) => s.ids);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (!mounted || ids.length === 0) return null;
   const { data } = useQuery({
     queryKey: ["products", "recently-viewed", ids],
     queryFn: () => catalogApi.getProducts({ ids, limit: 10 }),
-    enabled: ids.length > 0,
+    enabled: mounted && ids.length > 0,
   });
+
+  if (!mounted || ids.length === 0) return null;
   const items = data?.products || [];
   if (items.length === 0) return null;
 

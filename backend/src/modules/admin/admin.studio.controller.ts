@@ -1,4 +1,5 @@
-import { Controller, Post, Param, Body, UseGuards, Get } from '@nestjs/common';
+import { Controller, Post, Param, Body, UseGuards, Get, ParseUUIDPipe } from '@nestjs/common';
+import { RejectRequestDto, RequestRevisionDto } from './dto/admin.studio.dto';
 import { AdminStudioService } from './admin.studio.service';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -16,17 +17,17 @@ export class AdminStudioController {
   }
 
   @Post(':id/approve')
-  async approveRequest(@Param('id') id: string) {
+  async approveRequest(@Param('id', ParseUUIDPipe) id: string) {
     return this.studioService.updateStatus(id, 'APPROVED');
   }
 
   @Post(':id/reject')
-  async rejectRequest(@Param('id') id: string, @Body('reason') reason?: string) {
-    return this.studioService.updateStatus(id, 'REJECTED', reason);
+  async rejectRequest(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectRequestDto) {
+    return this.studioService.updateStatus(id, 'REJECTED', dto.reason);
   }
 
   @Post(':id/revise')
-  async requestRevision(@Param('id') id: string, @Body('notes') notes: string) {
-    return this.studioService.updateStatus(id, 'UNDER_REVIEW', notes);
+  async requestRevision(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RequestRevisionDto) {
+    return this.studioService.updateStatus(id, 'UNDER_REVIEW', dto.notes);
   }
 }

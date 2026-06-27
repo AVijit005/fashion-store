@@ -152,6 +152,19 @@ function ProductsPage() {
     setEdits((e) => ({ ...e, [k]: v }));
   }, []);
 
+  const handleCreate = () => {
+    try {
+      productSchema.parse(newProduct);
+      createProductMutation.mutate(newProduct);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        toast.error(err.errors[0].message);
+      } else {
+        toast.error("Validation failed");
+      }
+    }
+  };
+
   const handleNewProductChange = useCallback((k: string, v: unknown) => {
     setNewProduct((e) => ({ ...e, [k]: v }));
   }, []);
@@ -574,7 +587,7 @@ function ProductsPage() {
             </button>
             <button
               disabled={createProductMutation.isPending}
-              onClick={() => createProductMutation.mutate(newProduct)}
+              onClick={handleCreate}
               className="press bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-paper disabled:opacity-50"
             >
               {createProductMutation.isPending ? "Creating..." : "Create Product"}

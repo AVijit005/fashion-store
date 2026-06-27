@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Query, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminCustomersService } from './admin.customers.service';
 import { AuthGuard } from '../../common/guards/auth.guard';
@@ -28,7 +28,7 @@ export class AdminCustomersController {
 
   @Post(':id/notes')
   @ApiOperation({ summary: 'Add an internal note to a customer' })
-  async addNote(@Param('id') id: string, @Body('note') note: string) {
+  async addNote(@Param('id', ParseUUIDPipe) id: string, @Body('note') note: string) {
     return this.customersService.addNote(id, note);
   }
 }

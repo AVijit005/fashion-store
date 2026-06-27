@@ -42,16 +42,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   private async setupSearchIndexes() {
     try {
-      await this.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS pg_trgm;`);
-      await this.$executeRawUnsafe(
-        `CREATE INDEX IF NOT EXISTS products_title_trgm_idx ON products USING gin (title gin_trgm_ops);`,
-      );
-      await this.$executeRawUnsafe(
-        `CREATE INDEX IF NOT EXISTS products_description_trgm_idx ON products USING gin (description gin_trgm_ops);`,
-      );
-      await this.$executeRawUnsafe(
-        `CREATE INDEX IF NOT EXISTS products_tags_gin_idx ON products USING gin (tags);`,
-      );
+      await this.$executeRaw`CREATE EXTENSION IF NOT EXISTS pg_trgm;`;
+      await this.$executeRaw`CREATE INDEX IF NOT EXISTS products_title_trgm_idx ON products USING gin (title gin_trgm_ops);`;
+      await this.$executeRaw`CREATE INDEX IF NOT EXISTS products_description_trgm_idx ON products USING gin (description gin_trgm_ops);`;
+      await this.$executeRaw`CREATE INDEX IF NOT EXISTS products_tags_gin_idx ON products USING gin (tags);`;
       this.logger.log('Database GIN and pg_trgm search indexes verified/created successfully.');
     } catch (err) {
       this.logger.error('Failed to set up PostgreSQL search indexes:', (err as Error).stack);
