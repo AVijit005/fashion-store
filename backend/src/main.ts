@@ -13,6 +13,17 @@ import { Env } from './config/env.config';
 import { scrubPii } from './common/sentry/sentry-pii-filter';
 
 async function bootstrap() {
+  // API replica: RUN_WORKERS must NOT be true here (defense in depth \u2014
+  // the dynamic WorkerModule.forRoot({ enabled: false }) prevents worker
+  // classes from being instantiated regardless, but failing fast with a
+  // clear error message is friendlier than a silent misconfiguration).
+  if (process.env.RUN_WORKERS === 'true') {
+    console.error(
+      'FATAL: main.ts (API process) was started with RUN_WORKERS=true. Use worker.ts for the worker process.',
+    );
+    process.exit(1);
+  }
+
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
   });
@@ -38,7 +49,7 @@ async function bootstrap() {
 
   configureApp(app, configService);
 
-  // Swagger API documentation — available in development/staging only.
+  // Swagger API documentation \u2014 available in development/staging only.
   // In production, /docs returns 404 to avoid exposing internal API schemas.
   if (nodeEnv !== 'production') {
     const swaggerConfig = new DocumentBuilder()
@@ -55,9 +66,9 @@ async function bootstrap() {
   const port = configService.get<number>('PORT') || 3000;
   const host = nodeEnv === 'production' ? '0.0.0.0' : '127.0.0.1';
   await app.listen(port, host);
-  console.log(`🚀 Aura Streetwear Backend is running on: http://localhost:${port}`);
+  console.log(`\ud83d\ude80 Aura Streetwear Backend is running on: http://localhost:${port}`);
   if (nodeEnv !== 'production') {
-    console.log(`📖 API Documentation available at: http://localhost:${port}/docs`);
+    console.log(`\ud83d\udcd6 API Documentation available at: http://localhost:${port}/docs`);
   }
 }
 bootstrap();

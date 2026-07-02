@@ -26,6 +26,7 @@ import { CsrfService } from './common/guards/csrf.service';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { NewsletterModule } from './modules/newsletter/newsletter.module';
+import { WorkerModule } from './modules/worker/worker.module';
 
 @Module({
   imports: [
@@ -87,6 +88,13 @@ import { NewsletterModule } from './modules/newsletter/newsletter.module';
     WishlistModule,
     AdminModule,
     MaintenanceModule,
+    // Phase 6: conditionally enable BullMQ processors + @Cron jobs.
+    // API replica runs with RUN_WORKERS unset/false (worker classes
+    // are not provided, no @Processor subscribes to a queue, no @Cron
+    // schedule is registered). Worker replica runs with RUN_WORKERS=true.
+    WorkerModule.forRoot({
+      enabled: process.env.RUN_WORKERS === 'true',
+    }),
   ],
   providers: [
     {

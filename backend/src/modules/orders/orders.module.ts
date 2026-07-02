@@ -3,9 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
-import { OrderExpiryProcessor } from './order-expiry.processor';
-import { AbandonedCartCron } from './abandoned-cart.cron';
-import { PaymentPendingReconciliationCron } from './payment-pending-reconciliation.cron';
 import { CartModule } from '../cart/cart.module';
 import { AuthModule } from '../auth/auth.module';
 import { AuditModule } from '../audit/audit.module';
@@ -13,6 +10,15 @@ import { InventoryService } from './inventory.service';
 import { PaymentsModule } from '../payments/payments.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 
+/**
+ * OrdersModule is the HTTP + lifecycle surface for orders.
+ *
+ * Phase 6 split: the BullMQ processor (OrderExpiryProcessor) and the
+ * @Cron jobs (AbandonedCartCron, PaymentPendingReconciliationCron)
+ * were moved to WorkerModule. API replicas now import this module
+ * without workers; the dedicated worker replica imports WorkerModule
+ * separately. See worker.module.ts for the rationale.
+ */
 @Module({
   imports: [
     BullModule.registerQueue({
@@ -27,10 +33,11 @@ import { WebhooksModule } from '../webhooks/webhooks.module';
   controllers: [OrdersController],
   providers: [
     OrdersService,
-    OrderExpiryProcessor,
     InventoryService,
-    AbandonedCartCron,
-    PaymentPendingReconciliationCron,
+    // Phase 6: OrderExpiryProcessor, AbandonedCartCron, and
+    // PaymentPendingReconciliationCron were moved to WorkerModule.
+    // They're no longer provided here so the API replica doesn't
+    // spin up duplicate BullMQ consumers or duplicate cron schedules.
   ],
   exports: [OrdersService, InventoryService],
 })

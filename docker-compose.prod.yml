@@ -1,0 +1,219 @@
+# Production overlay for Aura Streetwear.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Differences from the base docker-compose.yml:
+#   - No host port mapping for the backend (only the frontend is exposed)
+#   - Resource limits on every service (CPU + memory)
+#   - security_opt: no-new-privileges on every service
+#   - read_only root filesystem where possible (tmpfs for /tmp where needed)
+#   - Networks split into frontend/backend/data tiers
+#   - The worker service runs with replicas: 1 (no horizontal scaling)
+#   - The backup service runs in the "backup" profile (already true in
+#     the base file)
+#
+# Assumes a reverse proxy (Caddy / Traefik / Cloudflare) terminates TLS
+# in front of the frontend service. Backend and worker are NOT reachable
+# from the public internet in this layout.
+
+services:
+  frontend:
+    # nginx-unprivileged already runs as the `nginx` user (UID 101).
+    # No additional USER directive needed.
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+      /var/cache/nginx:size=64m
+      /var/run:size=16m
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    networks:
+      - frontend
+      - backend
+
+  backend:
+    # NO host port — backend is reachable only via the frontend's
+    # internal network. The reverse proxy never talks to it directly.
+    ports: []
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE   # not actually needed since we bind 3000 (unprivileged)
+      - CHOWN              # prisma generate at build time runs as root; runtime is node
+      - SETUID
+      - SETGID
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - backend
+      - data
+
+  worker:
+    # Exactly one replica — BullMQ jobs are processed serially by this
+    # process, no need to scale. API replicas can scale independently.
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+      # Restart policy override — workers should never silently restart
+      # because a restart mid-job can leave inventory reservations in a
+      # half-applied state. The order-expiry queue uses idempotent
+      # jobIds (the order id) so this is recoverable, but we still
+      # prefer crash-looping for visibility.
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    networks:
+      - backend
+      - data
+
+  postgres:
+    command:
+      - postgres
+      - -c
+      - max_connections=200            # leaves headroom for API + worker + PgBouncer
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - log_min_duration_statement=500ms # slow query log threshold
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - data
+
+  redis:
+    command:
+      - redis-server
+      - --maxmemory
+      - 512mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --appendonly
+      - 'no'              # AOF off — Redis here is cache/queue, not the source of truth
+      - --save
+      - '60 1000'         # RDB snapshot every 60s if ≥1000 keys changed
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 768M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - data
+
+  minio:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+    security_opt:
+      - no-new-privileges:true
+    # MinIO exposes its own ports for S3 API and console. The S3 endpoint
+    # is reachable only from backend/worker via the data network.
+    networks:
+      - data
+
+  backup:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.05'
+          memory: 128M
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - data
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: false  # backend may need outbound (Razorpay, Sentry, SMTP)
+  data:
+    driver: bridge
+    internal: true   # Postgres / Redis / MinIO are NEVER reachable from the
+                     # public internet — only from the backend/worker tier.
+
+# Volumes are inherited from docker-compose.yml (pgdata, redisdata, miniodata).
+# In a real deployment, mount these from a managed volume / NFS / EBS.
+
+# ---------------------------------------------------------------------------
+# Postgres connection pool sizing (Phase 6)
+# ---------------------------------------------------------------------------
+# Current defaults (as of this commit):
+#   - DATABASE_URL includes connection_limit=20 (per-pod pool)
+#   - postgres max_connections = 200
+#
+# Math:
+#   - 1 worker pod            x  20 conns =  20
+#   - 1 backup / migration    x   5 conns =   5 (reserved headroom)
+#   - 1 admin / dashboard     x   2 conns =   2
+#   - N API replicas          x  20 conns = 20N
+#
+#   Available for API replicas = 200 - 20 - 5 - 2 = 173 conns
+#   Max API replicas          = floor(173 / 20) = 8 replicas
+#
+# Scaling beyond ~8 API replicas requires PgBouncer:
+#   1. Deploy PgBouncer as a sidecar (transaction pooling mode)
+#   2. Point API DATABASE_URL at pgbouncer:6432
+#   3. Drop connection_limit=20 to connection_limit=5 per pod
+#      (PgBouncer multiplexes — actual server-side conns stay bounded)
+#   4. With PgBouncer you can scale to 50+ API replicas on the same
+#      200-connection Postgres
+#
+# See backend/scripts/ for a `pgbouncer.ini.example` template.
+# ---------------------------------------------------------------------------
+

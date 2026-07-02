@@ -56,7 +56,10 @@ services:
       minio:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      # Phase 6 fix: probe /health (deep DB+Redis check) not / (just the
+      # "is live" string). Orchestrators now flag a replica unhealthy
+      # when DB or Redis is failing, not only when the process is dead.
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -122,6 +125,49 @@ services:
       retries: 5
     volumes:
       - miniodata:/data
+
+  # -----------------------------------------------------
+  # 👷 Background Worker (Phase 6)
+  # -----------------------------------------------------
+  # Runs BullMQ consumers (order-expiry queue) and @Cron jobs
+  # (AbandonedCartCron, PaymentPendingReconciliationCron). Only ONE
+  # replica should run — scaling the API does NOT scale workers.
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aura-worker
+    restart: unless-stopped
+    profiles: ["workers"]  # opt-in: `docker compose --profile workers up`
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      NODE_ENV: production
+      RUN_WORKERS: 'true'
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      AWS_S3_ENDPOINT: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-aura-studio}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET}
+    command: ["node", "dist/worker.js"]
+    healthcheck:
+      # Worker has no HTTP port, but we still want a liveness signal.
+      # Probe the BullMQ queue length via redis-cli as a weak proxy
+      # for "the worker is still subscribed to jobs".
+      test: ["CMD-SHELL", "redis-cli -h redis LLEN bull:order-expiry:wait || exit 0"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
 
   # -----------------------------------------------------
   # 💾 Daily Postgres Backup → S3

@@ -37,7 +37,7 @@ function redactObject<T extends Record<string, unknown>>(obj: T): T {
   return obj;
 }
 
-export function scrubPii(event: Sentry.Event): Sentry.Event {
+export function scrubPii<T extends Record<string, unknown>>(event: T): T {
   // 1. Strip sensitive HTTP request headers.
   if (event.request?.headers && typeof event.request.headers === 'object') {
     const headers = event.request.headers as Record<string, string | string[] | undefined>;
