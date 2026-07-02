@@ -143,6 +143,46 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
+## 📚 Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [`DEPLOY.md`](DEPLOY.md) | Step-by-step production deployment — cloud setup, secrets, DNS, CI/CD, smoke tests |
+| [`SECURITY.md`](SECURITY.md) | Vulnerability disclosure policy, supported versions, security features built into the codebase |
+| [`RUNBOOK.md`](RUNBOOK.md) | Incident response — symptoms, diagnosis, mitigation for ~14 common production scenarios |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Local dev setup, branch / PR / commit conventions, code style, code review checklist |
+| [`backend/.env.example`](backend/.env.example) | All backend env vars with placeholder secrets that trip the production guard |
+| [`.env.example`](.env.example) | All frontend env vars |
+| [`ops/SENTRY_SETUP.md`](ops/SENTRY_SETUP.md) | Sentry project creation, internal-integration auth token, GitHub secrets mapping |
+| [`ops/LOG_SHIPPING.md`](ops/LOG_SHIPPING.md) | Four shipping options (CloudWatch / Loki / Datadog / ELK) with compose snippets |
+
+## 🏁 Production readiness — Phase summary
+
+The codebase has been through 11 focused commits hardening it for production deployment. Each commit is independent and the full diff is reviewable in isolation.
+
+| Phase | Commit | Scope |
+|-------|--------|-------|
+| 0 + 1 | `fbf13bb` | Hygiene + critical security (Dockerfile fix, HTTPS headers, Postgres backups, env guard, Sentry PII scrubber) |
+| 2 | `eb435dc` | Split `OrdersService` into `PaymentsService` + `WebhooksService`; atomic refresh rotation; cart-item row lock; catalog UUID validation |
+| 3 | `270d0e8` | Email service with BullMQ queue + SMTP; email verification flow; password reset flow; constant-time login |
+| 4 | `5c2adcd` | Single source-of-truth for production URL; fake content removal (aggregateRating, stockHint); real checkout success UX; admin beforeLoad guard; real newsletter/footer/forgot-password handlers |
+| 5 | `7389e85` | JSON-LD consolidation (productJsonLd, organizationJsonLd, breadcrumbJsonLd, collectionJsonLd, websiteJsonLd); dynamic robots.txt with Sitemap directive |
+| 6 | `ad71e66` | Worker split (worker.ts + RUN_WORKERS gate); production compose overlay with resource limits + no public backend port; Postgres pool sizing |
+| 7 | `c94bc30` | CI/CD overhaul (6 jobs); CODEOWNERS; Dependabot |
+| 8 | `b82fd57` | Sentry source maps; Prometheus metrics endpoint + Grafana dashboard; request logger middleware |
+| 9 | `da26aa7` + `ec30606` | Order/shipping/refund/delivery emails; GDPR data export + delete endpoints + UI; admin refund button |
+| 10 | (this commit) | DEPLOY.md, SECURITY.md, RUNBOOK.md, CONTRIBUTING.md, README updates |
+
+Deferred follow-ups (not blockers for launch):
+- Returns/RMA workflow + state machine
+- GA4 + Meta Pixel analytics
+- Configurable tax rate (currently hard-coded 18% GST in `orders.service.ts`)
+- Low-stock cron + admin email digest
+- PgBouncer for > 8 API replicas
+- Frontend test suite (Vitest + Playwright)
+
+---
+
 ## 👨‍💻 Developer & Author
 
 **Vijit**  
