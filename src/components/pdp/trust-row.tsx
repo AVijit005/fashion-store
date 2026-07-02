@@ -1,25 +1,17 @@
 import { Truck, RotateCcw, ShieldCheck, Wallet } from "lucide-react";
 import { useState } from "react";
-
 import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api/client";
+import { logisticsApi } from "@/lib/api/logistics";
 
-async function fetchEtaFor(pincode: string) {
-  // TODO: Replace with real logistics API call to backend (e.g., Shiprocket)
-  if (!/^\d{6}$/.test(pincode)) {
-    throw new Error("Invalid pincode");
-  }
-  
-  await new Promise((r) => setTimeout(r, 600));
-
-  if (pincode.startsWith("00")) {
-    throw new Error("Unserviceable area");
-  }
-
-  // Fallback static ETA since API is not implemented
-  return { start: 3, end: 5, cod: true };
-}
-
+/**
+ * Phase 1 (audit item 1.4): the previous implementation used a
+ * `setTimeout`-based fake that returned "3-5 days" for every valid
+ * pincode. Now calls the real backend stub (`/logistics/eta?pincode=`)
+ * which returns zone-aware delivery windows + COD availability based on
+ * the seeded pincode-prefix table (or a coarse first-digit fallback).
+ *
+ * Cached per-pincode for 24h on the client.
+ */
 export function PdpTrustRow() {
   const [pin, setPin] = useState("");
   const [activePin, setActivePin] = useState("");
@@ -30,9 +22,10 @@ export function PdpTrustRow() {
     error,
   } = useQuery({
     queryKey: ["eta", activePin],
-    queryFn: () => fetchEtaFor(activePin),
+    queryFn: () => logisticsApi.getEta(activePin),
     enabled: activePin.length === 6,
     retry: 1,
+    staleTime: 24 * 60 * 60 * 1000, // 24h
   });
 
   const check = (e: React.FormEvent) => {
@@ -66,14 +59,16 @@ export function PdpTrustRow() {
           <p className="mt-3 text-sm">
             Delivered in{" "}
             <span className="font-medium">
-              {eta.start}–{eta.end} days
+              {eta.etaMinDays}–{eta.etaMaxDays} days
             </span>{" "}
-            · {eta.cod ? "COD available" : "Prepaid only"}
+            · {eta.codAvailable ? "COD available" : "Prepaid only"} · {eta.zone}
           </p>
         )}
         {error && (
           <p className="mt-3 text-sm text-accent">
-            {(error as Error).message || "Enter a valid 6-digit pincode"}
+            {(error as Error).message?.includes("Unserviceable")
+              ? "Sorry, we don't deliver to this pincode yet."
+              : "Enter a valid 6-digit pincode"}
           </p>
         )}
       </form>

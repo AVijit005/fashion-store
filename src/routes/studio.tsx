@@ -14,6 +14,8 @@ import { useCart } from "@/lib/store/cart";
 import { inr } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
+import { catalogApi, type Product as CatalogProduct } from "@/lib/api/catalog";
+import { uploadImageFile } from "@/lib/api/storage";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/studio")({
@@ -36,36 +38,14 @@ type Layer =
   | { id: string; type: "text"; text: string; x: number; y: number; size: number; color: string }
   | { id: string; type: "image"; src: string; x: number; y: number; size: number };
 
-const PRODUCTS = [
-  {
-    id: "tee",
-    name: "Oversized Tee",
-    price: 1299,
-    mockup:
-      "https://images.unsplash.com/photo-1581655353564-df123a1eb820?w=900&q=80&auto=format&fit=crop",
-  },
-  {
-    id: "hoodie",
-    name: "Heavy Hoodie",
-    price: 2299,
-    mockup:
-      "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=900&q=80&auto=format&fit=crop",
-  },
-  {
-    id: "mug",
-    name: "Ceramic Mug",
-    price: 349,
-    mockup:
-      "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=900&q=80&auto=format&fit=crop",
-  },
-  {
-    id: "tote",
-    name: "Canvas Tote",
-    price: 599,
-    mockup:
-      "https://images.unsplash.com/photo-1544816155-12df9643f363?w=900&q=80&auto=format&fit=crop",
-  },
-];
+// Phase 1 (audit item 1.3): the studio used to ship with a hardcoded
+// PRODUCTS array (Unsplash mockups + arbitrary ₹ prices). It now queries
+// the real catalog filtered by `tags=custom-print`. Admin tags eligible
+// products via the admin UI; the backend uses Prisma `hasSome` to match.
+// Until any product is tagged, the studio shows an empty picker — admin
+// must opt-in products to the custom-print program.
+const STUDIO_PLACEHOLDER =
+  "https://placehold.co/900x900/f5f3ee/0d0d0d?text=No+Image";
 
 const COLORS = [
   { name: "Bone", hex: "#f5f3ee" },
@@ -74,7 +54,7 @@ const COLORS = [
 ];
 
 function Studio() {
-  const [productId, setProductId] = useState("tee");
+  const [productId, setProductId] = useState<string>("");
   const [color, setColor] = useState("Bone");
   const [layers, setLayers] = useState<Layer[]>([
     { id: "l1", type: "text", text: "INK", x: 50, y: 45, size: 64, color: "#0d0d0d" },
@@ -91,7 +71,19 @@ function Studio() {
     queryFn: () => apiClient.get("/studio/templates"),
   });
 
-  const product = PRODUCTS.find((p) => p.id === productId)!;
+  const { data: productsResp, isLoading: productsLoading } = useQuery({
+    queryKey: ["studio-products"],
+    queryFn: () => catalogApi.getProducts({ tags: ["custom-print"], limit: 20 }),
+  });
+  const products: CatalogProduct[] = productsResp?.products ?? [];
+
+  // Default-select the first product once data loads.
+  if (!productId && products.length > 0) {
+    setProductId(products[0].id);
+  }
+
+  const product = products.find((p) => p.id === productId);
+  const productImage = product?.images?.[0] ?? STUDIO_PLACEHOLDER;
   const colorHex = COLORS.find((c) => c.name === color)!.hex;
   const sel = layers.find((l) => l.id === selected);
 
@@ -107,19 +99,31 @@ function Studio() {
     setSelected(id);
   };
 
-  const onUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isUploading, setIsUploading] = useState(false);
+
+  const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
+    setIsUploading(true);
+    try {
+      // Phase 4 (audit item 4.1): upload to S3 / MinIO instead of embedding
+      // base64 in customData. The returned publicUrl is a real CDN URL
+      // that survives design-versioning, cart serialization, and sharing.
+      const result = await uploadImageFile(f);
       const id = `l${Date.now()}`;
       setLayers([
         ...layers,
-        { id, type: "image", src: reader.result as string, x: 50, y: 50, size: 30 },
+        { id, type: "image", src: result.publicUrl, x: 50, y: 50, size: 30 },
       ]);
       setSelected(id);
-    };
-    reader.readAsDataURL(f);
+      toast.success("Image uploaded");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setIsUploading(false);
+      // Reset so the same file can be re-uploaded if needed.
+      e.target.value = "";
+    }
   };
 
   const remove = (id: string) => {
@@ -128,18 +132,22 @@ function Studio() {
   };
 
   const addToCart = () => {
+    if (!product) {
+      toast.error("Pick a base product first");
+      return;
+    }
     add({
       id: `custom-${productId}-${Date.now()}`,
-      slug: product.id,
+      slug: product.slug,
       name: `Custom ${product.name}`,
-      image: product.mockup,
+      image: productImage,
       price: product.price + 200,
       mrp: product.price + 200,
       size: "M",
       color,
       custom: true,
       customData: {
-        productId,
+        productId: product.id,
         color,
         hex: colorHex,
         layers,
@@ -148,13 +156,17 @@ function Studio() {
   };
 
   const saveDraft = async () => {
+    if (!product) {
+      toast.error("Pick a base product first");
+      return;
+    }
     setIsSaving(true);
     try {
       await apiClient.post("/studio/designs", {
         title: `Draft: ${product.name}`,
         category: "Drafts",
         designJson: {
-          productId,
+          productId: product.id,
           color,
           layers,
         },
@@ -203,19 +215,33 @@ function Studio() {
             <div>
               <p className="mb-3 text-[11px] uppercase tracking-[0.22em] text-mute">Product</p>
               <div className="grid grid-cols-2 gap-2">
-                {PRODUCTS.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setProductId(p.id)}
-                    className={`border p-3 text-left transition ${productId === p.id ? "border-ink" : "border-line hover:border-graphite"}`}
-                  >
-                    <div className="aspect-square overflow-hidden bg-fog">
-                      <img src={p.mockup} alt={p.name} className="h-full w-full object-cover" />
-                    </div>
-                    <p className="mt-2 text-[12px]">{p.name}</p>
-                    <p className="text-[11px] tabular-nums text-mute">{inr(p.price)}</p>
-                  </button>
-                ))}
+                {productsLoading ? (
+                  <p className="col-span-2 text-[12px] text-mute">Loading products…</p>
+                ) : products.length === 0 ? (
+                  <p className="col-span-2 text-[12px] text-mute">
+                    No customizable products yet. Admin must tag products with{" "}
+                    <code className="rounded bg-fog px-1">custom-print</code> to enable them
+                    in the studio.
+                  </p>
+                ) : (
+                  products.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => setProductId(p.id)}
+                      className={`border p-3 text-left transition ${productId === p.id ? "border-ink" : "border-line hover:border-graphite"}`}
+                    >
+                      <div className="aspect-square overflow-hidden bg-fog">
+                        <img
+                          src={p.images?.[0] ?? STUDIO_PLACEHOLDER}
+                          alt={p.name}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <p className="mt-2 text-[12px]">{p.name}</p>
+                      <p className="text-[11px] tabular-nums text-mute">{inr(p.price)}</p>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           ) : (
@@ -313,8 +339,8 @@ function Studio() {
             }}
           >
             <img
-              src={product.mockup}
-              alt=""
+              src={productImage}
+              alt={product?.name ?? "Studio canvas"}
               className="absolute inset-0 h-full w-full object-cover opacity-60 mix-blend-multiply"
             />
             {layers.map((l) => (
@@ -467,13 +493,15 @@ function Studio() {
 
           <div className="border border-line p-5">
             <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Your build</p>
-            <p className="mt-2 font-display text-3xl">{product.name}</p>
+            <p className="mt-2 font-display text-3xl">{product?.name ?? "No product"}</p>
             <p className="text-[12px] text-mute">
               {color} · {layers.length} layer{layers.length === 1 ? "" : "s"}
             </p>
             <div className="mt-4 flex items-baseline justify-between">
               <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Total</p>
-              <p className="font-display text-3xl tabular-nums">{inr(product.price + 200)}</p>
+              <p className="font-display text-3xl tabular-nums">
+                {inr((product?.price ?? 0) + 200)}
+              </p>
             </div>
             <div className="flex gap-4 mt-4">
               <button

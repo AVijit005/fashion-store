@@ -3,6 +3,7 @@ import { apiClient } from "../api/client";
 import { cartApi, getOrCreateCartSessionId } from "../api/cart";
 import { syncWishlistOnLogin, useWishlist } from "./wishlist";
 import { useCart } from "./cart";
+import { useRecentlyViewed } from "./recently-viewed";
 
 export interface UserProfile {
   id: string;
@@ -12,7 +13,6 @@ export interface UserProfile {
 
 interface AuthState {
   user: UserProfile | null;
-  accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   authModalOpen: boolean;
@@ -24,12 +24,10 @@ interface AuthState {
   signup: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   initialize: () => Promise<void>;
-  setTokens: (accessToken: string) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  accessToken: null,
   isAuthenticated: false,
   isLoading: true,
   authModalOpen: false,
@@ -38,15 +36,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setAuthModalOpen: (open) => set({ authModalOpen: open }),
   setAuthModalView: (view) => set({ authModalView: view }),
 
-  setTokens: (accessToken) => {
-    set({ accessToken, isAuthenticated: true });
-  },
-
   login: async (email, password) => {
     set({ isLoading: true });
     try {
-      const res = await apiClient.post<{ accessToken: string }>("/auth/login", { email, password });
-      get().setTokens(res.accessToken);
+      // Tokens are delivered as httpOnly cookies by the backend.
+      await apiClient.post("/auth/login", { email, password });
 
       // Fetch profile
       const user = await apiClient.get<UserProfile>("/auth/me");
@@ -87,8 +81,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Sync wishlist
       await syncWishlistOnLogin();
-    } catch (error) {
-      throw error;
+
+      // Phase 2 (audit item 2.1): flush anonymous recently-viewed
+      // items from localStorage into the backend, then hydrate the
+      // local store with the cross-device list.
+      await useRecentlyViewed.getState().syncToBackend();
+      await useRecentlyViewed.getState().loadFromBackend();
     } finally {
       set({ isLoading: false });
     }
@@ -121,7 +119,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (typeof window !== "undefined") {
         localStorage.removeItem("ink_logged_in");
       }
-      set({ user: null, accessToken: null, isAuthenticated: false });
+      set({ user: null, isAuthenticated: false });
 
       // Clear private data from local storage
       useCart.getState().clear();

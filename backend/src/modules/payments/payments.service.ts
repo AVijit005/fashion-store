@@ -174,23 +174,33 @@ export class PaymentsService {
 
   /**
    * Calls Razorpay to create a payment order. Honours the circuit breaker
-   * and retries 5xx / network errors with backoff. Returns a deterministic
-   * mock id (`rzp_mock_…`) when the configured keys are mock values so
-   * the dev / CI environment can flow through checkout end-to-end.
+   * and retries 5xx / network errors with backoff.
+   *
+   * Mock path is ONLY allowed in non-production environments with the
+   * explicit `ALLOW_MOCK_PAYMENTS=true` opt-in. In production, a missing
+   * or malformed Razorpay key causes an InternalServerError rather than
+   * silently accepting orders for free — see Phase 1 item 1.8 in the
+   * audit doc.
    */
   async createGatewayOrder(input: CreateGatewayOrderInput): Promise<CreateGatewayOrderResult> {
     const keyId = this.configService.get<string>('RAZORPAY_KEY_ID') || '';
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
+    const isDev = process.env.NODE_ENV !== 'production';
+    const mockAllowed = isDev && process.env.ALLOW_MOCK_PAYMENTS === 'true';
 
-    // Mock path — no real Razorpay call.
-    if (keyId.startsWith('mock') || !keyId || !keySecret) {
+    // Mock path is gated to dev environments with explicit opt-in.
+    // Production NEVER accepts the mock path even if keys are missing.
+    if (mockAllowed && (!keyId.startsWith('rzp_') || keySecret.length < 8)) {
       return {
         razorpayOrderId: `rzp_mock_${crypto.randomUUID().replace(/-/g, '')}`,
       };
     }
 
     if (!/^rzp_(test|live)_/.test(keyId) || keySecret.length < 8) {
-      throw new InternalServerErrorException('Payment gateway is not configured');
+      throw new InternalServerErrorException(
+        'Payment gateway is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET ' +
+          'to valid test/live keys, or set ALLOW_MOCK_PAYMENTS=true in a non-production env.',
+      );
     }
 
     if (Date.now() < this.razorpayCircuitOpenUntil) {

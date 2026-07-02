@@ -67,7 +67,9 @@ export function FlashSale() {
                 <p className="text-[12px] text-mute">{p.tagline}</p>
                 <p className="mt-1 text-[13px]">
                   <span className="tabular-nums">{inr(p.price)}</span>
-                  <span className="ml-2 text-mute line-through tabular-nums">{inr(p.mrp)}</span>
+                  {p.mrp != null && (
+                    <span className="ml-2 text-mute line-through tabular-nums">{inr(p.mrp)}</span>
+                  )}
                 </p>
               </Link>
             </Reveal>

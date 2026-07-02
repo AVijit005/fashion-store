@@ -73,7 +73,7 @@ export const ProductCard = memo(function ProductCard({
       name: product.name,
       image: product.images?.[0] || "https://placehold.co/600x800/f5f3ee/0d0d0d?text=No+Image",
       price: product.price,
-      mrp: product.mrp,
+      mrp: product.mrp ?? 0,
       size,
       color,
     });
@@ -206,7 +206,7 @@ export const ProductCard = memo(function ProductCard({
             </div>
             <div className="text-right">
               <p className="text-[14px] tabular-nums">{inr(product.price)}</p>
-              {discount > 0 && (
+              {discount > 0 && product.mrp != null && (
                 <p className="text-[11px] tabular-nums text-mute line-through">
                   {inr(product.mrp)}
                 </p>

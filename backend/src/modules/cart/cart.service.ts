@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, Inject, NotFoundException, InternalSer
 import Redis from 'ioredis';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../config/prisma.service';
+import { SettingsService } from '../../config/settings.service';
 import { ProductStatus, Prisma } from '@prisma/client';
 
 interface CachedCartItem {
@@ -40,6 +41,7 @@ export class CartService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly settingsService: SettingsService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
   ) { }
 
@@ -198,9 +200,11 @@ export class CartService {
           const baseProduct = customProductsMap.get(productId);
           if (!baseProduct) return null; // Product deleted or draft-gated
 
-          // Strictly compute price on backend: base price + 200 markup
+          // Phase 1 (audit item 1.7): custom-print markup is configurable via
+          // GlobalSettings (key: `studio.customPrintMarkup`). Default 200.
+          const settings = await this.settingsService.getAll();
           const basePrice = new Prisma.Decimal(baseProduct.basePrice.toString());
-          const customPrice = basePrice.add(new Prisma.Decimal(200));
+          const customPrice = basePrice.add(new Prisma.Decimal(settings.studio.customPrintMarkup));
           const itemTotal = customPrice.mul(item.quantity);
           totalAmount = totalAmount.add(itemTotal);
 

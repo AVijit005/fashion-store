@@ -15,7 +15,7 @@ export const Route = createFileRoute("/c/$category")({
       const cat = cats.find(
         (c: any) => c.slug === normalizedCategory || c.slug === params.category,
       );
-      
+
       let list: Product[] = [];
       if (params.category === "new") {
         const res = await catalogApi.getProducts({ limit: 100 });
@@ -24,7 +24,8 @@ export const Route = createFileRoute("/c/$category")({
         );
       } else if (params.category === "sale") {
         const res = await catalogApi.getProducts({ limit: 100 });
-        list = res.products.filter((p: Product) => p.mrp - p.price >= 400);
+        // Phase 1: skip products with no MRP — there's no discount to show.
+        list = res.products.filter((p: Product) => (p.mrp ?? 0) - p.price >= 400);
       } else {
         const res = await catalogApi.getProducts({ category: normalizedCategory, limit: 100 });
         list = res.products;

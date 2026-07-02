@@ -28,6 +28,16 @@ export const envSchema = z.object({
   ADMIN_EMAIL: z.string().email().optional(),
   ADMIN_PASSWORD: z.string().min(8).optional(),
 
+  // Phase 5 (audit item 5.1): Google OAuth credentials. Both are optional
+  // — when missing the strategy is constructed with placeholder values
+  // and /auth/google will throw if invoked.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CALLBACK_URL: z.string().url().optional(),
+
+  // Razorpay mock-mode opt-in. NEVER true in production — see env.config.ts guard.
+  ALLOW_MOCK_PAYMENTS: z.enum(['true', 'false']).optional(),
+
   // Email (transactional — signup verification, password reset, order receipts)
   // All optional so dev environments can run without an SMTP server; the
   // EmailProcessor logs and retries when these are unset.
@@ -95,6 +105,17 @@ export const validateEnv = (config: Record<string, unknown>) => {
         '\nGenerate strong secrets with: openssl rand -base64 64\nSee backend/.env.example for guidance.',
       );
       throw new Error('Insecure secrets detected — refusing to start');
+    }
+
+    // Phase 1 (audit item 1.8): refuse ALLOW_MOCK_PAYMENTS=true in production.
+    // The mock path silently accepts "paid" orders without a real Razorpay
+    // call — a missing env var in production must NOT enable free checkouts.
+    if (env.ALLOW_MOCK_PAYMENTS === 'true') {
+      console.error(
+        'FATAL: ALLOW_MOCK_PAYMENTS=true is set. This bypasses real Razorpay calls ' +
+          'and would let customers check out for free. Refusing to start in production.',
+      );
+      throw new Error('ALLOW_MOCK_PAYMENTS must not be true in production');
     }
   }
 

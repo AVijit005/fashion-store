@@ -61,7 +61,7 @@ export function QuickViewDialog({
       name: product.name,
       image: product.images[0],
       price: product.price,
-      mrp: product.mrp,
+      mrp: product.mrp ?? 0,
       size,
       color,
     });
@@ -124,7 +124,7 @@ export function QuickViewDialog({
               <h3 className="mt-2 font-display text-3xl leading-tight">{product.name}</h3>
               <div className="mt-4 flex items-baseline gap-3">
                 <p className="font-display text-2xl tabular-nums">{inr(product.price)}</p>
-                {discount > 0 && (
+                {discount > 0 && product.mrp != null && (
                   <>
                     <p className="text-sm text-mute line-through tabular-nums">
                       {inr(product.mrp)}

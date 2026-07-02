@@ -1,7 +1,8 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState, useMemo } from "react";
-import { ChevronRight, Heart, Plus, Share2, Gift, Flame, Star } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
+import { Bell, ChevronRight, Heart, Plus, Share2, Gift, Flame, Star } from "lucide-react";
 import { toast } from "sonner";
 import type { Product } from "@/lib/api/catalog";
 import { inr, pct } from "@/lib/format";
@@ -10,6 +11,7 @@ import { useWishlist } from "@/lib/store/wishlist";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useRecentlyViewed } from "@/lib/store/recently-viewed";
 import { useFlyToCart } from "@/lib/store/fly-to-cart";
+import { restockNotificationsApi } from "@/lib/api/restock-notifications";
 import { ProductCard } from "@/components/product/product-card";
 import { Reveal } from "@/components/ui/reveal";
 import { PdpGallery } from "@/components/pdp/gallery";
@@ -88,6 +90,25 @@ function ProductPage() {
   const [size, setSize] = useState("M");
   const [color, setColor] = useState(product.colors[0].name);
   const [guideOpen, setGuideOpen] = useState(false);
+  // Phase 3 (audit item 3.1): back-in-stock notify-me form state.
+  // Email is preserved across size/color changes so users don't have to
+  // re-type it while browsing other variants of the same product.
+  const [notifyEmail, setNotifyEmail] = useState("");
+  const [notifySubscribed, setNotifySubscribed] = useState(false);
+
+  const notifyMutation = useMutation({
+    mutationFn: () =>
+      restockNotificationsApi.subscribe(product.slug, {
+        variantId: selectedVariant?.id ?? "",
+        email: notifyEmail,
+      }),
+    onSuccess: () => {
+      setNotifySubscribed(true);
+      toast.success("We'll email you the moment it's back.");
+    },
+    onError: (e: Error) =>
+      toast.error(e.message || "Couldn't subscribe. Please try again."),
+  });
   const add = useCart((s) => s.add);
   const hydrated = useHydrated();
   const { has, toggle } = useWishlist();
@@ -127,7 +148,7 @@ function ProductPage() {
       name: product.name,
       image: product.images[0],
       price: displayPrice,
-      mrp: product.mrp,
+      mrp: product.mrp ?? 0,
       size,
       color,
       maxQty: selectedVariant.stockQuantity,
@@ -196,7 +217,7 @@ function ProductPage() {
 
           <div className="mt-6 flex items-baseline gap-3">
             <p className="font-display text-4xl tabular-nums">{inr(displayPrice)}</p>
-            {discount > 0 && (
+            {discount > 0 && product.mrp != null && (
               <>
                 <p className="text-mute line-through tabular-nums">{inr(product.mrp)}</p>
                 <p className="text-[12px] uppercase tracking-[0.18em] text-accent">
@@ -299,6 +320,59 @@ function ProductPage() {
             </button>
           </div>
 
+          {/* Phase 3 (audit item 3.1): Notify-me form shown only when the
+              selected size+color variant is sold out. One email per
+              variant — repeat submits are deduped server-side. */}
+          {selectedVariant && selectedVariant.stockQuantity <= 0 && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!notifyEmail.includes("@")) {
+                  toast.error("Please enter a valid email");
+                  return;
+                }
+                notifyMutation.mutate();
+              }}
+              className="mt-3 border border-line bg-fog/40 p-4"
+            >
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-mute">
+                <Bell className="h-3.5 w-3.5" />
+                <span>Out of stock · {size} / {color}</span>
+              </div>
+              {notifySubscribed ? (
+                <p className="mt-3 text-sm text-ink">
+                  ✓ You're on the list. We'll email{" "}
+                  <span className="font-medium">{notifyEmail}</span> as soon as
+                  it's back.
+                </p>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm">
+                    Notify me when this size is back in stock.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      type="email"
+                      required
+                      value={notifyEmail}
+                      onChange={(e) => setNotifyEmail(e.target.value)}
+                      placeholder="you@email.com"
+                      disabled={notifyMutation.isPending}
+                      className="flex-1 border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-ink disabled:opacity-60"
+                    />
+                    <button
+                      type="submit"
+                      disabled={notifyMutation.isPending}
+                      className="bg-ink px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-paper disabled:opacity-50"
+                    >
+                      {notifyMutation.isPending ? "…" : "Notify me"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </form>
+          )}
+
           <div className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-mute">
             <button
               onClick={() => {
@@ -398,7 +472,7 @@ function ProductPage() {
 
       <CompleteTheLook items={look} />
 
-      <ReviewsBlock rating={product.rating ?? 0} count={product.reviews ?? 0} />
+      <ReviewsBlock slug={product.slug} />
 
       <section className="mx-auto max-w-[1480px] px-5 py-20 lg:px-10">
         <Reveal>

@@ -6,7 +6,9 @@ import type { Product } from "@/lib/api/catalog";
 export function CompleteTheLook({ items }: { items: Product[] }) {
   if (items.length === 0) return null;
   const total = items.reduce((s, p) => s + p.price, 0);
-  const mrp = items.reduce((s, p) => s + p.mrp, 0);
+  // Phase 1 (audit item 1.2): mrp is nullable; treat null as 0 in the bundle
+  // total so we never display a fake strikethrough for products without MRP.
+  const mrp = items.reduce((s, p) => s + (p.mrp ?? 0), 0);
 
   return (
     <section className="mx-auto max-w-[1480px] px-5 py-20 lg:px-10">

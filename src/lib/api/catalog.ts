@@ -7,14 +7,19 @@ export type Product = {
   category: string;
   tagline: string;
   price: number;
-  mrp: number;
-  // Phase 4 fix: `rating` and `reviews` are no longer synthesized from the
-  // product UUID. Real values will come from /reviews in a later phase;
-  // until then the fields are optional and the UI only renders them when
-  // the backend actually returns them. Do NOT re-introduce the hash-based
-  // synthesis — it's a Google structured-data penalty trigger.
-  rating?: number;
-  reviews?: number;
+  /**
+   * Maximum Retail Price from the backend. NULL when the admin hasn't
+   * set one — PDP / product cards hide the strikethrough in that case
+   * (claiming a fake discount is false advertising).
+   */
+  mrp: number | null;
+  /**
+   * Average review rating (0–5) and review count from the verified-buyer
+   * reviews system. Zero is a valid value; the UI distinguishes "no
+   * reviews" from "0 stars" via the count.
+   */
+  rating: number;
+  reviews: number;
   colors: { name: string; hex: string }[];
   sizes: string[];
   images: string[];
@@ -92,10 +97,22 @@ export interface BackendProduct {
   slug: string;
   description: string;
   basePrice: string | number;
+  /**
+   * Maximum Retail Price (MRP) from the admin. Optional/null when the
+   * product has no MRP set — the UI must not invent one.
+   */
+  mrp?: string | number | null;
   isFeatured: boolean;
   mediaUrls: string[];
   tags: string[];
   variants?: BackendVariant[];
+  /**
+   * Phase 1 (audit item 1.1): real review aggregate injected by
+   * CatalogService.getProductBySlug. Optional for backward-compat with
+   * any caller that goes around getProductBySlug (e.g. /products?ids=).
+   */
+  averageRating?: number;
+  reviewCount?: number;
 }
 
 // Maps a raw backend product response from NestJS (Prisma) to the frontend's Product type.
@@ -146,12 +163,16 @@ export function mapBackendProduct(p: BackendProduct): Product {
     category: p.category?.slug || p.categoryId,
     tagline: p.description?.split(".")[0] || "Premium streetwear piece",
     price: firstVariantPrice,
-    mrp: Math.round(firstVariantPrice * 1.4), // Simulated MRP for frontend discount calculations
+    // Phase 1 (audit item 1.2): real MRP from the backend. Null when the
+    // admin hasn't set one — the UI hides the strikethrough.
+    mrp: p.mrp != null && p.mrp !== "" ? Number(p.mrp) : null,
     colors: colors.length > 0 ? colors : [{ name: "Standard", hex: "#000000" }],
     sizes: sizes.length > 0 ? sizes : ["S", "M", "L", "XL"],
     images,
     badges: (p.tags || []) as Product["badges"],
     story: p.description || "Designed for durability and style.",
+    rating: p.averageRating ?? 0,
+    reviews: p.reviewCount ?? 0,
     variants: p.variants?.map((v: BackendVariant) => ({
       id: v.id,
       size: v.size,
@@ -176,6 +197,7 @@ export const catalogApi = {
     category?: string;
     collection?: string;
     featured?: boolean;
+    tags?: string[];
     ids?: string[];
     limit?: number;
     offset?: number;
@@ -184,6 +206,7 @@ export const catalogApi = {
       category: params?.category,
       collection: params?.collection,
       featured: params?.featured ? "true" : undefined,
+      tags: params?.tags?.join(","),
       ids: params?.ids?.join(","),
       limit: params?.limit,
       offset: params?.offset,

@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
+import { ReviewsService } from '../reviews/reviews.service';
 import { ProductStatus, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 @Injectable()
 export class CatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reviewsService: ReviewsService,
+  ) {}
 
   async getCategories() {
     return this.prisma.category.findMany({
@@ -136,7 +140,14 @@ export class CatalogService {
       throw new NotFoundException('Product not found or not yet available');
     }
 
-    return product;
+    // Phase 1 (audit item 1.1): include real review aggregate so the PDP
+    // no longer shows "0.0 / 0 reviews" for every product.
+    const reviews = await this.reviewsService.getAggregate(product.id);
+    return {
+      ...product,
+      averageRating: reviews.average,
+      reviewCount: reviews.count,
+    };
   }
 
   async getActiveDrops() {

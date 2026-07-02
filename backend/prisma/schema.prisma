@@ -53,6 +53,30 @@ enum SubmissionStatus {
   REJECTED
 }
 
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  SKIPPED
+  IGNORED
+  FAILED
+}
+
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  RECEIVED
+  REFUND_INITIATED
+  REFUNDED
+  CANCELLED
+}
+
+enum RefundStatus {
+  INITIATED
+  PROCESSED
+  FAILED
+}
+
 model User {
   id                   String                @id @default(uuid())
   email                String                @unique
@@ -61,6 +85,19 @@ model User {
   phone                String?
   role                 Role                  @default(CUSTOMER)
   isVerified           Boolean               @default(false) @map("is_verified")
+  // Phase 5 (audit item 5.1): OAuth provider linkage. googleId is the
+  // primary key for Google sign-in; future providers (Apple, GitHub)
+  // get their own nullable @unique column.
+  googleId             String?               @unique @map("google_id")
+  avatarUrl            String?               @map("avatar_url")
+  // Phase 5 (audit item 5.2): TOTP second factor for ADMIN accounts.
+  // twoFactorSecret is the base32-encoded TOTP secret. twoFactorEnabled
+  // gates /auth/login to require a TOTP step. Backup codes let the admin
+  // recover if their authenticator is lost (one-time use, then marked
+  // invalid by hashing + storing hashes instead of plaintext).
+  twoFactorSecret      String?               @map("two_factor_secret")
+  twoFactorEnabled     Boolean               @default(false) @map("two_factor_enabled")
+  twoFactorBackupCodes String[]              @default([]) @map("two_factor_backup_codes")
   verificationToken    String?               @unique @map("verification_token")
   passwordResetToken   String?               @unique @map("password_reset_token")
   passwordResetExpires DateTime?             @map("password_reset_expires")
@@ -76,10 +113,17 @@ model User {
   submissionsReviewed  StudioSubmission[]    @relation("ReviewerSubmissions")
   statusHistories      StudioStatusHistory[]
   reviews              Review[]
+
+  @@index([googleId])
+  @@map("users")
+}
   auditLogs            AuditLog[]
   sessions             Session[]
+  contactSubmissions   ContactSubmission[]
+  recentlyViewed       RecentlyViewed[]
   cart                 Cart?
   wishlist             Wishlist?
+  returnRequests       ReturnRequest[]
 
   @@map("users")
 }
@@ -171,8 +215,11 @@ model Product {
   title           String
   slug            String           @unique
   description     String
-  basePrice       Decimal          @map("base_price") @db.Decimal(10, 2)
-  isFeatured      Boolean          @default(false) @map("is_featured")
+  basePrice         Decimal          @map("base_price") @db.Decimal(10, 2)
+  mrp               Decimal?         @map("mrp") @db.Decimal(10, 2)
+  lowStockThreshold Int              @default(5) @map("low_stock_threshold")
+  customizable      Boolean          @default(false) @map("customizable")
+  isFeatured        Boolean          @default(false) @map("is_featured")
   mediaUrls       String[]         @map("media_urls")
   status          ProductStatus    @default(DRAFT)
   tags            String[]         @default([])
@@ -201,13 +248,15 @@ model ProductVariant {
   sku           String      @unique
   size          String
   color         String
-  stockQuantity Int         @default(0) @map("stock_quantity")
-  priceOverride Decimal?    @map("price_override") @db.Decimal(10, 2)
-  isDeleted     Boolean     @default(false) @map("is_deleted")
-  mediaUrls     String[]    @map("media_urls")
-  thumbnailUrl  String?     @map("thumbnail_url")
-  orderItems    OrderItem[]
-  cartItems     CartItem[]
+  stockQuantity      Int             @default(0) @map("stock_quantity")
+  lowStockThreshold  Int             @default(5) @map("low_stock_threshold")
+  priceOverride      Decimal?        @map("price_override") @db.Decimal(10, 2)
+  isDeleted          Boolean         @default(false) @map("is_deleted")
+  mediaUrls          String[]        @map("media_urls")
+  thumbnailUrl       String?         @map("thumbnail_url")
+  orderItems         OrderItem[]
+  cartItems          CartItem[]
+  restockNotifications RestockNotification[]
 
   @@index([productId])
   @@index([isDeleted])
@@ -241,6 +290,8 @@ model Order {
   updatedAt          DateTime             @updatedAt @map("updated_at")
   items              OrderItem[]
   statusHistory      OrderStatusHistory[]
+  returns            ReturnRequest[]
+  refunds            Refund[]
 
   @@index([guestToken])
   @@index([status, createdAt])
@@ -250,14 +301,21 @@ model Order {
 }
 
 model OrderItem {
-  id               String          @id @default(uuid())
-  orderId          String          @map("order_id")
-  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productVariantId String?         @map("product_variant_id")
-  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
-  customData       Json?           @map("custom_data")
-  quantity         Int
-  priceAtPurchase  Decimal         @map("price_at_purchase") @db.Decimal(10, 2)
+  id                String          @id @default(uuid())
+  orderId           String          @map("order_id")
+  order             Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productVariantId  String?         @map("product_variant_id")
+  productVariant    ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+  customData        Json?           @map("custom_data")
+  quantity          Int
+  priceAtPurchase   Decimal         @map("price_at_purchase") @db.Decimal(10, 2)
+  returnRequest     ReturnRequest?
+  // Phase 3 (audit item 3.1): snapshot the product title + thumbnail
+  // at order time so historical orders still render correctly even if
+  // the product or variant is later deleted / soft-deleted / hidden.
+  productTitle      String          @map("product_title")
+  productThumbnail  String?         @map("product_thumbnail")
+  productSku        String?         @map("product_sku")
 
   @@index([orderId])
   @@index([productVariantId])
@@ -388,8 +446,8 @@ model Review {
 
 model AuditLog {
   id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String?  @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   action    String
   details   Json?
   ipAddress String?  @map("ip_address")
@@ -444,10 +502,10 @@ model CartItem {
 }
 
 model WebhookEvent {
-  id        String   @id
-  status    String
+  id        String              @id
+  status    WebhookEventStatus  @default(RECEIVED)
   payload   Json
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime            @default(now()) @map("created_at")
 
   @@index([status])
   @@map("webhook_events")
@@ -530,4 +588,125 @@ model GlobalSetting {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("global_settings")
+}
+
+model ContactSubmission {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  message   String
+  userId    String?  @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status    String   @default("NEW") // NEW | READ | REPLIED | ARCHIVED
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("contact_submissions")
+}
+
+// Phase 2 (audit item 2.1): server-side recently-viewed so logged-in users
+// see their history across devices. Anonymous users keep using the
+// localStorage store only; on login, the local items are merged into
+// this table (dedup by userId+productId, keeping the most recent viewedAt).
+model RecentlyViewed {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String   @map("product_id")
+  viewedAt  DateTime @default(now()) @map("viewed_at")
+
+  @@unique([userId, productId])
+  @@index([userId, viewedAt])
+  @@map("recently_viewed")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1 additions: returns, refunds, logistics zones, restock notifications
+// ---------------------------------------------------------------------------
+
+model ReturnRequest {
+  id              String                @id @default(uuid())
+  orderId         String                @map("order_id")
+  order           Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItemId     String                @unique @map("order_item_id")
+  orderItem       OrderItem             @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  userId          String                @map("user_id")
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason          String
+  description     String?
+  status          ReturnStatus          @default(REQUESTED)
+  pickupScheduled DateTime?             @map("pickup_scheduled_at")
+  refundId        String?               @unique @map("refund_id")
+  refund          Refund?               @relation(fields: [refundId], references: [id], onDelete: SetNull)
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+  history         ReturnStatusHistory[]
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+  @@map("return_requests")
+}
+
+model ReturnStatusHistory {
+  id        String        @id @default(uuid())
+  returnId  String        @map("return_id")
+  return    ReturnRequest @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  oldStatus ReturnStatus? @map("old_status")
+  newStatus ReturnStatus  @map("new_status")
+  changedBy String        @map("changed_by")
+  notes     String?
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  @@index([returnId])
+  @@map("return_status_histories")
+}
+
+model Refund {
+  id               String        @id @default(uuid())
+  orderId          String        @map("order_id")
+  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  paymentId        String?       @map("payment_id")
+  razorpayRefundId String?       @unique @map("razorpay_refund_id")
+  amountInPaise    Int           @map("amount_in_paise")
+  reason           String?
+  status           RefundStatus  @default(INITIATED)
+  processedAt      DateTime?     @map("processed_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  return           ReturnRequest?
+
+  @@index([orderId])
+  @@map("refunds")
+}
+
+model LogisticsZone {
+  id            String   @id @default(uuid())
+  pincodePrefix String   @unique @map("pincode_prefix")
+  zone          String
+  etaMinDays    Int      @map("eta_min_days")
+  etaMaxDays    Int      @map("eta_max_days")
+  codAvailable  Boolean  @default(true) @map("cod_available")
+  state         String
+  city          String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([zone])
+  @@map("logistics_zones")
+}
+
+model RestockNotification {
+  id         String         @id @default(uuid())
+  variantId  String         @map("variant_id")
+  variant    ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  email      String
+  isNotified Boolean        @default(false) @map("is_notified")
+  createdAt  DateTime       @default(now()) @map("created_at")
+  notifiedAt DateTime?      @map("notified_at")
+
+  @@unique([variantId, email])
+  @@index([variantId])
+  @@index([isNotified])
+  @@map("restock_notifications")
 }

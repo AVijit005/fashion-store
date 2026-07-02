@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
 import { PrismaService } from '../../config/prisma.service';
+import { SettingsService } from '../../config/settings.service';
 import { CartService } from '../cart/cart.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
 import { PaymentsService } from '../payments/payments.service';
@@ -20,6 +21,7 @@ import { deliveryConfirmedTemplate } from '../email/templates/delivery-confirmed
 import { CheckoutDto, VerifyPaymentDto } from './dto/orders.dto';
 import { OrderStatus, Order, Prisma, PaymentStatus, PaymentProvider } from '@prisma/client';
 import { InventoryService } from './inventory.service';
+import { RestockNotificationsService } from '../restock-notifications/restock-notifications.service';
 import * as crypto from 'crypto';
 import Redis from 'ioredis';
 
@@ -56,6 +58,8 @@ export class OrdersService {
     private readonly auditService: AuditService,
     private readonly paymentsService: PaymentsService,
     private readonly emailService: EmailService,
+    private readonly settingsService: SettingsService,
+    private readonly restockNotificationsService: RestockNotificationsService,
     @Inject('REDIS_CLIENT') private readonly redisClient: Redis,
     @InjectQueue('order-expiry') private readonly orderExpiryQueue: Queue,
   ) {}
@@ -224,11 +228,15 @@ export class OrdersService {
         const totalAmountBase = totalDecimal;
         const discountedBase = totalAmountBase.sub(discountAmount);
 
-        shippingFee = discountedBase.greaterThan(999) || discountedBase.equals(0)
+        // Phase 1 (audit item 1.6): tax + shipping come from GlobalSettings,
+        // not hardcoded constants. Admin can tune GST % and shipping thresholds
+        // via /admin/settings without redeploying.
+        const settings = await this.settingsService.getAll();
+        shippingFee = discountedBase.greaterThan(settings.shipping.freeThreshold) || discountedBase.equals(0)
           ? new Prisma.Decimal(0)
-          : new Prisma.Decimal(79);
+          : new Prisma.Decimal(settings.shipping.flatRate);
 
-        tax = discountedBase.mul(18).div(118);
+        tax = discountedBase.mul(settings.tax.gstPercent).div(100 + settings.tax.gstPercent);
         totalAmount = discountedBase.add(shippingFee);
 
         return tx.order.create({
@@ -256,6 +264,12 @@ export class OrdersService {
                 quantity: item.quantity,
                 priceAtPurchase: new Prisma.Decimal(item.unitPrice),
                 customData: item.customData ? (item.customData as any) : Prisma.JsonNull,
+                // Phase 3 (audit item 3.1): snapshot title + thumbnail + sku
+                // at order time so historical orders still render correctly
+                // even if the product or variant is later deleted.
+                productTitle: item.productTitle,
+                productThumbnail: item.thumbnailUrl ?? null,
+                productSku: item.sku ?? null,
               })),
             },
             statusHistory: {
