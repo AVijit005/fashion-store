@@ -11,6 +11,7 @@ import {
   Delete,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import {
   UpdateProfileDto,
@@ -48,6 +49,7 @@ export class UsersController {
   }
 
   @Put('me')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Update profile details' })
   async updateProfile(@Req() req: any, @Body() updateProfileDto: UpdateProfileDto) {
     const user = await this.usersService.findById(req.user.id);
@@ -59,6 +61,7 @@ export class UsersController {
   }
 
   @Put('me/preferences')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Update user preferences' })
   async updatePreferences(@Req() req: any, @Body() body: UpdatePreferencesDto) {
     const user = await this.prisma.user.update({
@@ -152,5 +155,124 @@ export class UsersController {
 
     await this.prisma.address.deleteMany({ where: { id, userId: req.user.id } });
     return { success: true };
+  }
+
+  // ---------- Phase 9: GDPR data export + account deletion ----------
+
+  @Get('me/export')
+  @ApiOperation({
+    summary: 'Export all data we hold for the current user (GDPR Art. 20)',
+  })
+  async exportMyData(@Req() req: any) {
+    const userId = req.user.id;
+    const [user, addresses, orders, reviews, wishlistItems, sessions, auditLogs] =
+      await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: userId },
+          // Explicit field list — omit passwordHash, verificationToken,
+          // passwordResetToken etc. even though they're never returned.
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            phone: true,
+            role: true,
+            isVerified: true,
+            createdAt: true,
+            updatedAt: true,
+            preferences: true,
+          },
+        }),
+        this.prisma.address.findMany({ where: { userId } }),
+        this.prisma.order.findMany({
+          where: { userId },
+          include: {
+            items: {
+              include: {
+                productVariant: {
+                  include: { product: { select: { title: true, slug: true } } },
+                },
+              },
+            },
+            statusHistory: { orderBy: { createdAt: 'asc' } },
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.review.findMany({ where: { userId } }),
+        this.prisma.wishlistItem.findMany({
+          where: { wishlist: { userId } },
+          include: {
+            product: { select: { title: true, slug: true } },
+          },
+        }),
+        this.prisma.session.findMany({
+          where: { userId },
+          select: {
+            id: true,
+            userAgent: true,
+            ipAddress: true,
+            isRevoked: true,
+            createdAt: true,
+            expiresAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.auditLog.findMany({
+          where: { userId },
+          orderBy: { createdAt: 'desc' },
+        }),
+      ]);
+
+    return {
+      exportedAt: new Date().toISOString(),
+      profile: user,
+      addresses,
+      orders,
+      reviews,
+      wishlist: wishlistItems,
+      sessions,
+      auditLogs,
+    };
+  }
+
+  @Delete('me')
+  @ApiOperation({
+    summary:
+      'Soft-delete the current user account (GDPR Art. 17). All sessions are revoked.',
+  })
+  async deleteMyAccount(@Req() req: any) {
+    const userId = req.user.id;
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Mark the user as deleted. Keep the row so order records
+      //    remain referentially intact for accounting / legal.
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          isDeleted: true,
+          // 2. Clear PII fields so the row no longer identifies the
+          //    person. Email becomes a non-routable sentinel so unique
+          //    constraint is preserved.
+          email: `deleted-${userId}@deleted.invalid`,
+          name: null,
+          phone: null,
+          // 3. Invalidate any outstanding auth tokens. Keeping the
+          //    columns null is fine — signin/signup paths check
+          //    isDeleted before granting access.
+          verificationToken: null,
+          passwordResetToken: null,
+          passwordResetExpires: null,
+        },
+      });
+      // 4. Revoke every session so a stolen refresh token can't keep
+      //    acting after the user requested deletion.
+      await tx.session.updateMany({
+        where: { userId, isRevoked: false },
+        data: { isRevoked: true },
+      });
+    });
+    return {
+      message:
+        'Account deleted. Per our retention policy, order records are retained in anonymised form for tax / accounting compliance.',
+    };
   }
 }

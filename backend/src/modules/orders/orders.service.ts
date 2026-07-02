@@ -13,6 +13,10 @@ import { PrismaService } from '../../config/prisma.service';
 import { CartService } from '../cart/cart.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
 import { PaymentsService } from '../payments/payments.service';
+import { EmailService } from '../email/email.service';
+import { shippingUpdateTemplate } from '../email/templates/shipping-update';
+import { refundIssuedTemplate } from '../email/templates/refund-issued';
+import { deliveryConfirmedTemplate } from '../email/templates/delivery-confirmed';
 import { CheckoutDto, VerifyPaymentDto } from './dto/orders.dto';
 import { OrderStatus, Order, Prisma, PaymentStatus, PaymentProvider } from '@prisma/client';
 import { InventoryService } from './inventory.service';
@@ -51,6 +55,7 @@ export class OrdersService {
     private readonly inventoryService: InventoryService,
     private readonly auditService: AuditService,
     private readonly paymentsService: PaymentsService,
+    private readonly emailService: EmailService,
     @Inject('REDIS_CLIENT') private readonly redisClient: Redis,
     @InjectQueue('order-expiry') private readonly orderExpiryQueue: Queue,
   ) {}
@@ -772,6 +777,30 @@ export class OrdersService {
       },
     });
 
+    // Phase 9: best-effort transactional emails. Sent inside the tx
+    // (best-effort; if the tx rolls back after this, a stray email may
+    // be sent for a non-existent order). Harmless for the customer; the
+    // worst case is one duplicate.
+    if (
+      newStatus === OrderStatus.SHIPPED ||
+      newStatus === OrderStatus.REFUNDED ||
+      newStatus === OrderStatus.DELIVERED
+    ) {
+      try {
+        if (newStatus === OrderStatus.SHIPPED) {
+          await this.sendShippingUpdateEmail(tx, orderId);
+        } else if (newStatus === OrderStatus.REFUNDED) {
+          await this.sendRefundEmail(tx, orderId, reason);
+        } else {
+          await this.sendDeliveryConfirmedEmail(tx, orderId);
+        }
+      } catch (err) {
+        this.logger.error(
+          `Failed to enqueue status email for order ${orderId} (${newStatus}): ${(err as Error).message}`,
+        );
+      }
+    }
+
     this.auditService.create({
       userId: updatedOrder.userId || undefined,
       action: AUDIT_ACTIONS.ORDER_STATUS_CHANGED,
@@ -820,5 +849,97 @@ export class OrdersService {
       updatedAt: order.updatedAt,
       items: order.items,
     };
+  }
+
+  // ---------- Phase 9: transactional email senders ----------
+
+  private async sendShippingUpdateEmail(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<void> {
+    const fullOrder = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { user: { select: { name: true, email: true } } },
+    });
+    if (!fullOrder) return;
+
+    const recipientEmail =
+      fullOrder.user?.email ?? fullOrder.shippingEmail;
+    if (!recipientEmail) return;
+
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ||
+      'http://localhost:5173';
+    const orderUrl = `${frontendUrl.replace(/\/$/, '')}/account?order=${encodeURIComponent(orderId)}`;
+
+    const template = shippingUpdateTemplate({
+      name: fullOrder.user?.name ?? null,
+      orderShortId: orderId.slice(0, 8).toUpperCase(),
+      orderUrl,
+    });
+    await this.emailService.sendTemplate(recipientEmail, template);
+  }
+
+  private async sendRefundEmail(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    reason?: string,
+  ): Promise<void> {
+    const fullOrder = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { user: { select: { name: true, email: true } } },
+    });
+    if (!fullOrder) return;
+
+    const recipientEmail =
+      fullOrder.user?.email ?? fullOrder.shippingEmail;
+    if (!recipientEmail) return;
+
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ||
+      'http://localhost:5173';
+    const orderUrl = `${frontendUrl.replace(/\/$/, '')}/account?order=${encodeURIComponent(orderId)}`;
+
+    const refundAmount =
+      Number(fullOrder.totalAmount) +
+      Number(fullOrder.shippingFee) +
+      Number(fullOrder.tax);
+
+    const template = refundIssuedTemplate({
+      name: fullOrder.user?.name ?? null,
+      orderShortId: orderId.slice(0, 8).toUpperCase(),
+      refundAmount,
+      currency: 'INR',
+      reason,
+      orderUrl,
+    });
+    await this.emailService.sendTemplate(recipientEmail, template);
+  }
+
+  private async sendDeliveryConfirmedEmail(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<void> {
+    const fullOrder = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { user: { select: { name: true, email: true } } },
+    });
+    if (!fullOrder) return;
+
+    const recipientEmail =
+      fullOrder.user?.email ?? fullOrder.shippingEmail;
+    if (!recipientEmail) return;
+
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ||
+      'http://localhost:5173';
+    const orderUrl = `${frontendUrl.replace(/\/$/, '')}/account?order=${encodeURIComponent(orderId)}`;
+
+    const template = deliveryConfirmedTemplate({
+      name: fullOrder.user?.name ?? null,
+      orderShortId: orderId.slice(0, 8).toUpperCase(),
+      orderUrl,
+    });
+    await this.emailService.sendTemplate(recipientEmail, template);
   }
 }

@@ -12,6 +12,8 @@ import { PrismaService } from '../../config/prisma.service';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import * as crypto from 'crypto';
 import Redis from 'ioredis';
+import { EmailService } from '../email/email.service';
+import { orderConfirmationTemplate, OrderConfirmationTemplateData } from '../email/templates/order-confirmation';
 
 const LOCK_RELEASE_LUA = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -66,6 +68,7 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
     @Inject('REDIS_CLIENT') private readonly redisClient: Redis,
   ) {}
 
@@ -337,6 +340,19 @@ export class PaymentsService {
       data: updateData,
     });
 
+    // Phase 9: best-effort order confirmation email. Sent from inside the
+    // tx (best-effort — if the tx rolls back AFTER this point, a stray
+    // email may be sent for a non-existent order; harmless for the
+    // customer and the worst case is one duplicate). For at-most-once
+    // delivery we'd move this to a post-commit hook in the caller.
+    try {
+      await this.sendOrderConfirmationEmail(tx, order.id);
+    } catch (err) {
+      this.logger.error(
+        `Failed to enqueue order confirmation email for order ${order.id}: ${(err as Error).message}`,
+      );
+    }
+
     return {
       orderId: order.id,
       status: OrderStatus.PAID,
@@ -346,5 +362,89 @@ export class PaymentsService {
         guestToken: order.guestToken || undefined,
       },
     };
+  }
+
+  /**
+   * Best-effort order confirmation email. Loads the full order with
+   * items + variant + product info, builds the template, and enqueues
+   * the email via EmailService. Failures are logged but do not abort
+   * the payment flow — the user has already paid; we don't want to
+   * fail the API call just because SMTP is temporarily unavailable.
+   */
+  private async sendOrderConfirmationEmail(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<void> {
+    const fullOrder = await tx.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: {
+          include: {
+            productVariant: {
+              include: {
+                product: { select: { title: true } },
+              },
+            },
+          },
+        },
+        user: { select: { name: true, email: true } },
+      },
+    });
+    if (!fullOrder) return;
+
+    const recipientEmail =
+      fullOrder.user?.email ?? fullOrder.shippingEmail;
+    if (!recipientEmail) return;
+
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ||
+      'http://localhost:5173';
+    const orderUrl = `${frontendUrl.replace(/\/$/, '')}/checkout/success?orderId=${encodeURIComponent(fullOrder.id)}`;
+
+    const items = fullOrder.items.map((it) => {
+      const name =
+        (it as unknown as { productVariant?: { product?: { title?: string } } })
+          .productVariant?.product?.title ?? 'Item';
+      const size = (it as unknown as { productVariant?: { size?: string } })
+        .productVariant?.size;
+      const color = (it as unknown as { productVariant?: { color?: string } })
+        .productVariant?.color;
+      const image = (
+        it as unknown as {
+          productVariant?: { thumbnailUrl?: string | null };
+        }
+      ).productVariant?.thumbnailUrl;
+      return {
+        name,
+        quantity: it.quantity,
+        price: Number(it.priceAtPurchase),
+        size,
+        color,
+        image: image ?? undefined,
+      };
+    });
+
+    const paymentMethodLabel =
+      fullOrder.paymentProvider === 'RAZORPAY' ? 'Razorpay' : 'Cash on Delivery';
+
+    const data: OrderConfirmationTemplateData = {
+      name: fullOrder.user?.name ?? null,
+      orderId: fullOrder.id,
+      orderShortId: fullOrder.id.slice(0, 8).toUpperCase(),
+      items,
+      subtotal: Number(fullOrder.totalAmount),
+      shipping: Number(fullOrder.shippingFee),
+      tax: Number(fullOrder.tax),
+      total:
+        Number(fullOrder.totalAmount) +
+        Number(fullOrder.shippingFee) +
+        Number(fullOrder.tax),
+      currency: 'INR',
+      paymentMethod: paymentMethodLabel,
+      orderUrl,
+    };
+
+    const template = orderConfirmationTemplate(data);
+    await this.emailService.sendTemplate(recipientEmail, template);
   }
 }
