@@ -23,6 +23,10 @@ export const envSchema = z.object({
   AWS_REGION: z.string().min(2),
   AWS_S3_BUCKET: z.string().min(3),
   AWS_S3_ENDPOINT: z.string().url().optional(),
+  SENTRY_DSN: z.string().optional(),
+  REDIS_CLUSTER_NODES: z.string().optional(),
+  ADMIN_EMAIL: z.string().email().optional(),
+  ADMIN_PASSWORD: z.string().min(8).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -35,24 +39,49 @@ export const validateEnv = (config: Record<string, unknown>) => {
   }
   const env = result.data;
 
-  // SEC-001: Enforce strong secrets in ALL environments
-  const weakValues = [
-    env.JWT_SECRET,
-    env.RAZORPAY_KEY_ID,
-    env.RAZORPAY_KEY_SECRET,
-    env.RAZORPAY_WEBHOOK_SECRET,
-  ];
-  
-  if (
-    weakValues.some((value) =>
-      /placeholder|mock|changeme|your_|test_placeholder|super-secret/i.test(value),
-    ) ||
-    env.JWT_SECRET.length < 32
-  ) {
-    console.error(
-      'FATAL: Secrets are using placeholder or mock values, or JWT_SECRET is too short (< 32 chars). Please use secure values in your .env file.',
-    );
-    throw new Error('Insecure secrets detected');
+  // SEC-001: Enforce strong secrets in production only.
+  // Development and test environments may use mock/placeholder values for CI/test runs,
+  // but schema types and minimum lengths are still enforced for all environments.
+  if (env.NODE_ENV === 'production') {
+    // Reject anything that looks like a placeholder, demo string, or short repeated pattern.
+    // The regex intentionally also catches the legacy example values
+    // (a1b2c3d4…) and repeated-character strings that previously slipped past the guard.
+    //
+    // NOTE: We deliberately do NOT match `1234567890` as a substring — real
+    // Razorpay keys commonly contain that digit run, and matching it would
+    // produce false positives on legitimate live credentials.
+    const WEAK_VALUE_RE =
+      /placeholder|mock|changeme|your_|test_placeholder|super-secret|a1b2c3d4|^.{0,8}$|^(.)\1+$/i;
+
+    const secretChecks: Array<{ name: string; value: string; minLength: number }> = [
+      { name: 'JWT_SECRET', value: env.JWT_SECRET, minLength: 32 },
+      { name: 'RAZORPAY_KEY_SECRET', value: env.RAZORPAY_KEY_SECRET, minLength: 32 },
+      { name: 'RAZORPAY_WEBHOOK_SECRET', value: env.RAZORPAY_WEBHOOK_SECRET, minLength: 32 },
+      { name: 'AWS_SECRET_ACCESS_KEY', value: env.AWS_SECRET_ACCESS_KEY, minLength: 32 },
+      { name: 'RAZORPAY_KEY_ID', value: env.RAZORPAY_KEY_ID, minLength: 16 },
+      { name: 'AWS_ACCESS_KEY_ID', value: env.AWS_ACCESS_KEY_ID, minLength: 16 },
+    ];
+
+    const failing: string[] = [];
+
+    for (const { name, value, minLength } of secretChecks) {
+      if (WEAK_VALUE_RE.test(value)) {
+        failing.push(`${name} is a placeholder or weak value`);
+      } else if (value.length < minLength) {
+        failing.push(`${name} is too short (${value.length} < ${minLength})`);
+      }
+    }
+
+    if (failing.length > 0) {
+      console.error('FATAL: Insecure secrets detected in production environment:');
+      for (const msg of failing) {
+        console.error(`  - ${msg}`);
+      }
+      console.error(
+        '\nGenerate strong secrets with: openssl rand -base64 64\nSee backend/.env.example for guidance.',
+      );
+      throw new Error('Insecure secrets detected — refusing to start');
+    }
   }
 
   if (!env.FRONTEND_ORIGINS) {

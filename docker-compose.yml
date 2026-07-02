@@ -36,7 +36,7 @@ services:
     ports:
       - '3000:3000'
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/aura_db?schema=public&connection_limit=20&pool_timeout=30&statement_timeout=15000&lock_timeout=5000}
       - REDIS_URL=${REDIS_URL}
       - JWT_SECRET=${JWT_SECRET}
       - NODE_ENV=production
@@ -65,7 +65,7 @@ services:
   # 🗄️ PostgreSQL Database
   # -----------------------------------------------------
   postgres:
-    image: postgres:15-alpine
+    image: postgres:15.7-alpine
     container_name: aura-postgres
     restart: unless-stopped
     environment:
@@ -86,7 +86,7 @@ services:
   # ⚡ Redis Cache & Queues
   # -----------------------------------------------------
   redis:
-    image: redis:7-alpine
+    image: redis:7.4-alpine
     container_name: aura-redis
     restart: unless-stopped
     ports:
@@ -103,7 +103,9 @@ services:
   # 🪣 MinIO (S3 Compatible Storage)
   # -----------------------------------------------------
   minio:
-    image: minio/minio:latest
+    # Pinned to a specific release so a future MinIO breaking change cannot
+    # silently corrupt production data.
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
     container_name: aura-minio
     restart: unless-stopped
     environment:
@@ -120,6 +122,38 @@ services:
       retries: 5
     volumes:
       - miniodata:/data
+
+  # -----------------------------------------------------
+  # 💾 Daily Postgres Backup → S3
+  # -----------------------------------------------------
+  # Runs at 02:00 UTC daily. Streams pg_dump straight to S3 (no local disk
+  # usage) and prunes dumps older than BACKUP_RETENTION_DAYS (default 30).
+  #
+  # Requires: BACKUP_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+  # AWS_REGION env vars on the host.
+  backup:
+    image: postgres:15.7-alpine
+    container_name: aura-backup
+    restart: unless-stopped
+    profiles: ["backup"]   # opt-in: `docker compose --profile backup up`
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      AWS_ACCESS_KEY_ID: ${BACKUP_S3_BUCKET_ACCESS_KEY_ID:-${AWS_ACCESS_KEY_ID}}
+      AWS_SECRET_ACCESS_KEY: ${BACKUP_S3_BUCKET_SECRET_ACCESS_KEY:-${AWS_SECRET_ACCESS_KEY}}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+    volumes:
+      - ./backend/scripts/backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache aws-cli >/dev/null && \
+        echo "0 2 * * * /usr/local/bin/backup.sh >> /var/log/backup.log 2>&1" > /etc/crontabs/root && \
+        crond -f -L /var/log/cron.log
 
 volumes:
   pgdata:

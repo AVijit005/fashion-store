@@ -1,0 +1,55 @@
+# Build artifacts
+node_modules
+dist
+dist-ssr
+.output
+.vinxi
+.tanstack/**
+.nitro
+.vercel
+*.local
+
+# Editor / OS
+.git
+.github
+.gitignore
+.gitattributes
+.vscode
+.idea
+.DS_Store
+*.sw?
+*.swo
+
+# Logs
+logs
+*.log
+
+# Env files (keep examples)
+.env
+.env.*
+!.env.example
+
+# Tests / docs / screenshots
+*.test.ts
+*.spec.ts
+coverage
+public/screenshots
+*.md
+!README.md
+
+# Internal tooling artifacts
+.kimchi
+.lovable
+.tanstack
+
+# Cruft that was historically committed but isn't needed in build context
+old_seed*.ts
+replace-mock.cjs
+roadmap_dump.md
+products.json
+
+# Dependency caches
+.npm
+.bun
+.yarn
+.pnp.*

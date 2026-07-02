@@ -1,0 +1,41 @@
+# Build artifacts
+node_modules
+dist
+coverage
+
+# Editor / OS
+.git
+.github
+.gitignore
+.gitattributes
+.vscode
+.idea
+.DS_Store
+
+# Logs
+logs
+*.log
+
+# Env files (keep examples)
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Tests
+test
+*.spec.ts
+*.e2e-spec.ts
+*.test.ts
+
+# Internal tooling
+.kimchi
+.lovable
+
+# Frontend code accidentally inherited via monorepo
+src
+public
+old_seed*.ts
+replace-mock.cjs
+roadmap_dump.md
+products.json
