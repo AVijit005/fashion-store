@@ -59,7 +59,10 @@ export function ProductGridShell({
         r = [...r].sort((a, b) => b.price - a.price);
         break;
       case "Top rated":
-        r = [...r].sort((a, b) => b.rating - a.rating);
+        // Phase 4 fix: rating is optional in the Product type (real reviews
+        // arrive later via /reviews). Treat undefined as 0 so products with
+        // no rating sort to the bottom rather than crashing the page.
+        r = [...r].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
         break;
     }
     return r;

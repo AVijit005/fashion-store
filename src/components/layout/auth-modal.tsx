@@ -2,6 +2,7 @@ import { X, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "@/lib/store/auth";
 import { syncWishlistOnLogin } from "@/lib/store/wishlist";
+import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
@@ -60,8 +61,15 @@ export function AuthModal() {
         await syncWishlistOnLogin();
         toast.success("Account created successfully.");
       } else if (authModalView === "forgot-password") {
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        toast.success("Password reset instructions sent to your email.");
+        // Phase 4 fix: the previous handler faked a 800ms delay and
+        // showed a misleading success toast — no email was ever sent.
+        // We now POST to /auth/forgot-password, which (in Phase 3) sends
+        // a real password-reset email. The endpoint always returns 200,
+        // so we don't leak account existence in the toast text either.
+        await apiClient.post("/auth/forgot-password", {
+          email: email.trim().toLowerCase(),
+        });
+        toast.success("If the account exists, a password-reset email has been sent.");
         setAuthModalView("login");
       }
     } catch (err) {

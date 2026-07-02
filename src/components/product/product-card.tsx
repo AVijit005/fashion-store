@@ -21,11 +21,16 @@ const badgeStyles: Record<string, string> = {
   bestseller: "bg-paper text-ink border border-ink",
 };
 
-// deterministic low-stock for psychology
-function stockHint(id: string): "low" | "trending" | null {
-  const n = id.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
-  if (n % 9 === 0) return "low";
-  if (n % 5 === 0) return "trending";
+// Phase 4 fix: removed deterministic-from-UUID stockHint — it produced
+// fake "Low stock" / "Trending" badges that may breach FTC guidance on
+// misleading scarcity signals. We now derive a real scarcity signal
+// from actual variant stock.
+type Scarcity = "low" | "trending" | null;
+function realStockHint(product: Product): Scarcity {
+  const totalStock = (product.variants ?? []).reduce((sum, v) => sum + (v.stockQuantity ?? 0), 0);
+  if (totalStock > 0 && totalStock <= 5) return "low";
+  // "Trending" still requires a real signal (sales velocity); until that
+  // exists we conservatively return null rather than fabricate it.
   return null;
 }
 
@@ -46,11 +51,11 @@ export const ProductCard = memo(function ProductCard({
   const launch = useFlyToCart((s) => s.launch);
   const cardRef = useRef<HTMLDivElement>(null);
   const discount = pct(product.price, product.mrp);
-  const hint = stockHint(product.id);
+  const hint = realStockHint(product);
 
   const quickAdd = (size: string) => {
     const color = product.colors[0].name;
-    const selectedVariant = product.variants?.find((v: any) => v.size === size && v.color === color);
+    const selectedVariant = product.variants?.find((v) => v.size === size && v.color === color);
     if (!selectedVariant || selectedVariant.stockQuantity <= 0) {
       toast.error("This size/color combination is out of stock");
       return;
@@ -210,7 +215,7 @@ export const ProductCard = memo(function ProductCard({
           </div>
 
           <div className="mt-2 flex items-center gap-1.5">
-            {product.colors.slice(0, 5).map((c: any) => (
+            {product.colors.slice(0, 5).map((c: Product["colors"][number]) => (
               <span
                 key={c.name}
                 className="h-3 w-3 rounded-full border border-line"
@@ -218,9 +223,15 @@ export const ProductCard = memo(function ProductCard({
                 title={c.name}
               />
             ))}
-            <span className="ml-2 text-[11px] text-mute">
-              ★ {(product.rating || 0).toFixed(1)} ({product.reviews || 0})
-            </span>
+            {/* Phase 4 fix: real ratings only. Render nothing if the backend
+                hasn't yet returned a verified review count. Synthetic
+                ratings were removed because they mislead customers and
+                violate Google's structured-data policy. */}
+            {product.rating != null && product.reviews != null && product.reviews > 0 && (
+              <span className="ml-2 text-[11px] text-mute">
+                ★ {product.rating.toFixed(1)} ({product.reviews})
+              </span>
+            )}
             {hint === "low" && (
               <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-accent">
                 Low stock

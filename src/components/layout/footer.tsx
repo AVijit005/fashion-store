@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Check, Instagram, Twitter, Youtube } from "lucide-react";
 import { useId, useState } from "react";
 import { z } from "zod";
+import { apiClient } from "@/lib/api/client";
 
 const emailSchema = z.string().trim().email("Please enter a valid email").max(255);
 
@@ -54,10 +55,15 @@ export function Footer() {
   const errorId = `${inputId}-error`;
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "submitting" | "success">("idle");
+  const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
 
-  const onSubmit = (e: React.FormEvent) => {
+  // Phase 4 fix: the previous handler called setTimeout to fake the
+  // submission and displayed "You're on the list" — the email was
+  // never sent. We now POST to /newsletter/subscribe and surface real
+  // errors instead of a misleading success message.
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (status === "submitting") return;
     const parsed = emailSchema.safeParse(email);
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Invalid email");
@@ -65,7 +71,16 @@ export function Footer() {
     }
     setError(null);
     setStatus("submitting");
-    setTimeout(() => setStatus("success"), 600);
+    try {
+      await apiClient.post("/newsletter/subscribe", {
+        email: parsed.data,
+        source: "footer",
+      });
+      setStatus("success");
+    } catch (err) {
+      setStatus("error");
+      setError(err instanceof Error ? err.message : "Couldn't subscribe. Please try again.");
+    }
   };
 
   return (

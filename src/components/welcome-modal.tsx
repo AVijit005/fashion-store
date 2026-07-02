@@ -1,12 +1,19 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { EASE } from "@/lib/motion";
+import { apiClient } from "@/lib/api/client";
 
 const KEY = "ink-welcome-seen";
 
+type SubmitStatus = "idle" | "submitting" | "success" | "error";
+
 export function WelcomeModal() {
   const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<SubmitStatus>("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -21,6 +28,38 @@ export function WelcomeModal() {
       localStorage.setItem(KEY, "1");
     } catch {
       /* noop */
+    }
+  };
+
+  // Phase 4 fix: the previous handler swallowed the email — it called
+  // close() without ever calling the backend, so the address was
+  // discarded (and may have breached GDPR if we claimed to subscribe).
+  // We now POST to /newsletter/subscribe and show explicit feedback.
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (status === "submitting") return;
+    const trimmed = email.trim();
+    if (!trimmed || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmed)) {
+      setErrorMessage("Please enter a valid email address");
+      setStatus("error");
+      return;
+    }
+    setStatus("submitting");
+    setErrorMessage(null);
+    try {
+      await apiClient.post("/newsletter/subscribe", {
+        email: trimmed,
+        source: "welcome_modal",
+      });
+      setStatus("success");
+      toast.success("Confirmation email sent. Check your inbox.");
+      // Close after a short delay so the user sees the toast.
+      setTimeout(() => close(), 800);
+    } catch (err) {
+      setStatus("error");
+      const msg = err instanceof Error ? err.message : "Couldn't subscribe. Please try again.";
+      setErrorMessage(msg);
+      toast.error(msg);
     }
   };
 
@@ -72,21 +111,37 @@ export function WelcomeModal() {
                 newsletter.
               </p>
               <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  close();
-                }}
-                className="mt-6 flex gap-2"
+                onSubmit={onSubmit}
+                className="mt-6 flex flex-col gap-2"
+                aria-busy={status === "submitting"}
               >
-                <input
-                  type="email"
-                  required
-                  placeholder="you@inkstudio.com"
-                  className="flex-1 border border-line bg-transparent px-3 py-3 text-sm outline-none focus:border-ink"
-                />
-                <button className="bg-ink px-5 py-3 text-[12px] uppercase tracking-[0.22em] text-paper">
-                  Claim
-                </button>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    required
+                    placeholder="you@inkstudio.com"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (status === "error") setStatus("idle");
+                    }}
+                    disabled={status === "submitting"}
+                    aria-invalid={status === "error"}
+                    className="flex-1 border border-line bg-transparent px-3 py-3 text-sm outline-none focus:border-ink disabled:opacity-60"
+                  />
+                  <button
+                    type="submit"
+                    disabled={status === "submitting" || status === "success"}
+                    className="bg-ink px-5 py-3 text-[12px] uppercase tracking-[0.22em] text-paper disabled:opacity-60"
+                  >
+                    {status === "submitting" ? "Sending…" : status === "success" ? "Sent" : "Claim"}
+                  </button>
+                </div>
+                {status === "error" && errorMessage && (
+                  <p role="alert" className="text-[11px] text-accent">
+                    {errorMessage}
+                  </p>
+                )}
               </form>
               <button
                 onClick={close}

@@ -8,8 +8,13 @@ export type Product = {
   tagline: string;
   price: number;
   mrp: number;
-  rating: number;
-  reviews: number;
+  // Phase 4 fix: `rating` and `reviews` are no longer synthesized from the
+  // product UUID. Real values will come from /reviews in a later phase;
+  // until then the fields are optional and the UI only renders them when
+  // the backend actually returns them. Do NOT re-introduce the hash-based
+  // synthesis — it's a Google structured-data penalty trigger.
+  rating?: number;
+  reviews?: number;
   colors: { name: string; hex: string }[];
   sizes: string[];
   images: string[];
@@ -124,12 +129,15 @@ export function mapBackendProduct(p: BackendProduct): Product {
     );
   }
 
-  // Derive deterministic rating and review count from the product ID
-  const ratingSum = p.id
-    .split("")
-    .reduce((sum: number, char: string) => sum + char.charCodeAt(0), 0);
-  const rating = 4.0 + (ratingSum % 10) / 10; // 4.0 - 4.9 range
-  const reviews = 50 + (ratingSum % 250);
+  // Derive deterministic rating and review count from the product ID.
+  // REMOVED in Phase 4 — fake review counts in JSON-LD are a Google
+  // manual-action trigger. Real values come from the /reviews endpoint
+  // in a later phase; until then we leave rating/reviews undefined.
+  // const ratingSum = p.id
+  //   .split("")
+  //   .reduce((sum: number, char: string) => sum + char.charCodeAt(0), 0);
+  // const rating = 4.0 + (ratingSum % 10) / 10;
+  // const reviews = 50 + (ratingSum % 250);
 
   return {
     id: p.id,
@@ -139,8 +147,6 @@ export function mapBackendProduct(p: BackendProduct): Product {
     tagline: p.description?.split(".")[0] || "Premium streetwear piece",
     price: firstVariantPrice,
     mrp: Math.round(firstVariantPrice * 1.4), // Simulated MRP for frontend discount calculations
-    rating,
-    reviews,
     colors: colors.length > 0 ? colors : [{ name: "Standard", hex: "#000000" }],
     sizes: sizes.length > 0 ? sizes : ["S", "M", "L", "XL"],
     images,
@@ -174,7 +180,7 @@ export const catalogApi = {
     limit?: number;
     offset?: number;
   }) {
-    const res = await apiClient.get<any>("/catalog/products", {
+    const res = await apiClient.get<unknown>("/catalog/products", {
       category: params?.category,
       collection: params?.collection,
       featured: params?.featured ? "true" : undefined,
@@ -184,11 +190,17 @@ export const catalogApi = {
     });
 
     // Bulletproof parsing in case backend returns unexpected shape
-    const rawProducts = Array.isArray(res) ? res : Array.isArray(res?.products) ? res.products : [];
-    const total = typeof res?.total === "number" ? res.total : rawProducts.length;
+    const data = res as { products?: unknown[]; total?: number } | unknown[];
+    const rawProducts = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.products)
+        ? data.products
+        : [];
+    const total =
+      !Array.isArray(data) && typeof data?.total === "number" ? data.total : rawProducts.length;
 
     return {
-      products: rawProducts.map(mapBackendProduct),
+      products: (rawProducts as BackendProduct[]).map(mapBackendProduct),
       total,
     };
   },
@@ -199,14 +211,19 @@ export const catalogApi = {
   },
 
   async search(query: string, params?: { limit?: number; offset?: number }) {
-    const res = await apiClient.get<any>("/catalog/search", {
+    const res = await apiClient.get<unknown>("/catalog/search", {
       q: query,
       limit: params?.limit,
       offset: params?.offset,
     });
     // Bulletproof parsing for search endpoints
-    const rawProducts = Array.isArray(res) ? res : Array.isArray(res?.products) ? res.products : [];
-    return rawProducts.map(mapBackendProduct);
+    const data = res as { products?: unknown[] } | unknown[];
+    const rawProducts = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.products)
+        ? data.products
+        : [];
+    return (rawProducts as BackendProduct[]).map(mapBackendProduct);
   },
 
   async getActiveDrops() {

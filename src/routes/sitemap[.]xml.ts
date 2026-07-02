@@ -1,8 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
 import { catalogApi } from "@/lib/api/catalog";
+import { SITE_URL } from "@/lib/env";
 
-const BASE_URL = process.env.VITE_SITE_URL || "https://aurastreetwear.com";
+// Phase 4 fix: the original `process.env.VITE_SITE_URL` access always
+// returned undefined on the client (Vite only exposes VITE_* via
+// import.meta.env), so the sitemap silently fell back to the hard-coded
+// string on every request. We now import the same constant that the rest
+// of the app uses.
+const BASE_URL = SITE_URL.replace(/\/$/, ""); // strip trailing slash
 
 interface SitemapEntry {
   path: string;
@@ -55,7 +61,7 @@ export const Route = createFileRoute("/sitemap.xml")({
             changefreq: "weekly" as const,
             priority: "0.7",
           })),
-          ...products.map((p: any) => ({
+          ...products.map((p: { slug: string }) => ({
             path: `/p/${p.slug}`,
             changefreq: "weekly" as const,
             priority: "0.6",

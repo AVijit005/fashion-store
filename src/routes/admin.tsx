@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { useAuthStore } from "@/lib/store/auth";
 
@@ -6,6 +6,31 @@ export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [{ title: "Admin — Ink Studio" }, { name: "robots", content: "noindex,nofollow" }],
   }),
+  // Phase 4 fix: the previous layout-component guard allowed deep links
+  // to fire child route data queries (admin.orders / admin.products /
+  // admin.customers all run their own useQuery on mount) BEFORE the
+  // React render pass decided to swap to the "Access denied" card.
+  // An attacker with a stolen session cookie could observe the network
+  // tab and see real order / customer data in the query responses even
+  // though the UI hid it. beforeLoad runs synchronously before any
+  // child loader or component, so the queries never fire for non-admins.
+  beforeLoad: ({ location }) => {
+    const state = useAuthStore.getState();
+    // If the auth store hasn't finished hydrating (initial cold load),
+    // let through. The layout will render a loading skeleton and the
+    // guard will re-evaluate once /auth/me resolves.
+    if (state.isLoading) return;
+    const user = state.user;
+    if (!user) {
+      throw redirect({
+        to: "/account",
+        search: { redirect: location.pathname },
+      });
+    }
+    if (user.role !== "ADMIN") {
+      throw redirect({ to: "/" });
+    }
+  },
   component: AdminLayout,
 });
 
@@ -13,6 +38,11 @@ function AdminLayout() {
   const user = useAuthStore((s) => s.user);
   const isLoading = useAuthStore((s) => s.isLoading);
 
+  // Defense in depth: beforeLoad should have already redirected. If we
+  // ever reach this component for a non-admin (e.g. the auth state
+  // changed mid-render), show the access-denied card. Do not render
+  // the AdminShell — it would mount the child route components and
+  // their data queries.
   if (isLoading) {
     return (
       <div className="flex min-h-screen flex-col bg-paper">

@@ -20,6 +20,7 @@ import { CompleteTheLook } from "@/components/pdp/complete-the-look";
 import { ReviewsBlock } from "@/components/pdp/reviews-block";
 import { EASE } from "@/lib/motion";
 import { catalogApi } from "@/lib/api/catalog";
+import { SITE_URL } from "@/lib/env";
 
 export const Route = createFileRoute("/p/$slug")({
   loader: async ({ params }) => {
@@ -27,7 +28,7 @@ export const Route = createFileRoute("/p/$slug")({
       const product = await catalogApi.getProductBySlug(params.slug);
       const [relatedRes, lookRes] = await Promise.all([
         catalogApi.getProducts({ category: product.category, limit: 5 }),
-        catalogApi.getProducts({ limit: 4 })
+        catalogApi.getProducts({ limit: 4 }),
       ]);
       const related = relatedRes.products.filter((p: Product) => p.id !== product.id).slice(0, 4);
       const look = lookRes.products.filter((p: Product) => p.id !== product.id).slice(0, 3);
@@ -64,17 +65,19 @@ export const Route = createFileRoute("/p/$slug")({
             image: p.images,
             sku: p.id,
             brand: { "@type": "Brand", name: "Ink Studio" },
-            aggregateRating: {
-              "@type": "AggregateRating",
-              ratingValue: p.rating,
-              reviewCount: p.reviews,
-            },
+            // Phase 4 fix: aggregateRating was shipping synthetic values
+            // (4.x rating, 50–300 reviews) derived from the product UUID.
+            // Google's Rich Results policy penalises fake review counts in
+            // AggregateRating — we now omit the field entirely. Real review
+            // data will be added via the /reviews endpoint in Phase 9.
             offers: {
               "@type": "Offer",
               priceCurrency: "INR",
               price: p.price,
               availability: "https://schema.org/InStock",
-              url,
+              url: url.startsWith("http")
+                ? url
+                : `${SITE_URL}${url.startsWith("/") ? "" : "/"}${url}`,
             },
           }),
         },
@@ -99,7 +102,11 @@ export const Route = createFileRoute("/p/$slug")({
 // Real stock computation handled in component
 
 function ProductPage() {
-  const { product, related, look } = Route.useLoaderData();
+  const { product, related, look } = Route.useLoaderData() as {
+    product: Product;
+    related: Product[];
+    look: Product[];
+  };
   const pushRecent = useRecentlyViewed((s) => s.push);
 
   useEffect(() => {
@@ -120,16 +127,13 @@ function ProductPage() {
   const launch = useFlyToCart((s) => s.launch);
   const addBtnRef = useRef<HTMLButtonElement>(null);
 
-
-
-  const selectedVariant = product.variants?.find((v: any) => v.size === size && v.color === color);
+  const selectedVariant = product.variants?.find((v) => v.size === size && v.color === color);
   const displayPrice = selectedVariant?.priceOverride
     ? Number(selectedVariant.priceOverride)
     : product.price;
   const discount = pct(displayPrice, product.mrp);
 
-  const totalStock =
-    product.variants?.reduce((s: number, v: any) => s + (v.stockQuantity || 0), 0) || 0;
+  const totalStock = product.variants?.reduce((s, v) => s + (v.stockQuantity || 0), 0) || 0;
   const lowStock = totalStock > 0 && totalStock <= 10 ? totalStock : null;
 
   const gallery = useMemo(
@@ -211,13 +215,13 @@ function ProductPage() {
                 <Star
                   key={i}
                   className={`h-3.5 w-3.5 ${
-                    i < Math.round(product.rating) ? "fill-ink text-ink" : "text-line"
+                    i < Math.round(product.rating ?? 0) ? "fill-ink text-ink" : "text-line"
                   }`}
                 />
               ))}
             </div>
             <p className="text-[12px] text-mute">
-              {(product.rating || 0).toFixed(1)} · {product.reviews || 0} reviews
+              {(product.rating ?? 0).toFixed(1)} · {product.reviews ?? 0} reviews
             </p>
           </div>
 
@@ -334,7 +338,8 @@ function ProductPage() {
                     .share({ title: product.name, url: window.location.href })
                     .catch((e) => console.error("Share failed", e));
                 } else {
-                  navigator.clipboard.writeText(window.location.href)
+                  navigator.clipboard
+                    .writeText(window.location.href)
                     .then(() => toast("Link copied"))
                     .catch(() => toast.error("Failed to copy link"));
                 }
@@ -352,7 +357,8 @@ function ProductPage() {
                     .share({ title: "Gift hint", text: hintText, url: window.location.href })
                     .catch((e) => console.error("Share failed", e));
                 } else {
-                  navigator.clipboard.writeText(hintText)
+                  navigator.clipboard
+                    .writeText(hintText)
                     .then(() => toast.success("Hint text & link copied to clipboard"))
                     .catch(() => toast.error("Failed to copy hint"));
                 }
@@ -423,7 +429,7 @@ function ProductPage() {
 
       <CompleteTheLook items={look} />
 
-      <ReviewsBlock rating={product.rating} count={product.reviews} />
+      <ReviewsBlock rating={product.rating ?? 0} count={product.reviews ?? 0} />
 
       <section className="mx-auto max-w-[1480px] px-5 py-20 lg:px-10">
         <Reveal>

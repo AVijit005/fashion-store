@@ -25,6 +25,7 @@ import { CsrfGuard } from './common/guards/csrf.guard';
 import { CsrfService } from './common/guards/csrf.service';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { NewsletterModule } from './modules/newsletter/newsletter.module';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
     OrdersModule,
     PaymentsModule,
     WebhooksModule,
+    NewsletterModule,
     StorageModule,
     StudioModule,
     WishlistModule,
