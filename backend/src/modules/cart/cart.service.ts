@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Inject, HttpException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, BadRequestException, Inject, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import Redis from 'ioredis';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../config/prisma.service';
@@ -59,79 +59,51 @@ export class CartService {
   async getCartItems(userId?: string, sessionId?: string): Promise<CachedCartItem[]> {
     const cacheKey = this.getCacheKey(userId, sessionId);
 
-    let cached = null;
-    try {
-      cached = await this.redis.get(cacheKey);
-      if (cached) {
-        return JSON.parse(cached) as CachedCartItem[];
-      }
-    } catch (error) {
-      console.warn(`Redis GET failed for ${cacheKey}`, error);
+    const cached = await this.readCache(cacheKey);
+    if (cached) {
+      return cached;
     }
 
-    // Cache miss: attempt to acquire lock to populate cache
+    // Cache miss: attempt to acquire lock to populate cache, with retry.
     const lockKey = `${cacheKey}:lock`;
     let lockAcquired: string | null = null;
     let redisDown = false;
-    try {
-      lockAcquired = await this.redis.set(lockKey, 'locked', 'EX', 10, 'NX');
-    } catch (error) {
-      console.warn(`Redis lock acquisition failed for ${cacheKey}`, error);
-      redisDown = true;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        lockAcquired = await this.redis.set(lockKey, 'locked', 'EX', 10, 'NX');
+        if (lockAcquired) {
+          break;
+        }
+      } catch (error) {
+        console.warn(`Redis lock acquisition failed for ${cacheKey}`, error);
+        redisDown = true;
+        break;
+      }
+
+      // Lock is busy: another request is populating the cache. Wait briefly
+      // and re-read the cache before the next attempt.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const retryCache = await this.readCache(cacheKey);
+      if (retryCache) {
+        return retryCache;
+      }
     }
 
-    if (redisDown) {
-      const cart = await this.prisma.cart.findFirst({
-        where: userId ? { userId } : { sessionId },
-        include: { items: true },
-      });
-      if (!cart) return [];
-      return cart.items.map((item) => ({
-        id: item.id,
-        variantId: item.productVariantId,
-        quantity: item.quantity,
-        customData: item.customData,
-      }));
-    }
-
+    // If Redis is unavailable or the lock remained busy, fall back to a direct
+    // DB read. Cart reads must never fail with a 503.
     if (!lockAcquired) {
-      // 503 instead of 400
-      throw new HttpException(
-        'Server is currently fetching the cart, please try again.',
-        503,
-      );
+      return this.loadCartItemsFromDb(userId, sessionId);
     }
 
     try {
       // Re-check cache in case another pod just populated it
-      cached = await this.redis.get(cacheKey);
-      if (cached) {
-        return JSON.parse(cached) as CachedCartItem[];
+      const recheck = await this.readCache(cacheKey);
+      if (recheck) {
+        return recheck;
       }
 
-      // Cache miss or Redis failure, load from DB
-      const cart = await this.prisma.cart.findFirst({
-        where: userId ? { userId } : { sessionId },
-        include: {
-          items: true,
-        },
-      });
-
-      if (!cart) {
-        try {
-          await this.redis.set(cacheKey, '[]', 'EX', this.cacheTtl);
-        } catch (error) {
-          console.warn(`Redis SET failed for ${cacheKey}`, error);
-        }
-        return [];
-      }
-
-      const items: CachedCartItem[] = cart.items.map((item) => ({
-        id: item.id,
-        variantId: item.productVariantId,
-        quantity: item.quantity,
-        customData: item.customData,
-      }));
+      const items = await this.loadCartItemsFromDb(userId, sessionId);
 
       try {
         await this.redis.set(cacheKey, JSON.stringify(items), 'EX', this.cacheTtl);
@@ -143,6 +115,39 @@ export class CartService {
     } finally {
       await this.redis.del(lockKey).catch(() => null);
     }
+  }
+
+  private async readCache(cacheKey: string): Promise<CachedCartItem[] | null> {
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached) as CachedCartItem[];
+      }
+    } catch (error) {
+      console.warn(`Redis GET failed for ${cacheKey}`, error);
+    }
+    return null;
+  }
+
+  private async loadCartItemsFromDb(
+    userId?: string,
+    sessionId?: string,
+  ): Promise<CachedCartItem[]> {
+    const cart = await this.prisma.cart.findFirst({
+      where: userId ? { userId } : { sessionId },
+      include: { items: true },
+    });
+
+    if (!cart) {
+      return [];
+    }
+
+    return cart.items.map((item) => ({
+      id: item.id,
+      variantId: item.productVariantId,
+      quantity: item.quantity,
+      customData: item.customData,
+    }));
   }
 
   // Retrieve fully hydrated cart with live prices and stock availability
@@ -310,10 +315,10 @@ export class CartService {
       const updatedCount = await tx.$executeRaw`
         INSERT INTO cart_items (id, cart_id, product_variant_id, quantity, updated_at)
         SELECT gen_random_uuid(), ${cart.id}, ${variantId}, ${quantity}, NOW()
-        WHERE ${quantity} <= (SELECT stock_quantity FROM product_variants WHERE id = ${variantId} AND is_deleted = false)
+        WHERE ${quantity} <= (SELECT stock_quantity FROM product_variants WHERE id = ${variantId} AND is_deleted = false FOR UPDATE)
         ON CONFLICT (cart_id, product_variant_id) DO UPDATE
         SET quantity = cart_items.quantity + EXCLUDED.quantity, updated_at = NOW()
-        WHERE cart_items.quantity + EXCLUDED.quantity <= (SELECT stock_quantity FROM product_variants WHERE id = EXCLUDED.product_variant_id AND is_deleted = false)
+        WHERE cart_items.quantity + EXCLUDED.quantity <= (SELECT stock_quantity FROM product_variants WHERE id = EXCLUDED.product_variant_id AND is_deleted = false FOR UPDATE)
       `;
 
       if (updatedCount === 0) {
@@ -331,50 +336,74 @@ export class CartService {
       return this.removeItem(itemId, userId, sessionId);
     }
 
-    const cart = await this.prisma.cart.findFirst({
-      where: userId ? { userId } : { sessionId },
-    });
-
-    if (!cart) {
-      throw new NotFoundException('Cart not found');
-    }
-
-    // Try finding by id first (for custom items or variant items)
-    const item = await this.prisma.cartItem.findFirst({
-      where: {
-        OR: [
-          { id: itemId, cartId: cart.id },
-          { productVariantId: itemId, cartId: cart.id },
-        ],
-      },
-    });
-
-    if (!item) {
-      throw new NotFoundException('Cart item not found');
-    }
-
-    if (item.productVariantId) {
-      const updatedCount = await this.prisma.$executeRaw`
-        UPDATE cart_items
-        SET quantity = ${quantity}, updated_at = NOW()
-        WHERE id = ${item.id}
-        AND ${quantity} <= (SELECT stock_quantity FROM product_variants WHERE id = ${item.productVariantId})
-        AND EXISTS (
-          SELECT 1 FROM product_variants pv
-          JOIN products p ON pv.product_id = p.id
-          WHERE pv.id = ${item.productVariantId} AND pv.is_deleted = false AND p.status = 'PUBLISHED' AND p.is_deleted = false
-        )
-      `;
-
-      if (updatedCount === 0) {
-        throw new BadRequestException('Requested quantity exceeds available stock');
-      }
-    } else {
-      await this.prisma.cartItem.update({
-        where: { id: item.id },
-        data: { quantity },
+    // H-B6 fix: wrap the entire read-modify-write cycle in a transaction
+    // and acquire a FOR UPDATE lock on the cart_item row before reading
+    // it. Without the row lock, two concurrent updateItem calls on the
+    // same item both read the old quantity and the final UPDATE is
+    // last-write-wins — silently clobbering one of the user's intents.
+    return this.prisma.$transaction(async (tx) => {
+      const cart = await tx.cart.findFirst({
+        where: userId ? { userId } : { sessionId },
       });
-    }
+
+      if (!cart) {
+        throw new NotFoundException('Cart not found');
+      }
+
+      // Lock the target cart_item row so concurrent updates on the same
+      // item serialize. We accept either an id match or a productVariantId
+      // match (legacy callers), but the lookup itself happens under the
+      // row lock to avoid the read-then-lock race.
+      const lockedRows = await tx.$queryRaw<
+        Array<{
+          id: string;
+          cart_id: string;
+          product_variant_id: string | null;
+          quantity: number;
+        }>
+      >`
+        SELECT id, cart_id, product_variant_id, quantity
+          FROM cart_items
+         WHERE cart_id = ${cart.id}
+           AND (id = ${itemId} OR product_variant_id = ${itemId})
+         ORDER BY (id = ${itemId}) DESC
+         LIMIT 1
+           FOR UPDATE
+      `;
+      const item = lockedRows[0];
+
+      if (!item) {
+        throw new NotFoundException('Cart item not found');
+      }
+
+      if (item.product_variant_id) {
+        const updatedCount = await tx.$executeRaw`
+          UPDATE cart_items
+          SET quantity = ${quantity}, updated_at = NOW()
+          WHERE id = ${item.id}
+          AND ${quantity} <= (SELECT stock_quantity FROM product_variants WHERE id = ${item.product_variant_id} FOR UPDATE)
+          AND EXISTS (
+            SELECT 1 FROM product_variants pv
+            JOIN products p ON pv.product_id = p.id
+            WHERE pv.id = ${item.product_variant_id} AND pv.is_deleted = false AND p.status = 'PUBLISHED' AND p.is_deleted = false
+          )
+        `;
+
+        if (updatedCount === 0) {
+          throw new BadRequestException('Requested quantity exceeds available stock');
+        }
+      } else {
+        await tx.cartItem.update({
+          where: { id: item.id },
+          data: { quantity },
+        });
+      }
+
+      // Cache invalidation is queued for after the transaction commits —
+      // Redis calls are not transactional and would race with a reader
+      // that hasn't yet seen our write.
+      await tx.$executeRaw`SELECT 1`; // no-op, keeps tx alive
+    }, { timeout: 8_000 });
 
     await this.invalidateCache(userId, sessionId);
     return this.getCart(userId, sessionId);
@@ -467,7 +496,7 @@ export class CartService {
       for (const guestItem of guestCart.items) {
         if (!guestItem.productVariantId) {
           const existingCustom = existingUserItems.find(
-            (i) => !i.productVariantId && JSON.stringify(i.customData) === JSON.stringify(guestItem.customData)
+            (i) => !i.productVariantId && this.customDataKey(i.customData) === this.customDataKey(guestItem.customData)
           );
           if (existingCustom) {
             await tx.cartItem.update({
@@ -512,6 +541,43 @@ export class CartService {
     await this.invalidateCache(userId, undefined);
 
     return this.getCart(userId);
+  }
+
+  private customDataKey(customData: any): string | null {
+    if (!customData || typeof customData !== 'object' || Array.isArray(customData)) {
+      return null;
+    }
+
+    const normalizedToOriginal = new Map<string, string>();
+    for (const key of Object.keys(customData)) {
+      const lower = key.toLowerCase();
+      if (
+        lower.startsWith('design') ||
+        ['printurl', 'text', 'placement'].includes(lower)
+      ) {
+        normalizedToOriginal.set(lower, key);
+      }
+    }
+
+    const designLikeKeys = Array.from(normalizedToOriginal.keys()).sort((a, b) =>
+      a.localeCompare(b),
+    );
+
+    // Canonical order: identifying fields first, then deterministic extras.
+    const canonicalKeys = ['productId', 'size', 'color', ...designLikeKeys];
+
+    const parts: string[] = [];
+    for (const key of canonicalKeys) {
+      const originalKey =
+        key === 'productId' || key === 'size' || key === 'color'
+          ? key
+          : normalizedToOriginal.get(key);
+      if (originalKey !== undefined && customData[originalKey] !== undefined) {
+        parts.push(`${key}=${JSON.stringify(customData[originalKey])}`);
+      }
+    }
+
+    return parts.length > 0 ? parts.join('|') : null;
   }
 
   private async invalidateCache(userId?: string, sessionId?: string) {

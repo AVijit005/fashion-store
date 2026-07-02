@@ -8,7 +8,6 @@ import {
   UseGuards,
   Req,
   BadRequestException,
-  UnauthorizedException,
   Query,
   ParseUUIDPipe,
   ParseIntPipe,
@@ -17,10 +16,12 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from './orders.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { CheckoutDto, VerifyPaymentDto, ApplyCouponDto } from './dto/orders.dto';
 import { OptionalAuthGuard } from '../../common/guards/optional-auth.guard';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 
 // Extend express Request to include NestJS rawBody buffer
 interface RawBodyRequest extends Request {
@@ -35,10 +36,13 @@ interface RequestUser {
 @ApiTags('Orders')
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly webhooksService: WebhooksService,
+  ) {}
 
   @Post('checkout')
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Initialize checkout and create gateway order' })
   async checkout(@Body() dto: CheckoutDto, @CurrentUser() user?: RequestUser) {
@@ -51,14 +55,14 @@ export class OrdersController {
   }
 
   @Post('apply-coupon')
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({ summary: 'Validate and calculate discount for a coupon code' })
   async applyCoupon(@Body() dto: ApplyCouponDto) {
     return this.ordersService.applyCoupon(dto.code, dto.subtotal);
   }
 
   @Post('verify-payment')
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Verify payment signature after gateway response' })
   async verifyPayment(
@@ -69,9 +73,27 @@ export class OrdersController {
     return this.ordersService.verifyPayment(dto, user?.id, guestToken);
   }
 
+  /**
+   * Legacy webhook path. Real webhook traffic should be sent to the new
+   * `POST /api/v1/webhooks/razorpay` route, which is owned by
+   * WebhooksController. This handler is kept for backwards compatibility
+   * with Razorpay dashboard URLs that were configured before the
+   * WebhooksService split. New deployments should configure Razorpay to
+   * use the canonical `/webhooks/razorpay` path.
+   *
+   * Delegates to WebhooksService so all signature verification,
+   * idempotency, and order-mutation logic lives in one place.
+   */
   @Post('webhook')
-  @ApiOperation({ summary: 'Razorpay webhook listener for payment capture' })
-  async webhook(@Req() req: RawBodyRequest, @Headers('x-razorpay-signature') signature?: string) {
+  @SkipTransform()
+  @ApiOperation({
+    summary: 'Legacy Razorpay webhook path (deprecated — use /webhooks/razorpay)',
+    deprecated: true,
+  })
+  async webhook(
+    @Req() req: RawBodyRequest,
+    @Headers('x-razorpay-signature') signature?: string,
+  ) {
     if (!signature || typeof signature !== 'string') {
       throw new BadRequestException('Webhook signature header missing or invalid format');
     }
@@ -82,12 +104,12 @@ export class OrdersController {
     }
 
     try {
-      JSON.parse(rawBody); // Ensure it is valid JSON before passing to service
+      JSON.parse(rawBody);
     } catch {
       throw new BadRequestException('Invalid JSON payload');
     }
 
-    return this.ordersService.handleWebhook(rawBody, signature);
+    return this.webhooksService.handleRazorpayWebhook(rawBody, signature);
   }
 
   @Post(':id/retry-payment')

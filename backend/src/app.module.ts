@@ -2,7 +2,8 @@ import { Module } from '@nestjs/common';
 import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
-import { validateEnv } from './config/env.config';
+import { validateEnv, Env } from './config/env.config';
+import { AppConfigModule } from './config/app-config.module';
 import { PrismaModule } from './config/prisma.module';
 import { RedisModule } from './config/redis.module';
 import { HealthModule } from './modules/health/health.module';
@@ -16,10 +17,14 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { StorageModule } from './modules/storage/storage.module';
 import { StudioModule } from './modules/studio/studio.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AppThrottlerGuard } from './common/guards/throttler.guard';
 import { APP_GUARD } from '@nestjs/core';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { CsrfGuard } from './common/guards/csrf.guard';
+import { CsrfService } from './common/guards/csrf.service';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -27,16 +32,17 @@ import { CsrfGuard } from './common/guards/csrf.guard';
       isGlobal: true,
       validate: validateEnv,
     }),
+    AppConfigModule,
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        throttlers: [{ ttl: 60000, limit: 300 }],
+      useFactory: (config: ConfigService<Env>) => ({
+        throttlers: [{ ttl: 60000, limit: 100 }],
         storage: new ThrottlerStorageRedisService(config.get<string>('REDIS_URL') || 'redis://localhost:6379'),
       }),
     }),
     BullModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
+      useFactory: (configService: ConfigService<Env>) => {
         const clusterNodesStr = configService.get<string>('REDIS_CLUSTER_NODES');
         if (clusterNodesStr) {
           const nodes = clusterNodesStr.split(',').map((node) => {
@@ -58,7 +64,7 @@ import { CsrfGuard } from './common/guards/csrf.guard';
             port: parseInt(url.port || '6379', 10),
             username: url.username || undefined,
             password: url.password || undefined,
-            tls: url.protocol === 'rediss:' ? { rejectUnauthorized: process.env.NODE_ENV === 'production' } : undefined,
+            tls: url.protocol === 'rediss:' ? { rejectUnauthorized: configService.get('NODE_ENV', 'development') === 'production' } : undefined,
           },
         };
       },
@@ -72,6 +78,8 @@ import { CsrfGuard } from './common/guards/csrf.guard';
     CatalogModule,
     CartModule,
     OrdersModule,
+    PaymentsModule,
+    WebhooksModule,
     StorageModule,
     StudioModule,
     WishlistModule,
@@ -81,12 +89,13 @@ import { CsrfGuard } from './common/guards/csrf.guard';
   providers: [
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: AppThrottlerGuard,
     },
     {
       provide: APP_GUARD,
       useClass: CsrfGuard,
     },
+    CsrfService,
   ],
 })
 export class AppModule {}
