@@ -21,6 +21,7 @@ import { PaperGrain } from "@/components/ui/paper-grain";
 import { RouteTransition } from "@/components/layout/route-transition";
 import React, { useEffect, Suspense } from "react";
 import { useAuthStore } from "@/lib/store/auth";
+import { organizationJsonLd, websiteJsonLd } from "@/lib/seo";
 import * as Sentry from "@sentry/react";
 
 const CartDrawer = React.lazy(() =>
@@ -127,17 +128,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: appCss },
     ],
     scripts: [
-      {
-        type: "application/ld+json",
-        children: JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "Organization",
-          name: "Ink Studio",
-          description:
-            "Heavyweight cotton tees, anime drops, hoodies, jackets, and a print studio for one-of-one pieces.",
-          url: "/",
-        }),
-      },
+      // Phase 5: route both schemas through seo.ts so the payload and
+      // URL formatting are consistent with the sitemap / canonical /
+      // OG tags. Previously Organization was inlined with url:"/" (a
+      // relative URL that Google may resolve against the wrong host).
+      organizationJsonLd(),
+      websiteJsonLd(),
     ],
   }),
   shellComponent: RootShell,

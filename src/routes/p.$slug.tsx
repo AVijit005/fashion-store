@@ -21,6 +21,7 @@ import { ReviewsBlock } from "@/components/pdp/reviews-block";
 import { EASE } from "@/lib/motion";
 import { catalogApi } from "@/lib/api/catalog";
 import { SITE_URL } from "@/lib/env";
+import { productJsonLd, breadcrumbJsonLd } from "@/lib/seo";
 
 export const Route = createFileRoute("/p/$slug")({
   loader: async ({ params }) => {
@@ -55,44 +56,12 @@ export const Route = createFileRoute("/p/$slug")({
       ],
       links: [{ rel: "canonical", href: url }],
       scripts: [
-        {
-          type: "application/ld+json",
-          children: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            name: p.name,
-            description: p.story,
-            image: p.images,
-            sku: p.id,
-            brand: { "@type": "Brand", name: "Ink Studio" },
-            // Phase 4 fix: aggregateRating was shipping synthetic values
-            // (4.x rating, 50–300 reviews) derived from the product UUID.
-            // Google's Rich Results policy penalises fake review counts in
-            // AggregateRating — we now omit the field entirely. Real review
-            // data will be added via the /reviews endpoint in Phase 9.
-            offers: {
-              "@type": "Offer",
-              priceCurrency: "INR",
-              price: p.price,
-              availability: "https://schema.org/InStock",
-              url: url.startsWith("http")
-                ? url
-                : `${SITE_URL}${url.startsWith("/") ? "" : "/"}${url}`,
-            },
-          }),
-        },
-        {
-          type: "application/ld+json",
-          children: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "BreadcrumbList",
-            itemListElement: [
-              { "@type": "ListItem", position: 1, name: "Home", item: "/" },
-              { "@type": "ListItem", position: 2, name: "Shop", item: "/shop" },
-              { "@type": "ListItem", position: 3, name: p.name, item: url },
-            ],
-          }),
-        },
+        productJsonLd(p),
+        breadcrumbJsonLd([
+          { name: "Home", path: "/" },
+          { name: "Shop", path: "/shop" },
+          { name: p.name, path: `/p/${(p as { slug?: string }).slug ?? p.id}` },
+        ]),
       ],
     };
   },

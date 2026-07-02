@@ -19,6 +19,7 @@ import { Route as ShopRouteImport } from './routes/shop'
 import { Route as ShippingRouteImport } from './routes/shipping'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as SaleRouteImport } from './routes/sale'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as ReturnsRouteImport } from './routes/returns'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as OutfitsRouteImport } from './routes/outfits'
@@ -97,6 +98,11 @@ const SearchRoute = SearchRouteImport.update({
 const SaleRoute = SaleRouteImport.update({
   id: '/sale',
   path: '/sale',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReturnsRoute = ReturnsRouteImport.update({
@@ -265,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/outfits': typeof OutfitsRoute
   '/privacy': typeof PrivacyRoute
   '/returns': typeof ReturnsRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/sale': typeof SaleRoute
   '/search': typeof SearchRoute
   '/shipping': typeof ShippingRoute
@@ -305,6 +312,7 @@ export interface FileRoutesByTo {
   '/outfits': typeof OutfitsRoute
   '/privacy': typeof PrivacyRoute
   '/returns': typeof ReturnsRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/sale': typeof SaleRoute
   '/search': typeof SearchRoute
   '/shipping': typeof ShippingRoute
@@ -347,6 +355,7 @@ export interface FileRoutesById {
   '/outfits': typeof OutfitsRoute
   '/privacy': typeof PrivacyRoute
   '/returns': typeof ReturnsRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/sale': typeof SaleRoute
   '/search': typeof SearchRoute
   '/shipping': typeof ShippingRoute
@@ -390,6 +399,7 @@ export interface FileRouteTypes {
     | '/outfits'
     | '/privacy'
     | '/returns'
+    | '/robots.txt'
     | '/sale'
     | '/search'
     | '/shipping'
@@ -430,6 +440,7 @@ export interface FileRouteTypes {
     | '/outfits'
     | '/privacy'
     | '/returns'
+    | '/robots.txt'
     | '/sale'
     | '/search'
     | '/shipping'
@@ -471,6 +482,7 @@ export interface FileRouteTypes {
     | '/outfits'
     | '/privacy'
     | '/returns'
+    | '/robots.txt'
     | '/sale'
     | '/search'
     | '/shipping'
@@ -513,6 +525,7 @@ export interface RootRouteChildren {
   OutfitsRoute: typeof OutfitsRoute
   PrivacyRoute: typeof PrivacyRoute
   ReturnsRoute: typeof ReturnsRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
   SaleRoute: typeof SaleRoute
   SearchRoute: typeof SearchRoute
   ShippingRoute: typeof ShippingRoute
@@ -597,6 +610,13 @@ declare module '@tanstack/react-router' {
       path: '/sale'
       fullPath: '/sale'
       preLoaderRoute: typeof SaleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/returns': {
@@ -859,6 +879,7 @@ const rootRouteChildren: RootRouteChildren = {
   OutfitsRoute: OutfitsRoute,
   PrivacyRoute: PrivacyRoute,
   ReturnsRoute: ReturnsRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
   SaleRoute: SaleRoute,
   SearchRoute: SearchRoute,
   ShippingRoute: ShippingRoute,
