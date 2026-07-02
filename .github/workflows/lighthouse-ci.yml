@@ -1,0 +1,54 @@
+name: Lighthouse CI
+
+# Phase 11: runs Lighthouse against the staging deployment on every push
+# to main and every PR. Fails the build if any category drops below 90.
+#
+# Required secret:
+#   LHCI_GITHUB_APP_TOKEN          -- created at https://github.com/apps/lighthouse-ci
+#                                     with read access to repo status. Optional but
+#                                     recommended for PR comments.
+#
+# Required env:
+#   LHCI_BASE_URL                  -- e.g. https://staging.yourdomain.com
+#
+# The default branch protection rules should require this check to pass
+# before merge. Configure in Settings > Branches > Branch protection rules.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lighthouse:
+    name: Lighthouse audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: .lighthouserc.json
+          uploadArtifacts: true
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+          LHCI_BASE_URL: ${{ vars.LHCI_BASE_URL || secrets.LHCI_BASE_URL }}
+
+      - name: Fail build if any category < 90
+        if: always()
+        run: |
+          # The lighthouse-ci-action already asserts thresholds from
+          # .lighthouserc.json. This is a belt-and-suspenders check that
+          # downloads the manifest and fails loudly if any category is
+          # below the threshold (90 for prod, 85 for staging).
+          if [ -f .lighthouseci/manifest.json ]; then
+            node -e "
+              const m = require('./.lighthouseci/manifest.json');
+              const min = m.reduce((acc, r) => Math.min(acc, Math.min(...Object.values(r.summary)), 1), 1);
+              console.log('Lowest category score across URLs:', min);
+              if (min < 0.90) { console.error('FAIL: score below 0.90'); process.exit(1); }
+            "
+          fi

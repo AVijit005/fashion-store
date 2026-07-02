@@ -5,6 +5,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { validateEnv, Env } from './config/env.config';
 import { AppConfigModule } from './config/app-config.module';
 import { PrismaModule } from './config/prisma.module';
+import { SettingsModule } from './config/settings.module';
 import { RedisModule } from './config/redis.module';
 import { HealthModule } from './modules/health/health.module';
 import { UsersModule } from './modules/users/users.module';
@@ -27,6 +28,11 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { NewsletterModule } from './modules/newsletter/newsletter.module';
 import { WorkerModule } from './modules/worker/worker.module';
+import { LogisticsModule } from './modules/logistics/logistics.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
+import { ReturnsModule } from './modules/returns/returns.module';
+import { ContactModule } from './modules/contact/contact.module';
+import { RecentlyViewedModule } from './modules/recently-viewed/recently-viewed.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 
@@ -74,6 +80,7 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
       },
     }),
     PrismaModule,
+    SettingsModule,
     RedisModule,
     ScheduleModule.forRoot(),
     HealthModule,
@@ -86,6 +93,11 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
     WebhooksModule,
     NewsletterModule,
     StorageModule,
+    LogisticsModule,
+    ReviewsModule,
+    ReturnsModule,
+    ContactModule,
+    RecentlyViewedModule,
     StudioModule,
     WishlistModule,
     AdminModule,

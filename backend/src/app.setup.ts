@@ -4,8 +4,11 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { AllExceptionsFilter } from './common/filters/global-exception.filter';
 import { ResponseTransformInterceptor } from './common/interceptors/response.interceptor';
+import { correlationIdMiddleware } from './common/correlation/correlation-id.middleware';
 
 export function configureApp(app: INestApplication, configService: ConfigService) {
+  app.use(correlationIdMiddleware);
+
   app.setGlobalPrefix('api');
   app.enableVersioning({
     type: VersioningType.URI,
@@ -40,7 +43,7 @@ export function configureApp(app: INestApplication, configService: ConfigService
     origin: allowedOrigins.length > 0 ? allowedOrigins : false,
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type, Accept, Authorization, x-cart-session-id, x-requested-with',
+    allowedHeaders: 'Content-Type, Accept, Authorization, x-cart-session-id, x-requested-with, x-xsrf-token',
   });
 
   app.useGlobalPipes(

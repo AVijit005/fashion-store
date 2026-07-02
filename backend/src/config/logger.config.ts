@@ -1,5 +1,8 @@
 import { format, transports } from 'winston';
 import { WinstonModuleOptions } from 'nest-winston';
+import { ConfigService } from '@nestjs/config';
+import { Env } from './env.config';
+import { getCorrelationId } from '../common/correlation/correlation-id.store';
 
 const maskPii = format((info) => {
   const maskFields = /password|token|secret|credit_card|email|ip|ipaddress/i;
@@ -19,14 +22,25 @@ const maskPii = format((info) => {
   return info;
 });
 
-export const loggerConfig: WinstonModuleOptions = {
-  transports: [
-    new transports.Console({
-      format:
-        process.env.NODE_ENV === 'production'
-          ? format.combine(maskPii(), format.timestamp(), format.json())
+const addCorrelationId = format((info) => {
+  const correlationId = getCorrelationId();
+  if (correlationId) {
+    info.correlationId = correlationId;
+  }
+  return info;
+});
+
+export function createLoggerConfig(configService: ConfigService<Env>): WinstonModuleOptions {
+  const isProduction = configService.get('NODE_ENV', 'development') === 'production';
+
+  return {
+    transports: [
+      new transports.Console({
+        format: isProduction
+          ? format.combine(maskPii(), addCorrelationId(), format.timestamp(), format.json())
           : format.combine(
               maskPii(),
+              addCorrelationId(),
               format.timestamp(),
               format.colorize(),
               format.printf(({ timestamp, level, message, context, ...meta }) => {
@@ -35,6 +49,7 @@ export const loggerConfig: WinstonModuleOptions = {
                 return `${timestamp} [${level}]${contextStr}: ${message}${metaStr}`;
               }),
             ),
-    }),
-  ],
-};
+      }),
+    ],
+  };
+}

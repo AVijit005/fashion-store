@@ -279,13 +279,19 @@ function CheckoutPage() {
         }) => {
           try {
             // 2. Verify payment signature on backend
-            await apiClient.post("/orders/verify-payment", {
-              razorpayOrderId: response.razorpay_order_id,
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySignature: response.razorpay_signature,
-            }, {
-              headers: checkoutRes.guestToken ? { "x-guest-token": checkoutRes.guestToken } : undefined
-            });
+            await apiClient.post(
+              "/orders/verify-payment",
+              {
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+              },
+              {
+                headers: checkoutRes.guestToken
+                  ? { "x-guest-token": checkoutRes.guestToken }
+                  : undefined,
+              },
+            );
 
             // 3. Clear local + backend cart only after confirmed payment
             clear();
@@ -643,10 +649,7 @@ function CheckoutPage() {
           </div>
           <ul className="max-h-[260px] overflow-y-auto">
             {items.map((it, i) => (
-              <li
-                key={it.variantId ?? it.id ?? i}
-                className="flex gap-3 border-b border-line p-4"
-              >
+              <li key={it.variantId ?? it.id ?? i} className="flex gap-3 border-b border-line p-4">
                 <img
                   src={it.image}
                   alt=""

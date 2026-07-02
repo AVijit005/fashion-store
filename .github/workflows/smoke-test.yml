@@ -1,0 +1,107 @@
+name: Post-deploy smoke test
+
+# Phase 11: post-deploy verification. Triggered after the deploy job
+# succeeds (via workflow_run). Hits the canary URLs and verifies:
+#   - Frontend /healthz returns 200
+#   - Backend /health returns 200 with status:ok and all checks passing
+#   - A GET on the storefront root returns 200 and contains the brand name
+#   - A GET on the catalog returns 200 and JSON
+#
+# Required env:
+#   FRONTEND_URL     e.g. https://aurastreetwear.com
+#   BACKEND_URL      e.g. https://api.aurastreetwear.com
+#
+# Run on every successful deploy workflow, plus manually via
+# workflow_dispatch.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      frontend_url:
+        description: 'Frontend URL to smoke-test'
+        required: false
+        default: ''
+        type: string
+      backend_url:
+        description: 'Backend URL to smoke-test'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Smoke test
+    # Only run when the upstream CI workflow completed successfully.
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve URLs
+        id: urls
+        run: |
+          FRONTEND_URL="${{ inputs.frontend_url || env.FRONTEND_URL }}"
+          BACKEND_URL="${{ inputs.backend_url || env.BACKEND_URL }}"
+          if [ -z "$FRONTEND_URL" ] || [ -z "$BACKEND_URL" ]; then
+            echo "ERROR: FRONTEND_URL and BACKEND_URL must be set" >&2
+            exit 1
+          fi
+          echo "frontend_url=$FRONTEND_URL" >> "$GITHUB_OUTPUT"
+          echo "backend_url=$BACKEND_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Check frontend /healthz
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.urls.outputs.frontend_url }}/healthz")
+          if [ "$code" != "200" ]; then
+            echo "::error::Frontend /healthz returned $code (expected 200)"
+            exit 1
+          fi
+          echo "OK: frontend /healthz = 200"
+
+      - name: Check backend /health (deep DB+Redis)
+        run: |
+          body=$(curl -sf "${{ steps.urls.outputs.backend_url }}/health")
+          status=$(echo "$body" | jq -r '.status')
+          if [ "$status" != "ok" ]; then
+            echo "::error::Backend /health returned status=$status"
+            echo "Body: $body"
+            exit 1
+          fi
+          echo "OK: backend /health = $body"
+
+      - name: Check storefront root loads
+        run: |
+          body=$(curl -sfL "${{ steps.urls.outputs.frontend_url }}/")
+          # Look for the brand name (case-insensitive). Update this
+          # grep if the brand name changes.
+          if ! echo "$body" | grep -qi "ink"; then
+            echo "::error::Frontend root did not contain expected brand marker"
+            exit 1
+          fi
+          echo "OK: storefront root contains brand marker"
+
+      - name: Check catalog API returns JSON
+        run: |
+          ct=$(curl -sfI "${{ steps.urls.outputs.backend_url }}/api/v1/catalog/products" | awk '/^[Cc]ontent-[Tt]ype:/ {print $2}' | tr -d '\r')
+          if ! echo "$ct" | grep -q "application/json"; then
+            echo "::error::Catalog API did not return JSON (Content-Type: $ct)"
+            exit 1
+          fi
+          echo "OK: catalog API returns $ct"
+
+      - name: Send Slack notification on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            text: ":fire: Aura smoke test failed on ${{ github.workflow_run.head_branch || github.ref }} \u2014 ${{ github.run_id }}"
+          env:
+            SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true

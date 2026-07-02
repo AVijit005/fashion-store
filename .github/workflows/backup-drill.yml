@@ -1,0 +1,60 @@
+name: Backup restore drill
+
+# Phase 11: weekly restore test. Runs every Sunday at 03:00 UTC.
+# Fails the build if the latest backup can't be restored or if row
+# counts diverge beyond threshold.
+#
+# Required secrets:
+#   BACKUP_S3_BUCKET          e.g. s3://aura-prod-backups
+#   DATABASE_URL             scratch Postgres (NOT production) URL
+#   AWS_ACCESS_KEY_ID        with s3:GetObject + s3:ListBucket on the bucket
+#   AWS_SECRET_ACCESS_KEY
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'  # Sundays 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  restore-drill:
+    name: Restore latest backup to scratch DB
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:15.7-alpine
+        env:
+          POSTGRES_USER: drill
+          POSTGRES_PASSWORD: drill
+          POSTGRES_DB: aura_drill
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install postgres client + aws cli
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client awscli
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DRILL_ROLE }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Run restore drill
+        env:
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          DATABASE_URL: postgresql://drill:drill@localhost:5432/aura_drill
+          THRESHOLD_PCT: '5'
+        run: bash infra/backup-restore-drill.sh

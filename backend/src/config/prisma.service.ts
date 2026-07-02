@@ -1,26 +1,13 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
+import { Env } from './env.config';
+import { buildDatabaseUrl } from './prisma.config';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(PrismaService.name);
-
-  constructor() {
-    const rawUrl = process.env.DATABASE_URL;
-    let finalUrl: string | undefined;
-    
-    if (rawUrl) {
-      try {
-        const url = new URL(rawUrl);
-        url.searchParams.set('connection_limit', '20');
-        url.searchParams.set('pool_timeout', '30');
-        url.searchParams.set('statement_timeout', '15000');
-        url.searchParams.set('lock_timeout', '5000');
-        finalUrl = url.toString();
-      } catch (e) {
-        // ignore
-      }
-    }
+  constructor(configService: ConfigService<Env>) {
+    const finalUrl = buildDatabaseUrl(configService.get<string>('DATABASE_URL'));
 
     super(finalUrl ? {
       datasources: {
@@ -33,22 +20,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   async onModuleInit() {
     await this.$connect();
-    await this.setupSearchIndexes();
   }
 
   async onModuleDestroy() {
     await this.$disconnect();
-  }
-
-  private async setupSearchIndexes() {
-    try {
-      await this.$executeRaw`CREATE EXTENSION IF NOT EXISTS pg_trgm;`;
-      await this.$executeRaw`CREATE INDEX IF NOT EXISTS products_title_trgm_idx ON products USING gin (title gin_trgm_ops);`;
-      await this.$executeRaw`CREATE INDEX IF NOT EXISTS products_description_trgm_idx ON products USING gin (description gin_trgm_ops);`;
-      await this.$executeRaw`CREATE INDEX IF NOT EXISTS products_tags_gin_idx ON products USING gin (tags);`;
-      this.logger.log('Database GIN and pg_trgm search indexes verified/created successfully.');
-    } catch (err) {
-      this.logger.error('Failed to set up PostgreSQL search indexes:', (err as Error).stack);
-    }
   }
 }

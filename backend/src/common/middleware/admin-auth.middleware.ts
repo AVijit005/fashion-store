@@ -26,7 +26,10 @@ export class AdminAuthMiddleware implements NestMiddleware {
     }
 
     try {
-      const secret = this.configService.get<string>('JWT_SECRET') || process.env.JWT_SECRET;
+      const secret = this.configService.get<string>('JWT_SECRET');
+      if (!secret) {
+        throw new UnauthorizedException('JWT secret is not configured');
+      }
       const payload = await this.jwtService.verifyAsync(token, { secret });
 
       let dbRole = payload.role;
@@ -40,6 +43,15 @@ export class AdminAuthMiddleware implements NestMiddleware {
           throw new UnauthorizedException('Session revoked or user invalid');
         }
         dbRole = session.user.role;
+      } else {
+        const user = await this.prisma.user.findUnique({
+          where: { id: payload.sub },
+          select: { role: true, isDeleted: true },
+        });
+        if (!user || user.isDeleted) {
+          throw new UnauthorizedException('User not found or deleted');
+        }
+        dbRole = user.role;
       }
 
       if (dbRole !== 'ADMIN') {

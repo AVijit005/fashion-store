@@ -76,11 +76,12 @@ function SettingsPage() {
 
   const { data: serverSettings, isLoading } = useQuery({
     queryKey: ["admin-settings"],
-    queryFn: () => apiClient.get("/admin/settings").catch((err) => {
-      console.error("Failed to fetch settings:", err);
-      toast.error("Failed to load settings from server. Using defaults.");
-      return null;
-    }),
+    queryFn: () =>
+      apiClient.get("/admin/settings").catch((err) => {
+        console.error("Failed to fetch settings:", err);
+        toast.error("Failed to load settings from server. Using defaults.");
+        return null;
+      }),
   });
 
   useEffect(() => {

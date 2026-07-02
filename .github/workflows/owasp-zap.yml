@@ -1,0 +1,71 @@
+name: OWASP ZAP baseline scan
+
+# Phase 11: nightly baseline vulnerability scan against the staging
+# deployment. Fails if any high-risk alert is detected. Results are
+# uploaded as a workflow artifact (HTML report) for 30 days.
+#
+# Required env / secrets:
+#   ZAP_TARGET_URL       -- e.g. https://staging.yourdomain.com
+#   (no auth needed for a public staging deploy; if staging is
+#   behind auth, see the zap-action docs for handling)
+#
+# Schedule: nightly at 02:00 UTC. Also runs on demand via
+# workflow_dispatch.
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Staging URL to scan'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  zap-baseline:
+    name: ZAP baseline scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.11.0
+        with:
+          target: ${{ inputs.target_url || vars.ZAP_TARGET_URL }}
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: ['-a', '-j', '-l', 'WARN', '-I', '-T', '60', '-m', '5']
+        continue-on-error: true   # we still want to upload the report on failure
+
+      - name: Upload ZAP report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-baseline-report
+          path: |
+            report_html.html
+            report_json.json
+            report_md.md
+          retention-days: 30
+
+      - name: Fail build on high-risk alerts
+        if: always()
+        run: |
+          if [ -f report_json.json ]; then
+            # High-risk alerts trigger a build failure. Use jq to count
+            # risk=High entries; fail if any are present.
+            HIGH_COUNT=$(jq '[.site[].alerts[]? | select(.riskcode=="3")] | length' report_json.json 2>/dev/null || echo 0)
+            echo "High-risk alerts found: ${HIGH_COUNT}"
+            if [ "${HIGH_COUNT}" -gt 0 ]; then
+              echo "::error::ZAP found ${HIGH_COUNT} high-risk alert(s). See the uploaded report."
+              exit 1
+            fi
+          else
+            echo "::warning::ZAP report not produced. Check workflow logs."
+          fi

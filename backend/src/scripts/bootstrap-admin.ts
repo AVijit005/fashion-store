@@ -1,17 +1,21 @@
 import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from '../app.module';
 import { PrismaService } from '../config/prisma.service';
+import { Env } from '../config/env.config';
 import * as argon2 from 'argon2';
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
   const prisma = app.get(PrismaService);
+  const configService = app.get<ConfigService<Env>>(ConfigService);
 
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const adminPassword = process.env.ADMIN_PASSWORD;
+  const adminEmail = configService.get<string>('ADMIN_EMAIL');
+  const adminPassword = configService.get<string>('ADMIN_PASSWORD');
 
   if (!adminEmail || !adminPassword) {
     console.error('ADMIN_EMAIL and ADMIN_PASSWORD environment variables must be provided');
+    await app.close();
     process.exit(1);
   }
 
@@ -34,7 +38,7 @@ async function bootstrap() {
   await app.close();
 }
 
-bootstrap().catch((err) => {
+bootstrap().catch(async (err) => {
   console.error(err);
   process.exit(1);
 });

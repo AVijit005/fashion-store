@@ -13,11 +13,15 @@ import {
   BadRequestException,
   HttpCode,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { AuthGuard } from '../../common/guards/auth.guard';
+import { Throttle } from '@nestjs/throttler';
 import { StorageService } from './storage.service';
 import { PrismaService } from '../../config/prisma.service';
+import { Env } from '../../config/env.config';
 import { CreateAssetDto } from './dto/create-asset.dto';
+import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import * as crypto from 'crypto';
 import { Request } from 'express';
 
@@ -33,24 +37,33 @@ interface RequestWithUser extends Request {
 @UseGuards(AuthGuard)
 @Controller('assets')
 export class AssetsController {
+  private readonly ALLOWED_MIME_TYPES: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+  };
+
   constructor(
     private readonly storageService: StorageService,
     private readonly prisma: PrismaService,
+    private readonly configService: ConfigService<Env>,
   ) {}
 
   private getPublicUrl(storageKey: string): string {
-    const bucket = process.env.AWS_S3_BUCKET || 'aura-studio';
-    const endpoint = process.env.AWS_S3_ENDPOINT;
+    const bucket = this.configService.get('AWS_S3_BUCKET', 'aura-studio');
+    const endpoint = this.configService.get<string>('AWS_S3_ENDPOINT');
     if (endpoint) {
       // Local MinIO
       return `${endpoint}/${bucket}/${storageKey}`;
     }
     // AWS S3
-    const region = process.env.AWS_REGION || 'us-east-1';
+    const region = this.configService.get('AWS_REGION', 'us-east-1');
     return `https://${bucket}.s3.${region}.amazonaws.com/${storageKey}`;
   }
 
   @Post('upload-url')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Generate a presigned URL to upload a new asset directly to S3' })
   @ApiResponse({
     status: 201,
@@ -61,18 +74,22 @@ export class AssetsController {
     if (dto.size > 10 * 1024 * 1024) {
       throw new BadRequestException('File size exceeds 10MB limit');
     }
-    const allowedMimeTypes: Record<string, string> = {
-      'image/jpeg': 'jpg',
-      'image/png': 'png',
-      'image/webp': 'webp',
-    };
-    if (!allowedMimeTypes[dto.mimeType]) {
+
+    // Path/filename validation: must be a non-empty string and cannot contain path separators
+    if (typeof dto.filename !== 'string' || dto.filename.length === 0) {
+      throw new BadRequestException('Invalid filename');
+    }
+    if (dto.filename.includes('/') || dto.filename.includes('\\')) {
+      throw new BadRequestException('Invalid filename');
+    }
+
+    if (!this.ALLOWED_MIME_TYPES[dto.mimeType]) {
       throw new BadRequestException('Invalid file type');
     }
 
     const userId = req.user.id;
     // Generate a unique storage key using the securely mapped extension
-    const extension = allowedMimeTypes[dto.mimeType];
+    const extension = this.ALLOWED_MIME_TYPES[dto.mimeType];
     const storageKey = `assets/${userId}/${crypto.randomUUID()}.${extension}`;
 
     // Create the asset record in the database
@@ -134,6 +151,15 @@ export class AssetsController {
       throw new BadRequestException('Uploaded file type does not match the requested asset type');
     }
 
+    // Reject disallowed MIME types even when they match the requested asset type (defense in depth)
+    if (metadata.ContentType && !this.ALLOWED_MIME_TYPES[metadata.ContentType]) {
+      await this.prisma.asset.update({
+        where: { id },
+        data: { status: 'FAILED' },
+      });
+      throw new BadRequestException('Uploaded file type is not allowed');
+    }
+
     const result = await this.prisma.asset.updateMany({
       where: { id, status: 'PENDING' },
       data: { status: 'UPLOADED', size: metadata.ContentLength },
@@ -150,6 +176,7 @@ export class AssetsController {
   }
 
   @Get(':id')
+  @SkipTransform()
   @ApiOperation({ summary: 'Get a temporary download URL for an asset' })
   @ApiResponse({ status: 200, description: 'Returns a presigned download URL' })
   async getAssetUrl(@Req() req: any, @Param('id') id: string) {

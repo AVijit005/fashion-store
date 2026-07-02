@@ -142,7 +142,12 @@ export function PdpGallery({ images, alt, overlayBadges }: Props) {
                     aria-label={`Open image ${i + 1} of ${images.length}`}
                     className="h-full w-full shrink-0 snap-center"
                   >
-                    <img src={src} alt={`${alt} ${i + 1}`} loading={i === 0 ? "eager" : "lazy"} className="h-full w-full object-cover" />
+                    <img
+                      src={src}
+                      alt={`${alt} ${i + 1}`}
+                      loading={i === 0 ? "eager" : "lazy"}
+                      className="h-full w-full object-cover"
+                    />
                   </button>
                 ))}
               </div>

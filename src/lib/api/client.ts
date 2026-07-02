@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
-  validate?: (data: unknown) => any;
+  validate?: (data: unknown) => boolean | unknown;
 }
 
 export class APIError extends Error {
@@ -28,7 +28,13 @@ export class APIError extends Error {
 
 let refreshPromise: Promise<void> | null = null;
 
-function unwrapApiData<T>(parsed: unknown, validate?: (data: unknown) => any): T {
+function getXsrfToken(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+function unwrapApiData<T>(parsed: unknown, validate?: (data: unknown) => boolean | unknown): T {
   let data = parsed;
   if (parsed && typeof parsed === "object" && "success" in parsed && "data" in parsed) {
     data = (parsed as Record<string, unknown>).data;
@@ -44,6 +50,8 @@ function unwrapApiData<T>(parsed: unknown, validate?: (data: unknown) => any): T
   }
   return data as T;
 }
+// isVercelPreview reserved for future deployment-aware routing
+void isVercelPreview;
 
 export const apiClient = {
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -64,25 +72,17 @@ export const apiClient = {
       headers.set("Content-Type", "application/json");
     }
 
-    // Backend relies on HttpOnly cookies, but we also attach the Bearer token if available
-    // as a fallback for cross-origin issues.
     if (typeof window !== "undefined") {
-      // Lazy load auth store to prevent circular dependency
-      try {
-        const { useAuthStore } = await import("../store/auth");
-        const token = useAuthStore.getState().accessToken;
-        if (token) {
-          headers.set("Authorization", `Bearer ${token}`);
-        }
-      } catch (err) {
-        console.error("Failed to load auth token:", err);
-      }
-
       // Attach Guest Session ID for Cart identification
       const guestSessionId = localStorage.getItem("ink_cart_session_id");
       if (guestSessionId) {
         headers.set("x-cart-session-id", guestSessionId);
       }
+    }
+
+    const xsrfToken = getXsrfToken();
+    if (xsrfToken) {
+      headers.set("X-XSRF-TOKEN", xsrfToken);
     }
 
     const config: RequestInit = {
@@ -100,14 +100,26 @@ export const apiClient = {
     }
 
     if (!response.ok) {
-      if (response.status === 401 && path !== "/auth/refresh" && path !== "/auth/login" && !(options.body instanceof FormData)) {
+      if (
+        response.status === 401 &&
+        path !== "/auth/refresh" &&
+        path !== "/auth/login" &&
+        !(options.body instanceof FormData)
+      ) {
         if (typeof window !== "undefined" && localStorage.getItem("ink_logged_in") === "true") {
           if (!refreshPromise) {
             refreshPromise = (async () => {
               const refreshUrl = new URL(`${BASE_URL}/auth/refresh`);
+              const refreshXsrf = getXsrfToken();
+              const refreshHeaders: Record<string, string> = {
+                "Content-Type": "application/json",
+              };
+              if (refreshXsrf) {
+                refreshHeaders["X-XSRF-TOKEN"] = refreshXsrf;
+              }
               const refreshRes = await fetch(refreshUrl.toString(), {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: refreshHeaders,
                 credentials: "include",
               });
 
@@ -117,11 +129,8 @@ export const apiClient = {
                 }
                 throw new Error("Refresh failed");
               }
-              const data = await refreshRes.json();
-              if (data && data.success && data.data && data.data.accessToken) {
-                const { useAuthStore } = await import("../store/auth");
-                useAuthStore.setState({ accessToken: data.data.accessToken });
-              }
+              // The backend rotates the httpOnly access_token cookie; no token
+              // is returned in the response body and none is stored in memory.
             })().finally(() => {
               refreshPromise = null;
             });
@@ -135,11 +144,6 @@ export const apiClient = {
           }
 
           try {
-            const { useAuthStore } = await import("../store/auth");
-            const token = useAuthStore.getState().accessToken;
-            if (token) {
-              headers.set("Authorization", `Bearer ${token}`);
-            }
             const retryConfig: RequestInit = { ...options, headers, credentials: "include" };
             const retryResponse = await fetch(url.toString(), retryConfig);
             if (retryResponse.ok) {
@@ -163,14 +167,33 @@ export const apiClient = {
         console.error("Failed to parse error JSON:", err);
         errorData = textBody || null;
       }
+
       let errorMessage = `API request failed with status ${response.status}`;
-      if (errorData && typeof errorData === "object" && "message" in errorData) {
-        errorMessage = String((errorData as Record<string, unknown>).message);
+      if (errorData && typeof errorData === "object") {
+        const payload = errorData as Record<string, unknown>;
+        const rawMessage = payload.message;
+
+        if (payload.success === false && Array.isArray(rawMessage)) {
+          errorMessage = rawMessage.join("; ");
+          const details = payload.details;
+          if (details && typeof details === "object") {
+            const detailMessages = (details as Record<string, unknown>).message;
+            if (Array.isArray(detailMessages)) {
+              errorMessage = [...rawMessage, ...(detailMessages as string[])].join("; ");
+            }
+          }
+        } else if (typeof rawMessage === "string") {
+          errorMessage = rawMessage;
+        } else if (Array.isArray(rawMessage)) {
+          errorMessage = rawMessage.join("; ");
+        }
       }
 
       if (typeof window !== "undefined") {
         if (response.status === 403) {
           toast.error("Access denied. You do not have permission.");
+        } else if (response.status >= 400 && response.status < 500) {
+          toast.error(errorMessage);
         } else if (response.status >= 500) {
           toast.error("Server error: " + errorMessage);
         }

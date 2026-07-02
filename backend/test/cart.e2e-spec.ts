@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, HttpStatus } from '@nestjs/common';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { ConfigService } from '@nestjs/config';
@@ -9,7 +9,7 @@ import { PrismaService } from '../src/config/prisma.service';
 describe('CartModule (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let jwtToken: string;
+  let authCookies: string[];
   let userId: string;
 
   let hoodieCategoryId: string;
@@ -96,8 +96,9 @@ describe('CartModule (e2e)', () => {
 
     const loginRes = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: 'cart-test@example.com', password: 'securePassword123!' });
-    jwtToken = loginRes.body.data.accessToken;
+      .send({ email: 'cart-test@example.com', password: 'securePassword123!' })
+      .expect(HttpStatus.OK);
+    authCookies = loginRes.headers['set-cookie'] as string[];
   });
 
   describe('Guest Cart Operations', () => {
@@ -167,7 +168,7 @@ describe('CartModule (e2e)', () => {
       // 1. Add item with price override check
       const addRes = await request(app.getHttpServer())
         .post('/cart/items')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send({ variantId: otherVariantId, quantity: 1 })
         .expect(HttpStatus.CREATED);
 
@@ -190,14 +191,14 @@ describe('CartModule (e2e)', () => {
       // Add variant 2 to user cart
       await request(app.getHttpServer())
         .post('/cart/items')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send({ variantId: otherVariantId, quantity: 1 })
         .expect(HttpStatus.CREATED);
 
       // Merge
       const mergeRes = await request(app.getHttpServer())
         .post('/cart/merge')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send({ guestSessionId })
         .expect(HttpStatus.CREATED);
 

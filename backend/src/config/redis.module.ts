@@ -1,13 +1,14 @@
 import { Module, Global, Inject, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { Env } from './env.config';
 
 @Global()
 @Module({
   providers: [
     {
       provide: 'REDIS_CLIENT',
-      useFactory: (configService: ConfigService) => {
+      useFactory: (configService: ConfigService<Env>) => {
         const redisUrl = configService.get<string>('REDIS_URL');
         const clusterNodesStr = configService.get<string>('REDIS_CLUSTER_NODES');
         if (!redisUrl && !clusterNodesStr) {
@@ -23,7 +24,7 @@ import Redis from 'ioredis';
             const delay = Math.min(times * 50, 2000);
             return delay;
           },
-          ...(isTls && { tls: { rejectUnauthorized: process.env.NODE_ENV === 'production' } }),
+          ...(isTls && { tls: { rejectUnauthorized: configService.get('NODE_ENV', 'development') === 'production' } }),
         };
 
         if (clusterNodesStr) {

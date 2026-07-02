@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, HttpStatus } from '@nestjs/common';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { ConfigService } from '@nestjs/config';
@@ -13,7 +13,7 @@ import { AbandonedCartCron } from '../src/modules/orders/abandoned-cart.cron';
 describe('OrdersModule (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let jwtToken: string;
+  let authCookies: string[];
   let userId: string;
 
   let hoodieCategoryId: string;
@@ -94,8 +94,9 @@ describe('OrdersModule (e2e)', () => {
 
     const loginRes = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: 'orders-test@example.com', password: 'securePassword123!' });
-    jwtToken = loginRes.body.data.accessToken;
+      .send({ email: 'orders-test@example.com', password: 'securePassword123!' })
+      .expect(HttpStatus.OK);
+    authCookies = loginRes.headers['set-cookie'] as string[];
   });
 
   const testAddress = {
@@ -114,14 +115,14 @@ describe('OrdersModule (e2e)', () => {
       // 1. Add item to cart
       await request(app.getHttpServer())
         .post('/cart/items')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send({ variantId: productVariantId, quantity: 2 })
         .expect(HttpStatus.CREATED);
 
       // 2. Perform checkout
       const checkoutRes = await request(app.getHttpServer())
         .post('/orders/checkout')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send(testAddress)
         .expect(HttpStatus.CREATED);
 
@@ -150,14 +151,14 @@ describe('OrdersModule (e2e)', () => {
       // 1. User 1 adds 9 items (stock is 10)
       await request(app.getHttpServer())
         .post('/cart/items')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send({ variantId: productVariantId, quantity: 9 })
         .expect(HttpStatus.CREATED);
 
       // User 1 checkouts
       await request(app.getHttpServer())
         .post('/orders/checkout')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send(testAddress)
         .expect(HttpStatus.CREATED);
 
@@ -190,13 +191,13 @@ describe('OrdersModule (e2e)', () => {
       // 1. Checkout to create order
       await request(app.getHttpServer())
         .post('/cart/items')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send({ variantId: productVariantId, quantity: 1 })
         .expect(HttpStatus.CREATED);
 
       const checkoutRes = await request(app.getHttpServer())
         .post('/orders/checkout')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send(testAddress);
 
       const orderId = checkoutRes.body.data.orderId;
@@ -237,17 +238,17 @@ describe('OrdersModule (e2e)', () => {
       // 1. Checkout to create order
       await request(app.getHttpServer())
         .post('/cart/items')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send({ variantId: productVariantId, quantity: 1 })
         .expect(HttpStatus.CREATED);
 
       const checkoutRes = await request(app.getHttpServer())
         .post('/orders/checkout')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send(testAddress);
 
       const razorpayOrderId = checkoutRes.body.data.razorpayOrderId;
-      const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || 'mock_razorpay_webhook_secret_dev';
+      const webhookSecret = app.get(ConfigService).get<string>('RAZORPAY_WEBHOOK_SECRET') || 'mock_razorpay_webhook_secret_dev';
       const eventId = 'evt_test123';
 
       const webhookBodyObj = {
@@ -309,13 +310,13 @@ describe('OrdersModule (e2e)', () => {
       // 1. Checkout to create order
       await request(app.getHttpServer())
         .post('/cart/items')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send({ variantId: productVariantId, quantity: 3 })
         .expect(HttpStatus.CREATED);
 
       const checkoutRes = await request(app.getHttpServer())
         .post('/orders/checkout')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send(testAddress);
 
       const orderId = checkoutRes.body.data.orderId;
@@ -350,14 +351,14 @@ describe('OrdersModule (e2e)', () => {
       // 1. Add item to cart
       await request(app.getHttpServer())
         .post('/cart/items')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send({ variantId: productVariantId, quantity: 2 })
         .expect(HttpStatus.CREATED);
 
       // 2. Checkout
       const checkoutRes = await request(app.getHttpServer())
         .post('/orders/checkout')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send(testAddress);
 
       const orderId = checkoutRes.body.data.orderId;
@@ -390,17 +391,17 @@ describe('OrdersModule (e2e)', () => {
       // 1. Checkout to create order
       await request(app.getHttpServer())
         .post('/cart/items')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send({ variantId: productVariantId, quantity: 1 })
         .expect(HttpStatus.CREATED);
 
       const checkoutRes = await request(app.getHttpServer())
         .post('/orders/checkout')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send(testAddress);
 
       const razorpayOrderId = checkoutRes.body.data.razorpayOrderId;
-      const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || 'mock_razorpay_webhook_secret_dev';
+      const webhookSecret = app.get(ConfigService).get<string>('RAZORPAY_WEBHOOK_SECRET') || 'mock_razorpay_webhook_secret_dev';
       const eventId = `evt_race_${crypto.randomUUID()}`;
 
       const webhookBodyObj = {
@@ -465,13 +466,13 @@ describe('OrdersModule (e2e)', () => {
       // Setup Cart 1 (User 1 - authenticated)
       await request(app.getHttpServer())
         .post('/cart/items')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send({ variantId: productVariantId, quantity: 1 })
         .expect(HttpStatus.CREATED);
 
       await request(app.getHttpServer())
         .post('/cart/items')
-        .set('Authorization', `Bearer ${jwtToken}`)
+        .set('Cookie', authCookies)
         .send({ variantId: secondVariant.id, quantity: 1 })
         .expect(HttpStatus.CREATED);
 
@@ -492,7 +493,7 @@ describe('OrdersModule (e2e)', () => {
       const checkouts = [
         request(app.getHttpServer())
           .post('/orders/checkout')
-          .set('Authorization', `Bearer ${jwtToken}`)
+          .set('Cookie', authCookies)
           .send(testAddress),
         request(app.getHttpServer())
           .post('/orders/checkout')

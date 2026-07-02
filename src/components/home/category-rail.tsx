@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Reveal } from "@/components/ui/reveal";
-import { catalogApi } from "@/lib/api/catalog";
+import { catalogApi, type BackendCategory } from "@/lib/api/catalog";
 import { useQuery } from "@tanstack/react-query";
 
 export function CategoryRail() {
@@ -33,7 +33,7 @@ export function CategoryRail() {
         </Reveal>
 
         <div className="flex gap-4 overflow-x-auto pb-2 hide-scrollbar lg:gap-6">
-          {categories.map((c: any, i: number) => (
+          {categories.map((c: BackendCategory, i: number) => (
             <Reveal key={c.slug} delay={i * 0.04} className="shrink-0">
               <Link
                 to="/c/$category"

@@ -10,6 +10,7 @@ import {
   Query,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AdminCatalogService } from './admin.catalog.service';
 import { CreateProductDto, UpdateProductDto } from './dto/admin.catalog.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
@@ -18,6 +19,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 
 @Controller('admin/catalog')
+@Throttle({ default: { limit: 60, ttl: 60000 } })
 @UseGuards(AuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 export class AdminCatalogController {

@@ -1,4 +1,6 @@
-import { Controller, Get, Put, Post, Patch, Param, Body, UseGuards, Query, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Put, Post, Patch, Param, Body, UseGuards, Query, ParseUUIDPipe, Req } from '@nestjs/common';
+import { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { AdminOrdersService } from './admin.orders.service';
 import { CreatePosOrderDto, UpdateBulkStatusDto } from './dto/admin.orders.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
@@ -7,6 +9,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Role, OrderStatus } from '@prisma/client';
 
 @Controller('admin/orders')
+@Throttle({ default: { limit: 60, ttl: 60000 } })
 @UseGuards(AuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 export class AdminOrdersController {
@@ -30,17 +33,30 @@ export class AdminOrdersController {
   }
 
   @Put(':id/status')
-  async updateOrderStatus(@Param('id', ParseUUIDPipe) id: string, @Body('status') status: OrderStatus) {
-    return this.ordersService.updateOrderStatus(id, status);
+  async updateOrderStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('status') status: OrderStatus,
+    @Req() req: Request,
+  ) {
+    const adminUserId = (req as any).user?.id as string | undefined;
+    const rawIp = req.ip || req.headers['x-forwarded-for']?.toString();
+    const ipAddress = rawIp?.split(',')[0]?.trim();
+    return this.ordersService.updateOrderStatus(id, status, undefined, adminUserId, ipAddress);
   }
 
   @Post(':id/refund')
-  async processRefund(@Param('id', ParseUUIDPipe) id: string) {
-    return this.ordersService.processRefund(id);
+  async processRefund(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    const adminUserId = (req as any).user?.id as string | undefined;
+    const rawIp = req.ip || req.headers['x-forwarded-for']?.toString();
+    const ipAddress = rawIp?.split(',')[0]?.trim();
+    return this.ordersService.processRefund(id, adminUserId, ipAddress);
   }
 
   @Patch('bulk-status')
-  async updateBulkOrderStatus(@Body() dto: UpdateBulkStatusDto) {
-    return this.ordersService.updateBulkOrderStatus(dto.orderIds, dto.status);
+  async updateBulkOrderStatus(@Body() dto: UpdateBulkStatusDto, @Req() req: Request) {
+    const adminUserId = (req as any).user?.id as string | undefined;
+    const rawIp = req.ip || req.headers['x-forwarded-for']?.toString();
+    const ipAddress = rawIp?.split(',')[0]?.trim();
+    return this.ordersService.updateBulkOrderStatus(dto.orderIds, dto.status, adminUserId, ipAddress);
   }
 }

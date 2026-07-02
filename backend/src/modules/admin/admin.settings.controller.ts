@@ -1,10 +1,12 @@
 import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AdminSettingsService } from './admin.settings.service';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 
 @Controller('admin/settings')
+@Throttle({ default: { limit: 60, ttl: 60000 } })
 @UseGuards(AuthGuard, RolesGuard)
 @Roles('ADMIN')
 export class AdminSettingsController {

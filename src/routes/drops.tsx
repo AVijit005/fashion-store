@@ -10,8 +10,8 @@ import { apiClient } from "@/lib/api/client";
 export const Route = createFileRoute("/drops")({
   loader: async () => {
     try {
-      const res = await apiClient.get("/catalog/drops");
-      return { dynamicDrops: res.data };
+      const dynamicDrops = await apiClient.get<unknown[]>("/catalog/drops");
+      return { dynamicDrops };
     } catch (err) {
       console.error(err);
       return { dynamicDrops: [] };

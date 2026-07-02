@@ -11,7 +11,14 @@ export const Route = createFileRoute("/cart")({
 
 function CartPage() {
   const hydrated = useHydrated();
-  const { items: _items, setQty, remove, subtotal, savings, couponDiscount: _couponDiscount } = useCart();
+  const {
+    items: _items,
+    setQty,
+    remove,
+    subtotal,
+    savings,
+    couponDiscount: _couponDiscount,
+  } = useCart();
   const items = hydrated ? _items : [];
   const sub = hydrated ? subtotal() : 0;
   const couponDiscount = hydrated ? _couponDiscount : 0;

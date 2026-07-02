@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AdminOrdersService } from './admin.orders.service';
 import { PrismaService } from '../../config/prisma.service';
 import { OrdersService } from '../orders/orders.service';
+import { AuditService } from '../audit/audit.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { InventoryService } from '../orders/inventory.service';
@@ -13,6 +14,12 @@ describe('AdminOrdersService', () => {
 
   beforeEach(async () => {
     prismaService = {
+      $transaction: jest.fn((arg: any) => {
+        if (typeof arg === 'function') {
+          return arg(prismaService);
+        }
+        return Promise.all(arg);
+      }),
       order: {
         findUnique: jest.fn(),
       },
@@ -28,6 +35,7 @@ describe('AdminOrdersService', () => {
         { provide: PrismaService, useValue: prismaService },
         { provide: OrdersService, useValue: ordersService },
         { provide: InventoryService, useValue: {} },
+        { provide: AuditService, useValue: { create: jest.fn() } },
       ],
     }).compile();
 
@@ -74,6 +82,7 @@ describe('AdminOrdersService', () => {
         OrderStatus.SHIPPED,
         'ADMIN',
         'Status updated manually by admin',
+        expect.anything(),
       );
     });
   });

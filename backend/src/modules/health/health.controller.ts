@@ -1,5 +1,6 @@
 import { Controller, Get, Head, Inject, Res } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
+import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import Redis from 'ioredis';
 
 @Controller()
@@ -11,11 +12,13 @@ export class HealthController {
 
   @Get()
   @Head()
+  @SkipTransform()
   rootHealth() {
     return { status: 'Aura Streetwear Backend is live.' };
   }
 
   @Get('health')
+  @SkipTransform()
   async checkHealth(@Res({ passthrough: true }) res: any) {
     let dbStatus = 'UP';
     let redisStatus = 'UP';

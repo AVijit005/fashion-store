@@ -11,7 +11,7 @@ export const Route = createFileRoute("/trending")({
     const res = await catalogApi.getProducts({ limit: 100 });
     return {
       products: res.products.filter(
-        (p: Product) => p.badges.includes("trending") || p.badges.includes("bestseller")
+        (p: Product) => p.badges.includes("trending") || p.badges.includes("bestseller"),
       ),
     };
   },

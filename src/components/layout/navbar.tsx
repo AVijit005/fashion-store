@@ -6,7 +6,7 @@ import { useCart } from "@/lib/store/cart";
 import { useWishlist } from "@/lib/store/wishlist";
 import { useCommandPalette } from "@/lib/store/command-palette";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { catalogApi, type Product } from "@/lib/api/catalog";
+import { catalogApi, type BackendCategory, type Product } from "@/lib/api/catalog";
 import { useAuthStore } from "@/lib/store/auth";
 import { useQuery } from "@tanstack/react-query";
 
@@ -222,7 +222,7 @@ export function Navbar() {
       data.columns = [
         {
           title: "Categories",
-          links: categories.slice(0, 6).map((c: any) => ({
+          links: categories.slice(0, 6).map((c: BackendCategory) => ({
             l: c.name,
             to: "/c/$category",
             params: { category: c.slug },

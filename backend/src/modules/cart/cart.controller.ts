@@ -12,6 +12,7 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiHeader } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { CartService } from './cart.service';
 import { AddCartItemDto, UpdateCartItemDto, MergeCartDto } from './dto/cart.dto';
 import { OptionalAuthGuard } from '../../common/guards/optional-auth.guard';
@@ -60,6 +61,7 @@ export class CartController {
   }
 
   @Post('items')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Add product variant to cart' })
   @ApiHeader({
@@ -77,6 +79,7 @@ export class CartController {
   }
 
   @Patch('items/:itemId')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Update cart item quantity' })
   @ApiHeader({
@@ -95,6 +98,7 @@ export class CartController {
   }
 
   @Delete('items/:itemId')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Remove item from cart' })
   @ApiHeader({
@@ -112,6 +116,7 @@ export class CartController {
   }
 
   @Delete()
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Clear cart content' })
   @ApiHeader({
@@ -128,6 +133,7 @@ export class CartController {
   }
 
   @Post('merge')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Merge guest cart into authenticated user cart' })
   async mergeCart(@Body() dto: MergeCartDto, @CurrentUser() user: RequestUser) {

@@ -24,7 +24,7 @@ export type CartItem = {
   qty: number;
   maxQty?: number;
   custom?: boolean;
-  customData?: any;
+  customData?: Record<string, unknown>;
 };
 
 type CartState = {
@@ -48,7 +48,7 @@ type CartState = {
 const keyFor = (i: { id: string; size: string; color: string }) => `${i.id}-${i.size}-${i.color}`;
 
 type SyncAction =
-  | { type: "add"; itemId: string; quantity: number; customData?: any }
+  | { type: "add"; itemId: string; quantity: number; customData?: Record<string, unknown> }
   | { type: "update"; itemId: string; qty: number }
   | { type: "remove"; itemId: string }
   | { type: "clear" };
@@ -102,10 +102,11 @@ async function processQueue() {
           await cartApi.clearCart();
         }
         useSyncStore.getState().dequeue(); // only dequeue on success
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[cart] Backend sync failed:", err);
+        const apiErr = err as { status?: number };
         // If it's a 4xx error (permanent), dequeue to prevent blocking the queue forever
-        if (err.status >= 400 && err.status < 500) {
+        if (apiErr.status && apiErr.status >= 400 && apiErr.status < 500) {
           console.error("Permanent error, dropping from queue");
           useSyncStore.getState().dequeue();
         } else {
@@ -126,7 +127,12 @@ if (typeof window !== "undefined") {
 
 function syncAdd(item: CartItem, quantity: number) {
   if (item.custom) return;
-  useSyncStore.getState().enqueue({ type: "add", itemId: item.variantId || item.id, quantity, customData: item.customData });
+  useSyncStore.getState().enqueue({
+    type: "add",
+    itemId: item.variantId || item.id,
+    quantity,
+    customData: item.customData,
+  });
 }
 
 function syncUpdate(item: CartItem, qty: number) {
@@ -164,12 +170,14 @@ export const useCart = create<CartState>()(
 
         if (existing) {
           if (existing.maxQty !== undefined && existing.qty + qty > existing.maxQty) {
-             toast.error(`Only ${existing.maxQty} left in stock`);
-             qty = existing.maxQty - existing.qty;
+            toast.error(`Only ${existing.maxQty} left in stock`);
+            qty = existing.maxQty - existing.qty;
           }
           if (qty > 0) {
             set({
-              items: get().items.map((it) => (keyFor(it) === k ? { ...it, qty: it.qty + qty } : it)),
+              items: get().items.map((it) =>
+                keyFor(it) === k ? { ...it, qty: it.qty + qty } : it,
+              ),
               open: true,
               couponCode: null,
               couponDiscount: 0,
@@ -177,16 +185,25 @@ export const useCart = create<CartState>()(
             syncAdd(existing, qty);
           }
         } else {
-           if (i.maxQty !== undefined && qty > i.maxQty) qty = i.maxQty;
-           const newItem = { ...(i as CartItem), qty };
-           set({ items: [...get().items, newItem], open: true, couponCode: null, couponDiscount: 0 });
-           syncAdd(newItem, qty);
+          if (i.maxQty !== undefined && qty > i.maxQty) qty = i.maxQty;
+          const newItem = { ...(i as CartItem), qty };
+          set({
+            items: [...get().items, newItem],
+            open: true,
+            couponCode: null,
+            couponDiscount: 0,
+          });
+          syncAdd(newItem, qty);
         }
       },
 
       remove: (k) => {
         const item = get().items.find((it) => keyFor(it) === k);
-        set({ items: get().items.filter((it) => keyFor(it) !== k), couponCode: null, couponDiscount: 0 });
+        set({
+          items: get().items.filter((it) => keyFor(it) !== k),
+          couponCode: null,
+          couponDiscount: 0,
+        });
 
         if (item) syncRemove(item);
       },
@@ -228,8 +245,15 @@ export const useCart = create<CartState>()(
           );
           set({ couponCode: res.code, couponDiscount: res.discount });
           toast.success("Coupon applied");
-        } catch (err: any) {
-          toast.error(err.response?.data?.message || "Invalid coupon");
+        } catch (err: unknown) {
+          const message =
+            err && typeof err === "object" && "response" in err
+              ? String(
+                  (err as { response?: { data?: { message?: string } } }).response?.data?.message ||
+                    "",
+                )
+              : "";
+          toast.error(message || "Invalid coupon");
           throw err;
         }
       },

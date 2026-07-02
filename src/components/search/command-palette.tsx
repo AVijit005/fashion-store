@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/command";
 import { useCommandPalette } from "@/lib/store/command-palette";
 import { useRecentSearches } from "@/lib/store/recent-searches";
-import { type Product, catalogApi } from "@/lib/api/catalog";
+import { type Product, type BackendCategory, catalogApi } from "@/lib/api/catalog";
 import { useQuery } from "@tanstack/react-query";
 import { inr } from "@/lib/format";
 
@@ -181,7 +181,12 @@ export function CommandPalette() {
                 value={`${p.name} ${p.tagline} ${p.category}`}
                 onSelect={() => go(`/p/${p.slug}`, p.name)}
               >
-                <img src={p.images[0]} alt="" loading="lazy" className="h-10 w-8 shrink-0 object-cover" />
+                <img
+                  src={p.images[0]}
+                  alt=""
+                  loading="lazy"
+                  className="h-10 w-8 shrink-0 object-cover"
+                />
                 <div className="flex-1 truncate">
                   <p className="truncate text-[13px]">{p.name}</p>
                   <p className="truncate text-[11px] text-mute">{p.tagline}</p>
@@ -194,7 +199,7 @@ export function CommandPalette() {
 
         <CommandSeparator />
         <CommandGroup heading="Categories">
-          {dynamicCategories.slice(0, 8).map((c: any) => (
+          {dynamicCategories.slice(0, 8).map((c: BackendCategory) => (
             <CommandItem
               key={c.slug}
               value={`category ${c.name}`}

@@ -1,16 +1,20 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
-import { OrderStatus, PaymentProvider, PaymentStatus } from '@prisma/client';
+import { Prisma, OrderStatus, PaymentProvider, PaymentStatus } from '@prisma/client';
 import { OrdersService } from '../orders/orders.service';
 import { InventoryService } from '../orders/inventory.service';
+import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
 import { CreatePosOrderDto } from './dto/admin.orders.dto';
 
 @Injectable()
 export class AdminOrdersService {
+  private readonly logger = new Logger(AdminOrdersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordersService: OrdersService,
     private readonly inventoryService: InventoryService,
+    private readonly auditService: AuditService,
   ) {}
 
   async getOrders(page: number = 1, limit: number = 50, search?: string, status?: string) {
@@ -38,7 +42,7 @@ export class AdminOrdersService {
         orderBy: { createdAt: 'desc' },
         include: {
           user: {
-            select: { id: true, email: true, firstName: true, lastName: true, role: true }
+            select: { id: true, email: true, name: true, role: true }
           },
           items: {
             include: {
@@ -123,23 +127,40 @@ export class AdminOrdersService {
     });
   }
 
-  async updateOrderStatus(id: string, status: OrderStatus, tx?: Prisma.TransactionClient) {
+  async updateOrderStatus(
+    id: string,
+    status: OrderStatus,
+    tx?: Prisma.TransactionClient,
+    adminUserId?: string,
+    ipAddress?: string,
+  ) {
     const client = tx || this.prisma;
     const order = await client.order.findUnique({ where: { id } });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
 
-    return this.ordersService.transitionStatus(
+    const result = await this.ordersService.transitionStatus(
       id,
       status,
       'ADMIN',
       'Status updated manually by admin',
       tx,
     );
+
+    if (status === OrderStatus.CANCELLED) {
+      this.auditService.create({
+        userId: order.userId || undefined,
+        action: AUDIT_ACTIONS.ORDER_CANCELLED,
+        details: { orderId: id, adminUserId, oldStatus: order.status },
+        ipAddress,
+      });
+    }
+
+    return result;
   }
 
-  async processRefund(id: string) {
+  async processRefund(id: string, adminUserId?: string, ipAddress?: string) {
     const order = await this.prisma.order.findUnique({ where: { id } });
     if (!order) {
       throw new NotFoundException('Order not found');
@@ -148,20 +169,34 @@ export class AdminOrdersService {
       throw new BadRequestException('Order is not paid');
     }
 
-    if (order.paymentProvider === 'RAZORPAY' && order.razorpayPaymentId) {
+    if (order.paymentProvider === PaymentProvider.RAZORPAY && order.razorpayPaymentId) {
       await this.ordersService.processRazorpayRefund(order.razorpayPaymentId, Number(order.totalAmount));
     }
 
     // Process refund using OrdersService to ensure inventory restoration
-    return this.ordersService.transitionStatus(
+    const result = await this.ordersService.transitionStatus(
       id,
       OrderStatus.REFUNDED,
       'ADMIN',
       'Order refunded manually by admin',
     );
+
+    this.auditService.create({
+      userId: order.userId || undefined,
+      action: AUDIT_ACTIONS.ORDER_REFUNDED,
+      details: { orderId: id, adminUserId, amount: Number(order.totalAmount) },
+      ipAddress,
+    });
+
+    return result;
   }
 
-  async updateBulkOrderStatus(orderIds: string[], status: OrderStatus) {
+  async updateBulkOrderStatus(
+    orderIds: string[],
+    status: OrderStatus,
+    adminUserId?: string,
+    ipAddress?: string,
+  ) {
     if (!orderIds || orderIds.length === 0) {
       throw new BadRequestException('No order IDs provided');
     }
@@ -174,10 +209,11 @@ export class AdminOrdersService {
 
       for (const id of orderIds) {
         try {
-          await this.updateOrderStatus(id, status, tx);
+          await this.updateOrderStatus(id, status, tx, adminUserId, ipAddress);
           results.success++;
         } catch (error: any) {
-          throw new BadRequestException(`Bulk update failed at order ${id}: ${error.message}`);
+          results.failed++;
+          results.errors.push({ id, message: error.message });
         }
       }
 
