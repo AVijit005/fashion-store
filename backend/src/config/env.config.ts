@@ -27,6 +27,20 @@ export const envSchema = z.object({
   REDIS_CLUSTER_NODES: z.string().optional(),
   ADMIN_EMAIL: z.string().email().optional(),
   ADMIN_PASSWORD: z.string().min(8).optional(),
+
+  // Email (transactional — signup verification, password reset, order receipts)
+  // All optional so dev environments can run without an SMTP server; the
+  // EmailProcessor logs and retries when these are unset.
+  EMAIL_FROM: z.string().optional(),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_SECURE: z.enum(['true', 'false']).optional(),
+  EMAIL_WORKER_DISABLED: z.enum(['true', 'false']).optional(),
+
+  // Frontend origin used to build absolute URLs in emails (verify, reset, etc.)
+  FRONTEND_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

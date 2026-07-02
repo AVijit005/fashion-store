@@ -6,8 +6,11 @@ export class LoginDto {
   @IsEmail()
   email!: string;
 
-  @ApiProperty({ example: 'password123' })
+  // We do NOT enforce the new password policy at the login boundary —
+  // users with passwords created under the old (lenient) policy must
+  // still be able to log in. Policy is enforced on signup + reset.
+  @ApiProperty({ example: 'password' })
   @IsString()
-  @MinLength(8)
+  @MinLength(1)
   password!: string;
 }
