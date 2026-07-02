@@ -1,0 +1,48 @@
+# CODEOWNERS
+# Any path listed here requires explicit review from the named owners
+# before a PR can be merged. GitHub matches the LAST matching pattern,
+# so put more-specific rules later.
+#
+# Order matters: the LAST matching rule wins.
+
+# Default: require @AVijit005 review on everything.
+*                                       @AVijit005
+
+# Payment + security-critical paths require both the project owner and
+# any reviewer explicitly named in the file. Sub-paths override the
+# catch-all above.
+backend/src/modules/payments/          @AVijit005
+backend/src/modules/webhooks/          @AVijit005
+backend/src/modules/auth/              @AVijit005
+backend/src/common/sentry/             @AVijit005
+backend/src/common/guards/csrf.guard.ts @AVijit005
+backend/src/config/env.config.ts       @AVijit005
+backend/.env.example                   @AVijit005
+backend/scripts/                       @AVijit005
+
+# Infrastructure — Docker, CI, deploy, env templates. These define how the
+# app runs in production; mistakes here are catastrophic.
+Dockerfile                             @AVijit005
+backend/Dockerfile                     @AVijit005
+docker-compose.yml                     @AVijit005
+docker-compose.prod.yml                @AVijit005
+nginx-frontend.conf                    @AVijit005
+.github/workflows/                     @AVijit005
+.github/CODEOWNERS                     @AVijit005
+
+# Database schema — a careless edit ships migrations to every replica.
+backend/prisma/schema.prisma            @AVijit005
+backend/prisma/migrations/             @AVijit005
+
+# Frontend security boundaries (auth-gated routes, session handling).
+src/lib/api/client.ts                  @AVijit005
+src/lib/store/auth.ts                  @AVijit005
+src/routes/admin.tsx                   @AVijit005
+src/routes/admin/                      @AVijit005
+
+# Public surface (robots.txt, sitemap, SEO) is lower-risk but still
+# affects brand and crawl budget.
+src/routes/sitemap[.]xml.ts            @AVijit005
+src/routes/robots[.]txt.ts             @AVijit005
+src/lib/seo.ts                         @AVijit005
+src/lib/env.ts                         @AVijit005

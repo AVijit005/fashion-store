@@ -1,0 +1,86 @@
+version: 2
+
+# Phase 7: weekly dependency PRs across all four ecosystems.
+# Dependabot groups minor + patch updates into a single weekly PR per
+# ecosystem so reviewers can merge them in one pass. Major updates stay
+# individual so they get explicit review.
+
+updates:
+  # Frontend — Bun-managed npm packages.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+      development-dependencies:
+        dependency-type: "development"
+    # Dependabot will bump @types/* / eslint-* / vitest-* / prettier-*
+    # together as a single PR to reduce review noise.
+    ignore:
+      # Don't auto-bump major versions — review them manually.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # Tailwind v4, React 19, TanStack Router v1 — already on bleeding edge.
+      - dependency-name: "tailwindcss"
+      - dependency-name: "@tanstack/react-router"
+
+  # Backend — npm packages with their own lockfile.
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+      development-dependencies:
+        dependency-type: "development"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # Prisma major bumps need a migration plan, not an auto-PR.
+      - dependency-name: "@prisma/client"
+      - dependency-name: "prisma"
+
+  # Docker base images — weekly check for security patches.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    labels:
+      - "dependencies"
+      - "docker"
+    ignore:
+      # Don't bump Postgres major in an auto-PR.
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions — weekly check for action updates.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    labels:
+      - "dependencies"
+      - "ci"
