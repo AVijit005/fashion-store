@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Reveal } from "@/components/ui/reveal";
+import { ComingSoonBanner } from "@/components/ui/coming-soon-banner";
 import { creators } from "@/lib/data/editorials";
 import { Instagram } from "lucide-react";
 
@@ -22,6 +23,10 @@ export const Route = createFileRoute("/creators")({
 function CreatorsPage() {
   return (
     <div className="bg-paper">
+      <ComingSoonBanner
+        feature="Creator collective"
+        message="Profiles shown are illustrative. Full directory with verified creator submissions ships soon."
+      />
       <header className="mx-auto max-w-[1480px] px-5 pt-16 lg:px-10 lg:pt-24">
         <p className="text-[11px] uppercase tracking-[0.22em] text-mute">The collective</p>
         <h1 className="mt-3 max-w-3xl font-display text-6xl leading-[0.92] lg:text-[8vw]">

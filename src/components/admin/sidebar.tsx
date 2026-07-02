@@ -9,6 +9,7 @@ import {
   Settings,
   ArrowLeft,
   Command,
+  Undo2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,7 @@ const NAV: Array<{
 }> = [
   { to: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
   { to: "/admin/orders", label: "Orders", icon: ShoppingBag, badge: "12" },
+  { to: "/admin/returns", label: "Returns", icon: Undo2 },
   { to: "/admin/products", label: "Products", icon: Package },
   { to: "/admin/customers", label: "Customers", icon: Users },
   { to: "/admin/drops", label: "Drops", icon: Sparkles, badge: "Live" },

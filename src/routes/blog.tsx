@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Reveal } from "@/components/ui/reveal";
+import { ComingSoonBanner } from "@/components/ui/coming-soon-banner";
 
 const posts = [
   {
@@ -56,6 +57,10 @@ function BlogPage() {
   const [hero, ...rest] = posts;
   return (
     <div className="bg-paper">
+      <ComingSoonBanner
+        feature="Studio Notes"
+        message="Posts shown are sample articles. Full CMS-backed blog launches with the next release."
+      />
       <header className="mx-auto max-w-[1480px] px-5 py-16 lg:px-10 lg:py-24">
         <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Studio Notes</p>
         <h1 className="mt-3 font-display text-6xl leading-[0.9] lg:text-[8vw]">

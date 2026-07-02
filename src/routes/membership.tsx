@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Reveal } from "@/components/ui/reveal";
+import { ComingSoonBanner } from "@/components/ui/coming-soon-banner";
 import { Sparkles, Crown, Truck } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/membership")({
   head: () => ({
@@ -63,6 +65,10 @@ const tiers = [
 function MembershipPage() {
   return (
     <div className="bg-paper">
+      <ComingSoonBanner
+        feature="Studio membership"
+        message="Tier pricing and benefits shown are illustrative. Subscription checkout launches soon."
+      />
       <header className="mx-auto max-w-[1480px] px-5 py-16 text-center lg:px-10 lg:py-24">
         <Crown className="mx-auto h-6 w-6" />
         <p className="mt-4 text-[11px] uppercase tracking-[0.22em] text-mute">Studio membership</p>
@@ -95,12 +101,17 @@ function MembershipPage() {
                   </li>
                 ))}
               </ul>
-              <Link
-                to="/account"
+              <button
+                type="button"
+                onClick={() =>
+                  toast("Membership checkout launches soon — we'll email you when it's ready.", {
+                    description: "In the meantime, follow us on Instagram for drop reminders.",
+                  })
+                }
                 className={`mt-auto pt-10 block w-full py-4 text-center text-[12px] uppercase tracking-[0.22em] ${t.featured ? "bg-paper text-ink" : "bg-ink text-paper"}`}
               >
                 Join →
-              </Link>
+              </button>
             </div>
           </Reveal>
         ))}

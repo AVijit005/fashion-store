@@ -24,6 +24,7 @@ import {
 } from "@/lib/api/users";
 import { AddressForm } from "@/components/account/address-form";
 import { useAuthStore, type UserProfile } from "@/lib/store/auth";
+import { ReturnRequestModal } from "@/components/account/return-request-modal";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/account")({
@@ -53,6 +54,13 @@ function Account() {
   const [isRetrying, setIsRetrying] = useState<string | null>(null);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Phase 1 (audit item 1.5): RMA modal state. Holds the item currently
+  // being returned; when set, the ReturnRequestModal is rendered at the
+  // top level of the page.
+  const [activeReturn, setActiveReturn] = useState<{
+    orderItemId: string;
+    productTitle: string;
+  } | null>(null);
 
   const exportData = useExportData();
   const deleteAccount = useDeleteAccount();
@@ -324,7 +332,20 @@ function Account() {
                     </div>
                     <button
                       onClick={() => {
-                        window.location.href = `mailto:support@inkstudio.com?subject=Return Request for Order INK-${o.id.substring(0, 8).toUpperCase()}&body=Please provide the reason for return:%0A%0A`;
+                        // Each delivered order can have multiple items.
+                        // For simplicity, open one return per order using the
+                        // first item; users with multiple items request them
+                        // separately.
+                        const firstItem = o.items?.[0];
+                        if (!firstItem) {
+                          toast.error("No items in this order");
+                          return;
+                        }
+                        setActiveReturn({
+                          orderItemId: firstItem.id,
+                          productTitle: firstItem.productVariant?.product?.title
+                            ?? `Order INK-${o.id.substring(0, 8).toUpperCase()}`,
+                        });
                       }}
                       className="border border-line px-4 py-2 text-[12px] uppercase tracking-[0.18em] hover:border-ink hover:text-ink transition-colors"
                     >
@@ -579,6 +600,17 @@ function Account() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Phase 1 (audit item 1.5): RMA modal. Opens when the user clicks
+          "Request Return" on a delivered order. Backend enforces verified
+          ownership, 15-day window, and one non-cancelled return per item. */}
+      {activeReturn && (
+        <ReturnRequestModal
+          orderItemId={activeReturn.orderItemId}
+          productTitle={activeReturn.productTitle}
+          onClose={() => setActiveReturn(null)}
+        />
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Reveal } from "@/components/ui/reveal";
+import { ComingSoonBanner } from "@/components/ui/coming-soon-banner";
 import { ChevronDown } from "lucide-react";
 
 const faqs = [
@@ -45,6 +46,10 @@ export const Route = createFileRoute("/help-center")({
 function HelpPage() {
   return (
     <div className="bg-paper">
+      <ComingSoonBanner
+        feature="Help center"
+        message="Admin-editable knowledge base ships in Phase 6. For now these are seed FAQs."
+      />
       <header className="mx-auto max-w-[1480px] px-5 py-16 lg:px-10 lg:py-24">
         <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Help center</p>
         <h1 className="mt-3 font-display text-6xl leading-[0.9] lg:text-[8vw]">

@@ -3,6 +3,8 @@ import { Mail, MessageCircle, Phone, Instagram } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
+import { apiClient } from "@/lib/api/client";
+import { useAuthStore } from "@/lib/store/auth";
 
 export const Route = createFileRoute("/contact")({
   head: () => ({
@@ -68,11 +70,25 @@ function ContactPage() {
     }
     setErrors({});
     setSubmitting(true);
-    // Backend wiring left to the user — frontend-only for now.
-    await new Promise((r) => setTimeout(r, 600));
-    setSubmitting(false);
-    toast.success("Message sent. We'll reply within a few hours.");
-    (e.target as HTMLFormElement).reset();
+    try {
+      // Phase 2 (audit item 2.9): real backend submission. Persisted to
+      // `contact_submissions`, triggers admin email notification. Rate-limited
+      // to 5/hr per IP on the backend.
+      const user = useAuthStore.getState().user;
+      await apiClient.post<{ id: string; createdAt: string }>("/contact", {
+        name: parsed.data.name,
+        email: parsed.data.email,
+        message: parsed.data.message,
+        userId: user?.id,
+      });
+      toast.success("Message sent. We'll reply within a few hours.");
+      (e.target as HTMLFormElement).reset();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to send. Please try again.";
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const fieldClass = (k: keyof FieldErrors) =>

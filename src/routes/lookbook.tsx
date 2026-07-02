@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Reveal } from "@/components/ui/reveal";
+import { ComingSoonBanner } from "@/components/ui/coming-soon-banner";
 import { lookbookStories } from "@/lib/data/editorials";
 
 export const Route = createFileRoute("/lookbook")({
@@ -21,6 +22,10 @@ export const Route = createFileRoute("/lookbook")({
 function LookbookPage() {
   return (
     <div className="bg-paper">
+      <ComingSoonBanner
+        feature="Lookbook · Vol. 04"
+        message="Editorial stories use sample pieces. Real catalog-linked lookbook ships with the next release."
+      />
       <header className="mx-auto max-w-[1480px] px-5 pt-16 lg:px-10 lg:pt-24">
         <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Lookbook · Vol. 04</p>
         <h1 className="mt-3 font-display text-6xl leading-[0.92] lg:text-[9vw]">

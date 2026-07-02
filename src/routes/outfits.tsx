@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { breadcrumbJsonLd, collectionJsonLd } from "@/lib/seo";
 import { Reveal } from "@/components/ui/reveal";
+import { ComingSoonBanner } from "@/components/ui/coming-soon-banner";
 import { outfits } from "@/lib/data/editorials";
 import { inr } from "@/lib/format";
 
@@ -34,6 +35,10 @@ export const Route = createFileRoute("/outfits")({
 function OutfitsPage() {
   return (
     <div className="bg-paper">
+      <ComingSoonBanner
+        feature="Curated outfits"
+        message="Outfit pieces shown are illustrative. Add-to-cart works once real catalog items are wired to each outfit."
+      />
       <header className="mx-auto max-w-[1480px] px-5 py-16 lg:px-10 lg:py-24">
         <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Complete the fit</p>
         <h1 className="mt-3 font-display text-6xl leading-[0.9] lg:text-[8vw]">
