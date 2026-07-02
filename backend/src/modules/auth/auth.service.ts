@@ -439,6 +439,101 @@ export class AuthService {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
+  /**
+   * Phase 5 (audit item 5.1): Google OAuth link-or-create.
+   *
+   * Called by GoogleStrategy.validate() after Google authenticates the
+   * user. Behaviour:
+   *   - If a User row exists with this googleId → return it as-is.
+   *   - Else if a User row exists with this email (password account) →
+   *     link the googleId onto that row (does NOT auto-verify email;
+   *     that's a separate step the user can do later).
+   *   - Else → create a new CUSTOMER user with a random Argon2id
+   *     password (so password login still works if needed later) and
+   *     mark isVerified=true (Google already verified the email).
+   *
+   * Returns the full User entity so the strategy can attach it to req.user.
+   */
+  async loginOrCreateFromGoogle(input: {
+    googleId: string;
+    email: string;
+    name: string | null;
+    avatarUrl: string | null;
+  }) {
+    const email = input.email.trim().toLowerCase();
+
+    // Fast path: existing Google-linked user.
+    const byGoogle = await this.prisma.user.findUnique({
+      where: { googleId: input.googleId },
+    });
+    if (byGoogle && !byGoogle.isDeleted) return byGoogle;
+
+    // Link path: existing email user, link googleId.
+    const byEmail = await this.usersService.findByEmail(email);
+    if (byEmail && !byEmail.isDeleted) {
+      return this.prisma.user.update({
+        where: { id: byEmail.id },
+        data: {
+          googleId: input.googleId,
+          avatarUrl: input.avatarUrl ?? byEmail.avatarUrl ?? null,
+          name: byEmail.name ?? input.name ?? null,
+        },
+      });
+    }
+
+    // Create path: brand-new user. Random password so the row satisfies
+    // the NOT NULL constraint; the user can set a real password later via
+    // the forgot-password flow if they want to use email login too.
+    const randomPassword = crypto.randomBytes(32).toString('hex');
+    const passwordHash = await hashPassword(randomPassword);
+    return this.prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        name: input.name,
+        googleId: input.googleId,
+        avatarUrl: input.avatarUrl,
+        role: 'CUSTOMER',
+        isVerified: true, // Google already verified the email
+      },
+    });
+  }
+
+  /**
+   * Mint a session + access/refresh token pair for an already-authenticated
+   * user. Used by the Google OAuth callback path so the cookie-issuance
+   * logic matches the email/password login path exactly.
+   */
+  async mintSessionForUser(
+    userId: string,
+    email: string,
+    role: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    const refreshToken = this.generateRandomToken();
+    const tokenHash = this.hashToken(refreshToken);
+    const expiryDays =
+      this.configService.get<number>('REFRESH_TOKEN_EXPIRES_IN_DAYS') || 7;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + expiryDays);
+    const session = await this.prisma.session.create({
+      data: { userId, tokenHash, ipAddress, userAgent, expiresAt },
+    });
+    const accessToken = this.generateAccessToken(userId, role, session.id);
+    this.auditService.create({
+      userId,
+      action: AUDIT_ACTIONS.USER_LOGIN,
+      details: { event: 'google_oauth' },
+      ipAddress,
+    });
+    return {
+      accessToken,
+      refreshToken,
+      user: { id: userId, email, role },
+    };
+  }
+
   private generateAccessToken(userId: string, role: string, sessionId: string): string {
     const secret = this.configService.get<string>('JWT_SECRET');
     const expiresIn = this.configService.get<string>('JWT_EXPIRES_IN') || '15m';

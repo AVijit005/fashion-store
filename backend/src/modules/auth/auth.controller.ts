@@ -15,6 +15,7 @@ import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { AuthGuard as PassportAuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { CsrfService } from '../../common/guards/csrf.service';
 import { SignUpDto } from './dto/signup.dto';
@@ -169,6 +170,50 @@ export class AuthController {
   async resetPassword(@Body() dto: ResetPasswordDto) {
     await this.authService.resetPassword(dto.token, dto.newPassword);
     return { message: 'Password updated successfully. Please sign in with your new password.' };
+  }
+
+  // -------- Google OAuth --------
+
+  /**
+   * Phase 5 (audit item 5.1): GET /auth/google
+   * @UseGuards(PassportAuthGuard('google')) triggers passport-google-oauth20's
+   * redirect to Google's consent screen. The actual redirect is handled
+   * by passport — this method only runs if the strategy is configured
+   * and authentication completes synchronously (rare; usually a redirect).
+   */
+  @Get('google')
+  @UseGuards(PassportAuthGuard('google'))
+  async googleAuth() {
+    return { message: 'Redirecting to Google' };
+  }
+
+  /**
+   * Phase 5 (audit item 5.1): GET /auth/google/callback
+   * Passport validates the OAuth code, calls GoogleStrategy.validate(),
+   * populates req.user. We then mint session cookies and redirect to
+   * the frontend.
+   */
+  @Get('google/callback')
+  @UseGuards(PassportAuthGuard('google'))
+  async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
+    const user = req.user as { id: string; email: string; role: string };
+    const rawIp = req.ip || (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim();
+    const userAgent = req.headers['user-agent'];
+
+    const tokens = await this.authService.mintSessionForUser(
+      user.id,
+      user.email,
+      user.role,
+      rawIp,
+      userAgent,
+    );
+    this.setRefreshTokenCookie(res, tokens.refreshToken);
+    this.setAccessTokenCookie(res, tokens.accessToken);
+    this.setXsrfTokenCookie(res, this.csrfService.generateToken());
+
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
+    return res.redirect(`${frontendUrl.replace(/\/$/, '')}/account?oauth=google`);
   }
 
   // -------- Cookie helpers --------
