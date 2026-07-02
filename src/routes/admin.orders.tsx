@@ -140,6 +140,23 @@ function OrdersPage() {
     },
   });
 
+  // Phase 9: admin "Refund" affordance. Calls POST /admin/orders/:id/refund
+  // which uses PaymentsService.refundPayment, marks the order REFUNDED,
+  // and triggers the refund-issued transactional email.
+  const refundMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiClient.post(`/admin/orders/${orderId}/refund`);
+    },
+    onSuccess: () => {
+      toast.success("Refund issued. Customer has been notified by email.");
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      setActive(null);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Refund failed");
+    },
+  });
+
   const list = useMemo(() => {
     return data?.pages.flatMap((page) => page.data) || [];
   }, [data]);
@@ -527,6 +544,27 @@ function OrdersPage() {
                   </>
                 )}
               </button>
+              {active && (active as any).status === "PAID" && (
+                <button
+                  disabled={refundMutation.isPending}
+                  onClick={() => {
+                    if (!active) return;
+                    const orderId = active.id as string;
+                    const total = (active as any).total ?? 0;
+                    if (
+                      !window.confirm(
+                        `Issue a full refund of ${inr(total)} for order ${orderId}? This calls Razorpay and emails the customer. This cannot be undone.`,
+                      )
+                    ) {
+                      return;
+                    }
+                    refundMutation.mutate(orderId);
+                  }}
+                  className="press border border-red-500 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-red-600 hover:bg-red-500 hover:text-paper disabled:opacity-50"
+                >
+                  {refundMutation.isPending ? "Refunding..." : "Refund"}
+                </button>
+              )}
             </div>
           </div>
         }

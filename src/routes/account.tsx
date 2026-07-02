@@ -10,12 +10,20 @@ import {
   Settings,
   RotateCcw,
   Check,
+  Download,
+  AlertTriangle,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { apiClient } from "@/lib/api/client";
-import { useAddresses, useDeleteAddress, useUpdatePreferences } from "@/lib/api/users";
+import {
+  useAddresses,
+  useDeleteAddress,
+  useUpdatePreferences,
+  useExportData,
+  useDeleteAccount,
+} from "@/lib/api/users";
 import { AddressForm } from "@/components/account/address-form";
-import { useAuthStore } from "@/lib/store/auth";
+import { useAuthStore, type UserProfile } from "@/lib/store/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/account")({
@@ -44,7 +52,10 @@ function Account() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isRetrying, setIsRetrying] = useState<string | null>(null);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const exportData = useExportData();
+  const deleteAccount = useDeleteAccount();
   const { data: addresses = [], isLoading: loadingAddresses } = useAddresses();
   const deleteAddress = useDeleteAddress();
   const updatePreferences = useUpdatePreferences();
@@ -62,7 +73,7 @@ function Account() {
     const newPrefs = { ...prefs, [key]: val };
     updatePreferences.mutate(newPrefs, {
       onSuccess: (updatedUser) => {
-        useAuthStore.setState({ user: updatedUser });
+        useAuthStore.setState({ user: updatedUser as unknown as UserProfile });
         toast.success("Preferences updated");
       },
     });
@@ -72,7 +83,7 @@ function Account() {
     const newPrefs = { ...prefs, notifications: { ...notifs, [key]: checked } };
     updatePreferences.mutate(newPrefs, {
       onSuccess: (updatedUser) => {
-        useAuthStore.setState({ user: updatedUser });
+        useAuthStore.setState({ user: updatedUser as unknown as UserProfile });
         toast.success("Notifications updated");
       },
     });
@@ -471,6 +482,104 @@ function Account() {
       >
         <LogOut className="h-4 w-4" /> Sign out
       </button>
+
+      {/* ---- Data & Privacy (Phase 9 GDPR section) ---- */}
+      <section className="mt-20 border-t border-line pt-10">
+        <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Data & Privacy</p>
+        <h2 className="mt-2 font-display text-3xl">Your data, your control.</h2>
+        <p className="mt-3 max-w-2xl text-mute">
+          Under GDPR you have the right to a copy of all data we hold about you, and the right to
+          request deletion of your account. Order records are retained in anonymised form for tax
+          / accounting compliance even after deletion.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button
+            onClick={async () => {
+              try {
+                toast.loading("Preparing your data export…");
+                const data = await exportData.mutateAsync();
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+                a.download = `ink-studio-data-export-${stamp}.json`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                toast.success("Download started. Check your browser's downloads folder.");
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Export failed");
+              }
+            }}
+            disabled={exportData.isPending}
+            className="flex items-center gap-2 border border-ink px-5 py-3 text-[12px] uppercase tracking-[0.22em] hover:bg-ink hover:text-paper transition disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {exportData.isPending ? "Preparing…" : "Download my data"}
+          </button>
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="flex items-center gap-2 border border-red-500 px-5 py-3 text-[12px] uppercase tracking-[0.22em] text-red-600 hover:bg-red-500 hover:text-paper transition"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            Delete account
+          </button>
+        </div>
+      </section>
+
+      {/* ---- Delete-account confirmation modal ---- */}
+      {confirmDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-delete-title"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-ink/40 p-6 backdrop-blur-sm"
+          onClick={() => setConfirmDelete(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md border border-line bg-paper p-8"
+          >
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-6 w-6 text-red-500" />
+              <h2 id="confirm-delete-title" className="font-display text-2xl">
+                Delete your account?
+              </h2>
+            </div>
+            <p className="mt-4 text-mute">
+              This permanently deletes your profile, addresses, wishlist, and revokes every active
+              session. Order records are retained in anonymised form for tax / accounting. This cannot
+              be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="border border-line px-5 py-3 text-[12px] uppercase tracking-[0.22em]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await deleteAccount.mutateAsync();
+                    toast.success("Account deleted. Signing you out…");
+                    useAuthStore.getState().logout();
+                    window.location.href = "/";
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Delete failed");
+                  }
+                }}
+                disabled={deleteAccount.isPending}
+                className="bg-red-500 px-5 py-3 text-[12px] uppercase tracking-[0.22em] text-paper hover:bg-red-600 disabled:opacity-50"
+              >
+                {deleteAccount.isPending ? "Deleting…" : "Yes, delete my account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

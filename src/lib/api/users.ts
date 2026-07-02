@@ -11,6 +11,8 @@ export interface Address {
   isDefault: boolean;
 }
 
+export type Preferences = Record<string, unknown>;
+
 export const usersApi = {
   getAddresses: () => apiClient.get<Address[]>("/users/me/addresses"),
   addAddress: (data: Omit<Address, "id">) =>
@@ -19,7 +21,15 @@ export const usersApi = {
     apiClient.put<Address>(`/users/me/addresses/${id}`, { ...data, zip: data.postalCode }),
   deleteAddress: (id: string) =>
     apiClient.delete<{ success: boolean }>(`/users/me/addresses/${id}`),
-  updatePreferences: (data: any) => apiClient.put<any>("/users/me/preferences", data),
+  updatePreferences: (data: Preferences) =>
+    apiClient.put<Preferences>("/users/me/preferences", data),
+
+  // GDPR data export (Art. 20) — returns full user document as JSON.
+  exportData: () => apiClient.get<unknown>("/users/me/export"),
+
+  // GDPR account deletion (Art. 17) — soft-delete, revoke sessions.
+  deleteAccount: () =>
+    apiClient.delete<{ message: string }>("/users/me"),
 };
 
 export function useUpdatePreferences() {
@@ -62,6 +72,28 @@ export function useDeleteAddress() {
     mutationFn: usersApi.deleteAddress,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["addresses"] });
+    },
+  });
+}
+
+/**
+ * Trigger a browser download of the user's full data export. The
+ * fetch path is intentionally a direct call (not useQuery) because
+ * the result is a one-shot download, not data we want to cache.
+ */
+export function useExportData() {
+  return useMutation({
+    mutationFn: usersApi.exportData,
+  });
+}
+
+export function useDeleteAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: usersApi.deleteAccount,
+    onSuccess: () => {
+      // Drop every cached query — the account is gone.
+      queryClient.clear();
     },
   });
 }
