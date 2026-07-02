@@ -5,13 +5,26 @@ import { routeTree } from "./routeTree.gen";
 import * as Sentry from "@sentry/react";
 
 if (typeof window !== "undefined") {
-  Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN || "",
-    integrations: [Sentry.browserTracingIntegration(), Sentry.replayIntegration()],
-    tracesSampleRate: 1.0,
-    replaysSessionSampleRate: 0.1,
-    replaysOnErrorSampleRate: 1.0,
-  });
+  // Phase 8 fixes (H-S5 / H-S6):
+  //   1. Skip init entirely when no DSN is configured — avoids noisy
+  //      console output in local dev / preview environments.
+  //   2. Cap prod sample rates at 10% so we don't blow the Sentry quota
+  //      on traffic spikes. Errors are still always captured (full
+  //      replaysOnErrorSampleRate).
+  const dsn = import.meta.env.VITE_SENTRY_DSN;
+  if (dsn) {
+    const isProd = import.meta.env.PROD;
+    Sentry.init({
+      dsn,
+      integrations: [Sentry.browserTracingIntegration(), Sentry.replayIntegration()],
+      tracesSampleRate: isProd ? 0.1 : 1.0,
+      replaysSessionSampleRate: isProd ? 0.1 : 1.0,
+      replaysOnErrorSampleRate: 1.0,
+      // Never send PII by default. If we later need user context
+      // (email, IP), it must be explicitly set here AND scrubbed.
+      sendDefaultPii: false,
+    });
+  }
 }
 
 export const getRouter = () => {

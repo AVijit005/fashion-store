@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
@@ -27,6 +27,8 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { NewsletterModule } from './modules/newsletter/newsletter.module';
 import { WorkerModule } from './modules/worker/worker.module';
+import { MetricsModule } from './modules/metrics/metrics.module';
+import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 
 @Module({
   imports: [
@@ -88,6 +90,9 @@ import { WorkerModule } from './modules/worker/worker.module';
     WishlistModule,
     AdminModule,
     MaintenanceModule,
+    // Phase 8: MetricsModule is @Global so any service can inject
+    // MetricsService to increment counters / observe histograms.
+    MetricsModule,
     // Phase 6: conditionally enable BullMQ processors + @Cron jobs.
     // API replica runs with RUN_WORKERS unset/false (worker classes
     // are not provided, no @Processor subscribes to a queue, no @Cron
@@ -108,4 +113,12 @@ import { WorkerModule } from './modules/worker/worker.module';
     CsrfService,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  // Phase 8: wire the request logger middleware so every HTTP request
+  // (including 404s and CSRF rejections) emits a single structured
+  // log line with method, path, status, duration, IP, user-agent, and
+  // correlation id. See request-logger.middleware.ts for the schema.
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+  }
+}
