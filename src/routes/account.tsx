@@ -343,8 +343,9 @@ function Account() {
                         }
                         setActiveReturn({
                           orderItemId: firstItem.id,
-                          productTitle: firstItem.productVariant?.product?.title
-                            ?? `Order INK-${o.id.substring(0, 8).toUpperCase()}`,
+                          productTitle:
+                            firstItem.productVariant?.product?.title ??
+                            `Order INK-${o.id.substring(0, 8).toUpperCase()}`,
                         });
                       }}
                       className="border border-line px-4 py-2 text-[12px] uppercase tracking-[0.18em] hover:border-ink hover:text-ink transition-colors"
@@ -510,8 +511,8 @@ function Account() {
         <h2 className="mt-2 font-display text-3xl">Your data, your control.</h2>
         <p className="mt-3 max-w-2xl text-mute">
           Under GDPR you have the right to a copy of all data we hold about you, and the right to
-          request deletion of your account. Order records are retained in anonymised form for tax
-          / accounting compliance even after deletion.
+          request deletion of your account. Order records are retained in anonymised form for tax /
+          accounting compliance even after deletion.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <button
@@ -519,7 +520,9 @@ function Account() {
               try {
                 toast.loading("Preparing your data export…");
                 const data = await exportData.mutateAsync();
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                const blob = new Blob([JSON.stringify(data, null, 2)], {
+                  type: "application/json",
+                });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
@@ -571,8 +574,8 @@ function Account() {
             </div>
             <p className="mt-4 text-mute">
               This permanently deletes your profile, addresses, wishlist, and revokes every active
-              session. Order records are retained in anonymised form for tax / accounting. This cannot
-              be undone.
+              session. Order records are retained in anonymised form for tax / accounting. This
+              cannot be undone.
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button

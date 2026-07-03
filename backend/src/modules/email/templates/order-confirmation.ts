@@ -29,9 +29,7 @@ function inr(amount: number): string {
   return `\u20b9${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 }
 
-export function orderConfirmationTemplate(
-  d: OrderConfirmationTemplateData,
-): EmailTemplate {
+export function orderConfirmationTemplate(d: OrderConfirmationTemplateData): EmailTemplate {
   const greeting = d.name ? `Hi ${d.name},` : 'Hi there,';
   const items = d.items
     .map(
@@ -41,7 +39,14 @@ export function orderConfirmationTemplate(
             ${it.image ? `<img src="${escapeHtml(it.image)}" alt="${escapeHtml(it.name)}" width="64" height="64" style="display: block; border-radius: 4px; object-fit: cover; margin-right: 12px; vertical-align: middle;" />` : ''}
             <span style="vertical-align: middle;">
               <strong>${escapeHtml(it.name)}</strong>
-              ${it.size || it.color ? `<br /><span style="color: #6b7280; font-size: 13px;">${[it.size, it.color].filter(Boolean).map(escapeHtml).join(' \u00b7 ')}</span>` : ''}
+              ${
+                it.size || it.color
+                  ? `<br /><span style="color: #6b7280; font-size: 13px;">${[it.size, it.color]
+                      .filter((value): value is string => Boolean(value))
+                      .map(escapeHtml)
+                      .join(' \u00b7 ')}</span>`
+                  : ''
+              }
             </span>
           </td>
           <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; text-align: center;">${it.quantity}</td>

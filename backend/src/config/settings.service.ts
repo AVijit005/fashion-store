@@ -84,9 +84,7 @@ export class SettingsService implements OnModuleInit {
         hsnCode: String(map.get('tax.hsnCode') ?? DEFAULTS.tax.hsnCode),
       },
       shipping: {
-        freeThreshold: Number(
-          map.get('shipping.freeThreshold') ?? DEFAULTS.shipping.freeThreshold,
-        ),
+        freeThreshold: Number(map.get('shipping.freeThreshold') ?? DEFAULTS.shipping.freeThreshold),
         flatRate: Number(map.get('shipping.flatRate') ?? DEFAULTS.shipping.flatRate),
       },
       studio: {

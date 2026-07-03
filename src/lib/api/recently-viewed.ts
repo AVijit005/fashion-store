@@ -32,12 +32,10 @@ export interface RecentlyViewedEntry {
  */
 export const recentlyViewedApi = {
   /** Get the user's recent views (most recent first). */
-  list: (limit = 12) =>
-    apiClient.get<RecentlyViewedEntry[]>("/recently-viewed", { limit }),
+  list: (limit = 12) => apiClient.get<RecentlyViewedEntry[]>("/recently-viewed", { limit }),
 
   /** Record a single product view. Fire-and-forget. */
-  track: (productId: string) =>
-    apiClient.post<void>("/recently-viewed/track", { productId }),
+  track: (productId: string) => apiClient.post<void>("/recently-viewed/track", { productId }),
 
   /**
    * Merge anonymous (localStorage) views into the backend on login.

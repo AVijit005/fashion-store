@@ -21,9 +21,7 @@ import { scrubPii } from './common/sentry/sentry-pii-filter';
  */
 async function bootstrapWorker() {
   if (process.env.RUN_WORKERS !== 'true') {
-    console.error(
-      'FATAL: worker.ts requires RUN_WORKERS=true. Use main.ts for the API process.',
-    );
+    console.error('FATAL: worker.ts requires RUN_WORKERS=true. Use main.ts for the API process.');
     process.exit(1);
   }
 

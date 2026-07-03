@@ -8,7 +8,7 @@ import { ReturnStatus } from '@prisma/client';
  */
 export class ReviewReturnDto {
   @IsEnum(ReturnStatus)
-  decision!: ReturnStatus.APPROVED | ReturnStatus.REJECTED;
+  decision!: ReturnStatus;
 
   @IsOptional()
   @IsString()

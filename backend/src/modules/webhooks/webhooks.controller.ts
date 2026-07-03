@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Post,
-  Headers,
-  Req,
-  BadRequestException,
-} from '@nestjs/common';
+import { Controller, Post, Headers, Req, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Request } from 'express';
 import { WebhooksService } from './webhooks.service';
@@ -35,10 +29,7 @@ export class WebhooksController {
   @Post('razorpay')
   @SkipTransform()
   @ApiOperation({ summary: 'Razorpay webhook listener for payment capture' })
-  async razorpay(
-    @Req() req: RawBodyRequest,
-    @Headers('x-razorpay-signature') signature?: string,
-  ) {
+  async razorpay(@Req() req: RawBodyRequest, @Headers('x-razorpay-signature') signature?: string) {
     if (!signature || typeof signature !== 'string') {
       throw new BadRequestException('Webhook signature header missing or invalid format');
     }

@@ -24,7 +24,11 @@ import { Env } from './env.config';
             const delay = Math.min(times * 50, 2000);
             return delay;
           },
-          ...(isTls && { tls: { rejectUnauthorized: configService.get('NODE_ENV', 'development') === 'production' } }),
+          ...(isTls && {
+            tls: {
+              rejectUnauthorized: configService.get('NODE_ENV', 'development') === 'production',
+            },
+          }),
         };
 
         if (clusterNodesStr) {

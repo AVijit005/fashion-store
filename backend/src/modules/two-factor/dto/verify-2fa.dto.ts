@@ -1,4 +1,4 @@
-import { IsString, Matches, MaxLength, MinLength } from "class-validator";
+import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 /**
  * Phase 5 (audit item 5.2): DTOs for the 2FA endpoints.
@@ -10,7 +10,7 @@ import { IsString, Matches, MaxLength, MinLength } from "class-validator";
 export class TwoFactorCodeDto {
   @IsString()
   @Matches(/^(\d{6}|[A-F0-9]{8})$/i, {
-    message: "code must be a 6-digit TOTP or 8-character hex backup code",
+    message: 'code must be a 6-digit TOTP or 8-character hex backup code',
   })
   code!: string;
 }

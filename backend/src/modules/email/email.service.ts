@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import * as nodemailer from 'nodemailer';
-import type { Transporter } from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
+import nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 
 export interface EmailJob {
   to: string;
@@ -35,8 +35,7 @@ export class EmailService {
     @InjectQueue('email-queue') private readonly emailQueue: Queue<EmailJob>,
   ) {
     this.fromAddress =
-      configService.get<string>('EMAIL_FROM') ??
-      '"Aura Streetwear" <no-reply@aurastreetwear.com>';
+      configService.get<string>('EMAIL_FROM') ?? '"Aura Streetwear" <no-reply@aurastreetwear.com>';
   }
 
   /**
@@ -129,7 +128,9 @@ export class EmailProcessor {
         text,
         headers,
       });
-      this.logger.log(`Sent email to=${to} subject="${subject}" messageId=${info.messageId} jobId=${job.id ?? 'n/a'}`);
+      this.logger.log(
+        `Sent email to=${to} subject="${subject}" messageId=${info.messageId} jobId=${job.id ?? 'n/a'}`,
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to send email to=${to} subject="${subject}" error=${msg}`);

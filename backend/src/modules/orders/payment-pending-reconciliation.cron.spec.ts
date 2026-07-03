@@ -11,7 +11,9 @@ describe('PaymentPendingReconciliationCron', () => {
 
   beforeEach(async () => {
     ordersService = {
-      transitionStatus: jest.fn().mockResolvedValue({ id: 'order-1', status: OrderStatus.CANCELLED }),
+      transitionStatus: jest
+        .fn()
+        .mockResolvedValue({ id: 'order-1', status: OrderStatus.CANCELLED }),
     };
 
     prismaService = {
@@ -136,8 +138,16 @@ describe('PaymentPendingReconciliationCron', () => {
   });
 
   it('should continue processing remaining orders when one order fails', async () => {
-    const orderA = { id: 'order-a', status: OrderStatus.PAYMENT_PENDING, createdAt: minutesAgo(31) };
-    const orderB = { id: 'order-b', status: OrderStatus.PAYMENT_PENDING, createdAt: minutesAgo(32) };
+    const orderA = {
+      id: 'order-a',
+      status: OrderStatus.PAYMENT_PENDING,
+      createdAt: minutesAgo(31),
+    };
+    const orderB = {
+      id: 'order-b',
+      status: OrderStatus.PAYMENT_PENDING,
+      createdAt: minutesAgo(32),
+    };
 
     prismaService.order.findMany.mockResolvedValue([{ id: orderA.id }, { id: orderB.id }]);
 

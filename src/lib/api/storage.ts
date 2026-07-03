@@ -64,9 +64,7 @@ export async function uploadImageFile(file: File): Promise<UploadedAsset> {
   };
 }
 
-function readImageDimensions(
-  file: File,
-): Promise<{ width: number; height: number }> {
+function readImageDimensions(file: File): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();

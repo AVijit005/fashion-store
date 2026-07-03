@@ -106,8 +106,7 @@ function ProductPage() {
       setNotifySubscribed(true);
       toast.success("We'll email you the moment it's back.");
     },
-    onError: (e: Error) =>
-      toast.error(e.message || "Couldn't subscribe. Please try again."),
+    onError: (e: Error) => toast.error(e.message || "Couldn't subscribe. Please try again."),
   });
   const add = useCart((s) => s.add);
   const hydrated = useHydrated();
@@ -337,19 +336,18 @@ function ProductPage() {
             >
               <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-mute">
                 <Bell className="h-3.5 w-3.5" />
-                <span>Out of stock · {size} / {color}</span>
+                <span>
+                  Out of stock · {size} / {color}
+                </span>
               </div>
               {notifySubscribed ? (
                 <p className="mt-3 text-sm text-ink">
                   ✓ You're on the list. We'll email{" "}
-                  <span className="font-medium">{notifyEmail}</span> as soon as
-                  it's back.
+                  <span className="font-medium">{notifyEmail}</span> as soon as it's back.
                 </p>
               ) : (
                 <>
-                  <p className="mt-2 text-sm">
-                    Notify me when this size is back in stock.
-                  </p>
+                  <p className="mt-2 text-sm">Notify me when this size is back in stock.</p>
                   <div className="mt-3 flex gap-2">
                     <input
                       type="email"

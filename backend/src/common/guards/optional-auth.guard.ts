@@ -34,10 +34,19 @@ export class OptionalAuthGuard implements CanActivate {
         if (sessionId) {
           const session = await this.prisma.session.findUnique({
             where: { id: sessionId },
-            select: { isRevoked: true, expiresAt: true, user: { select: { role: true, isDeleted: true } } },
+            select: {
+              isRevoked: true,
+              expiresAt: true,
+              user: { select: { role: true, isDeleted: true } },
+            },
           });
 
-          if (session && !session.isRevoked && session.expiresAt > new Date() && !session.user.isDeleted) {
+          if (
+            session &&
+            !session.isRevoked &&
+            session.expiresAt > new Date() &&
+            !session.user.isDeleted
+          ) {
             request.user = {
               id: payload.sub,
               role: session.user.role,
@@ -50,7 +59,7 @@ export class OptionalAuthGuard implements CanActivate {
             where: { id: payload.sub },
             select: { role: true, isDeleted: true },
           });
-          
+
           if (user && !user.isDeleted) {
             request.user = {
               id: payload.sub,

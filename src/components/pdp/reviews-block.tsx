@@ -26,9 +26,7 @@ export function ReviewsBlock({ slug }: { slug: string }) {
   if (isLoading) {
     return (
       <section className="border-t border-line bg-paper">
-        <div className="mx-auto max-w-[1480px] px-5 py-20 text-mute lg:px-10">
-          Loading reviews…
-        </div>
+        <div className="mx-auto max-w-[1480px] px-5 py-20 text-mute lg:px-10">Loading reviews…</div>
       </section>
     );
   }
@@ -63,16 +61,12 @@ export function ReviewsBlock({ slug }: { slug: string }) {
       <div className="mx-auto grid max-w-[1480px] grid-cols-1 gap-10 px-5 py-20 lg:grid-cols-[320px_1fr] lg:px-10">
         <div>
           <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Reviews</p>
-          <p className="mt-2 font-display text-6xl tabular-nums">
-            {average.toFixed(1)}
-          </p>
+          <p className="mt-2 font-display text-6xl tabular-nums">{average.toFixed(1)}</p>
           <div className="mt-2 flex gap-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <Star
                 key={i}
-                className={`h-4 w-4 ${
-                  i < Math.round(average) ? "fill-ink text-ink" : "text-line"
-                }`}
+                className={`h-4 w-4 ${i < Math.round(average) ? "fill-ink text-ink" : "text-line"}`}
               />
             ))}
           </div>
@@ -93,8 +87,7 @@ export function ReviewsBlock({ slug }: { slug: string }) {
           {isAuthed && count > 0 && <ReviewForm slug={slug} />}
           {isAuthed && count === 0 && (
             <div className="mt-6 rounded border border-line p-3 text-[12px] text-mute">
-              No reviews yet. Be the first to share your experience after your order
-              is delivered.
+              No reviews yet. Be the first to share your experience after your order is delivered.
             </div>
           )}
         </div>
@@ -111,9 +104,7 @@ export function ReviewsBlock({ slug }: { slug: string }) {
                 key={f.k}
                 onClick={() => setFilter(f.k as typeof filter)}
                 className={`border px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] ${
-                  filter === f.k
-                    ? "border-ink bg-ink text-paper"
-                    : "border-line hover:border-ink"
+                  filter === f.k ? "border-ink bg-ink text-paper" : "border-line hover:border-ink"
                 }`}
               >
                 {f.l}
@@ -123,9 +114,7 @@ export function ReviewsBlock({ slug }: { slug: string }) {
 
           <ul className="mt-6 space-y-6">
             {visible.length === 0 ? (
-              <li className="text-sm text-mute">
-                No reviews match this filter.
-              </li>
+              <li className="text-sm text-mute">No reviews match this filter.</li>
             ) : (
               visible.map((r) => (
                 <li key={r.id} className="border-b border-line pb-6">

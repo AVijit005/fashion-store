@@ -1,9 +1,4 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  ForbiddenException,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@nestjs/common';
 import { Request } from 'express';
 import { CsrfService } from './csrf.service';
 
@@ -20,7 +15,7 @@ export class CsrfGuard implements CanActivate {
     }
 
     // Webhooks are protected by Razorpay signature validation, not CSRF tokens.
-    if (request.path === '/api/v1/orders/webhook') {
+    if (request.path === '/api/v1/orders/webhook' || request.path === '/api/v1/webhooks/razorpay') {
       return true;
     }
 

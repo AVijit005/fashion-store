@@ -20,7 +20,7 @@ export class AbandonedCartCron {
     const lockKey = 'cron:abandoned-carts:lock';
     // Attempt to acquire lock for 4 minutes
     const lockAcquired = await this.redis.set(lockKey, 'locked', 'EX', 240, 'NX');
-    
+
     if (!lockAcquired) {
       this.logger.debug('Abandoned carts cron is already running on another pod. Skipping.');
       return;
@@ -42,25 +42,29 @@ export class AbandonedCartCron {
         select: { id: true },
       });
 
-    if (expiredOrders.length === 0) {
-      return;
-    }
-
-    this.logger.log(`Found ${expiredOrders.length} expired orders missed by Queue. Processing...`);
-
-    for (const order of expiredOrders) {
-      try {
-        await this.ordersService.transitionStatus(
-          order.id,
-          OrderStatus.FAILED,
-          'SYSTEM',
-          'Cron Sweep: Unpaid order expired.',
-        );
-        this.logger.log(`Successfully expired order: ${order.id} via Cron.`);
-      } catch (err) {
-        this.logger.debug(`Failed to expire order ${order.id} via Cron: ${(err as Error).message}`);
+      if (expiredOrders.length === 0) {
+        return;
       }
-    }
+
+      this.logger.log(
+        `Found ${expiredOrders.length} expired orders missed by Queue. Processing...`,
+      );
+
+      for (const order of expiredOrders) {
+        try {
+          await this.ordersService.transitionStatus(
+            order.id,
+            OrderStatus.FAILED,
+            'SYSTEM',
+            'Cron Sweep: Unpaid order expired.',
+          );
+          this.logger.log(`Successfully expired order: ${order.id} via Cron.`);
+        } catch (err) {
+          this.logger.debug(
+            `Failed to expire order ${order.id} via Cron: ${(err as Error).message}`,
+          );
+        }
+      }
     } finally {
       // We can let the lock expire, or remove it early if done
       await this.redis.del(lockKey);

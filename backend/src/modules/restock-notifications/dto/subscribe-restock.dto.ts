@@ -1,4 +1,4 @@
-import { IsEmail, IsUUID, MaxLength } from "class-validator";
+import { IsEmail, IsUUID, MaxLength } from 'class-validator';
 
 /**
  * Subscribe to a back-in-stock notification for a specific variant.

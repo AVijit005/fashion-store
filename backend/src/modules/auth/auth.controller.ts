@@ -20,11 +20,7 @@ import { AuthService } from './auth.service';
 import { CsrfService } from '../../common/guards/csrf.service';
 import { SignUpDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
-import {
-  ForgotPasswordDto,
-  ResetPasswordDto,
-  VerifyEmailDto,
-} from './dto/reset-password.dto';
+import { ForgotPasswordDto, ResetPasswordDto, VerifyEmailDto } from './dto/reset-password.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -50,10 +46,7 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 900000 } })
   @ApiOperation({ summary: 'Register a new customer' })
   @ApiResponse({ status: 201, description: 'User successfully registered' })
-  async signUp(
-    @Body() signUpDto: SignUpDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async signUp(@Body() signUpDto: SignUpDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.signUp(signUpDto);
     this.setXsrfTokenCookie(res, this.csrfService.generateToken());
     return result;
@@ -195,7 +188,10 @@ export class AuthController {
    */
   @Get('google/callback')
   @UseGuards(PassportAuthGuard('google'))
-  async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
+  async googleAuthCallback(
+    @Req() req: Request & { user?: { id: string; email: string; role: string } },
+    @Res() res: Response,
+  ) {
     const user = req.user as { id: string; email: string; role: string };
     const rawIp = req.ip || (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim();
     const userAgent = req.headers['user-agent'];
@@ -211,8 +207,7 @@ export class AuthController {
     this.setAccessTokenCookie(res, tokens.accessToken);
     this.setXsrfTokenCookie(res, this.csrfService.generateToken());
 
-    const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
     return res.redirect(`${frontendUrl.replace(/\/$/, '')}/account?oauth=google`);
   }
 
@@ -248,7 +243,7 @@ export class AuthController {
       httpOnly: true,
       secure: isProduction,
       sameSite: 'strict',
-      path: '/',
+      path: '/api/v1',
       maxAge: 15 * 60 * 1000, // 15 minutes
     });
   }
@@ -259,7 +254,7 @@ export class AuthController {
       httpOnly: true,
       secure: isProduction,
       sameSite: 'strict',
-      path: '/',
+      path: '/api/v1',
       expires: new Date(0),
     });
   }

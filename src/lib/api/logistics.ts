@@ -16,6 +16,5 @@ export const logisticsApi = {
    * availability for a 6-digit Indian pincode. Cached on the client for
    * 24h (per-pincode serviceability rarely changes).
    */
-  getEta: (pincode: string) =>
-    apiClient.get<EtaResult>("/logistics/eta", { pincode }),
+  getEta: (pincode: string) => apiClient.get<EtaResult>("/logistics/eta", { pincode }),
 };

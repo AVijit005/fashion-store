@@ -43,8 +43,7 @@ export const returnsApi = {
     apiClient.patch<ReturnRequestDto>(`/admin/returns/${id}/review`, body),
 
   /** Admin: mark APPROVED return as RECEIVED (goods back at warehouse). */
-  adminReceived: (id: string) =>
-    apiClient.patch<ReturnRequestDto>(`/admin/returns/${id}/received`),
+  adminReceived: (id: string) => apiClient.patch<ReturnRequestDto>(`/admin/returns/${id}/received`),
 
   /** Admin: initiate Razorpay refund. amountInPaise comes from the order total. */
   adminRefund: (id: string, body: { amountInPaise: number }) =>

@@ -69,9 +69,7 @@ export class LogisticsService {
     return { pincode, ...fallback, source: 'fallback' };
   }
 
-  private fallbackForPrefix(
-    prefix: string,
-  ): Omit<EtaResult, 'pincode' | 'source'> | null {
+  private fallbackForPrefix(prefix: string): Omit<EtaResult, 'pincode' | 'source'> | null {
     const first = prefix[0];
     if (['1', '2', '3', '4'].includes(first)) {
       return { zone: 'NEAR', etaMinDays: 3, etaMaxDays: 5, codAvailable: true };

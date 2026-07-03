@@ -26,13 +26,21 @@ export class AdminStudioController {
   }
 
   @Post(':id/reject')
-  async rejectRequest(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectRequestDto, @Req() req: Request) {
+  async rejectRequest(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectRequestDto,
+    @Req() req: Request,
+  ) {
     const userId = (req as any).user.id;
     return this.studioService.updateStatus(id, 'REJECTED', userId, dto.reason);
   }
 
   @Post(':id/revise')
-  async requestRevision(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RequestRevisionDto, @Req() req: Request) {
+  async requestRevision(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RequestRevisionDto,
+    @Req() req: Request,
+  ) {
     const userId = (req as any).user.id;
     return this.studioService.updateStatus(id, 'UNDER_REVIEW', userId, dto.notes);
   }

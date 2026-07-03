@@ -39,11 +39,7 @@ export class ReviewsController {
     @Query('offset') offset?: string,
   ) {
     const product = await this.resolveProduct(slug);
-    return this.reviews.listForProduct(
-      product.id,
-      Number(limit ?? 20),
-      Number(offset ?? 0),
-    );
+    return this.reviews.listForProduct(product.id, Number(limit ?? 20), Number(offset ?? 0));
   }
 
   @Post()

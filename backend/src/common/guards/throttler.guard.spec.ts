@@ -5,11 +5,7 @@ describe('AppThrottlerGuard', () => {
   let guard: AppThrottlerGuard;
 
   beforeEach(() => {
-    guard = new AppThrottlerGuard(
-      { throttlers: [] } as any,
-      {} as any,
-      {} as any,
-    );
+    guard = new AppThrottlerGuard({ throttlers: [] } as any, {} as any, {} as any);
   });
 
   it('should return req.user.id when the user is present', async () => {

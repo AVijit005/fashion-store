@@ -237,8 +237,7 @@ export class UsersController {
 
   @Delete('me')
   @ApiOperation({
-    summary:
-      'Soft-delete the current user account (GDPR Art. 17). All sessions are revoked.',
+    summary: 'Soft-delete the current user account (GDPR Art. 17). All sessions are revoked.',
   })
   async deleteMyAccount(@Req() req: any) {
     const userId = req.user.id;

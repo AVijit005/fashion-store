@@ -5,16 +5,9 @@ import { toast } from "sonner";
 import { returnsApi, type ReturnRequestDto, type ReturnStatus } from "@/lib/api/returns";
 import { inr } from "@/lib/format";
 
-// TanStack Router uses file-based routing; the `/admin/returns` route
-// is not in `routeTree.gen.ts` until you run `npm run dev` (or the
-// route generator). We cast the path so this file compiles standalone;
-// it will pick up the real registered path on first dev/build.
-export const Route = createFileRoute("/admin/returns" as never)({
+export const Route = createFileRoute("/admin/returns")({
   head: () => ({
-    meta: [
-      { title: "Returns — Admin" },
-      { name: "robots", content: "noindex,nofollow" },
-    ],
+    meta: [{ title: "Returns — Admin" }, { name: "robots", content: "noindex,nofollow" }],
   }),
   component: AdminReturnsPage,
 });
@@ -112,27 +105,25 @@ function AdminReturnsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {(["ALL", "REQUESTED", "APPROVED", "RECEIVED", "REFUND_INITIATED", "REFUNDED"] as const).map(
-            (f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`border px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] ${
-                  filter === f ? "border-ink bg-ink text-paper" : "border-line hover:border-ink"
-                }`}
-              >
-                {f.replace("_", " ")}
-              </button>
-            ),
-          )}
+          {(
+            ["ALL", "REQUESTED", "APPROVED", "RECEIVED", "REFUND_INITIATED", "REFUNDED"] as const
+          ).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`border px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] ${
+                filter === f ? "border-ink bg-ink text-paper" : "border-line hover:border-ink"
+              }`}
+            >
+              {f.replace("_", " ")}
+            </button>
+          ))}
         </div>
       </header>
 
       {isLoading && <p className="text-mute">Loading returns…</p>}
       {error && (
-        <p className="text-sm text-accent">
-          Failed to load returns. Are you logged in as ADMIN?
-        </p>
+        <p className="text-sm text-accent">Failed to load returns. Are you logged in as ADMIN?</p>
       )}
 
       {list.length === 0 && !isLoading && (
@@ -153,14 +144,11 @@ function AdminReturnsPage() {
                   INK-{r.orderId.substring(0, 8).toUpperCase()}
                 </Link>
                 <p className="mt-1 text-[12px] text-mute">
-                  Item {r.orderItemId.substring(0, 8)} ·{" "}
-                  {new Date(r.createdAt).toLocaleString()}
+                  Item {r.orderItemId.substring(0, 8)} · {new Date(r.createdAt).toLocaleString()}
                 </p>
                 <p className="mt-2 text-sm">
                   <span className="font-medium">{r.reason}</span>
-                  {r.description && (
-                    <span className="text-mute"> — {r.description}</span>
-                  )}
+                  {r.description && <span className="text-mute"> — {r.description}</span>}
                 </p>
                 {r.refund && (
                   <p className="mt-1 text-[11px] text-mute">

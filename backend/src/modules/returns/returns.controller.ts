@@ -1,22 +1,10 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Patch,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReturnsService } from './returns.service';
-import {
-  CreateReturnDto,
-  ReviewReturnDto,
-  InitiateRefundDto,
-} from './dto';
+import { CreateReturnDto, ReviewReturnDto, InitiateRefundDto } from './dto';
 
 interface AuthenticatedUser {
   id: string;

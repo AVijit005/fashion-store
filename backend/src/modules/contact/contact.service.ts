@@ -1,8 +1,8 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "../../config/prisma.service";
-import { EmailService } from "../email/email.service";
-import { ConfigService } from "@nestjs/config";
-import { CreateContactDto } from "./dto/create-contact.dto";
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../../config/prisma.service';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
+import { CreateContactDto } from './dto/create-contact.dto';
 
 /**
  * ContactService — Phase 2 (audit item 2.9).
@@ -35,7 +35,7 @@ export class ContactService {
 
     // Best-effort admin notification. Failures are logged but never block
     // the submission itself — the customer message is already persisted.
-    const adminEmail = this.configService.get<string>("ADMIN_EMAIL");
+    const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
     if (adminEmail) {
       try {
         await this.emailService.sendTemplate(adminEmail, {
@@ -43,9 +43,10 @@ export class ContactService {
           html: `<p><strong>From:</strong> ${dto.name} &lt;${dto.email}&gt;</p>
                  <p><strong>Message:</strong></p>
                  <blockquote style="border-left:3px solid #ccc;padding-left:1em;margin-left:0;">
-                   ${dto.message.replace(/</g, "&lt;")}
+                   ${dto.message.replace(/</g, '&lt;')}
                  </blockquote>
                  <p style="color:#666;font-size:12px;">Submission ID: ${submission.id}</p>`,
+          text: `New contact submission from ${dto.name} <${dto.email}>\n\n${dto.message}\n\nSubmission ID: ${submission.id}`,
         });
       } catch (err) {
         this.logger.warn(
@@ -54,9 +55,7 @@ export class ContactService {
       }
     }
 
-    this.logger.log(
-      `Contact submission id=${submission.id} from ${dto.email}`,
-    );
+    this.logger.log(`Contact submission id=${submission.id} from ${dto.email}`);
 
     return submission;
   }
@@ -64,7 +63,7 @@ export class ContactService {
   // Admin listing — wired in the admin.returns-style "Contact" section.
   async listAll() {
     return this.prisma.contactSubmission.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       include: { user: { select: { id: true, email: true, name: true } } },
     });
   }

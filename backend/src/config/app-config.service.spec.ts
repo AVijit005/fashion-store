@@ -64,7 +64,9 @@ describe('AppConfigService', () => {
 
   it('getOrThrow throws when value is missing', () => {
     const emptyService = createService({});
-    expect(() => emptyService.databaseUrl).toThrow('Missing required configuration value: DATABASE_URL');
+    expect(() => emptyService.databaseUrl).toThrow(
+      'Missing required configuration value: DATABASE_URL',
+    );
   });
 
   it('exposes nodeEnv helpers', () => {

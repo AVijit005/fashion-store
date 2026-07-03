@@ -9,18 +9,18 @@ import {
   Post,
   Query,
   UseGuards,
-} from "@nestjs/common";
-import { RestockNotificationsService } from "./restock-notifications.service";
-import { SubscribeRestockDto } from "./dto/subscribe-restock.dto";
-import { PrismaService } from "../../config/prisma.service";
-import { Throttle } from "@nestjs/throttler";
-import { AuthGuard } from "../../common/guards/auth.guard";
-import { RolesGuard } from "../../common/guards/roles.guard";
-import { Roles } from "../../common/decorators/roles.decorator";
+} from '@nestjs/common';
+import { RestockNotificationsService } from './restock-notifications.service';
+import { SubscribeRestockDto } from './dto/subscribe-restock.dto';
+import { PrismaService } from '../../config/prisma.service';
+import { Throttle } from '@nestjs/throttler';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
 // Public endpoint — anyone can subscribe with their email.
 // Rate-limited to 3/min per IP to prevent signup spam / email enumeration.
-@Controller("products/:slug/notify-restock")
+@Controller('products/:slug/notify-restock')
 export class RestockNotificationsController {
   constructor(
     private readonly restock: RestockNotificationsService,
@@ -30,10 +30,7 @@ export class RestockNotificationsController {
   @Post()
   @Throttle({ default: { limit: 3, ttl: 60_000 } })
   @HttpCode(200)
-  async subscribe(
-    @Param("slug") slug: string,
-    @Body() dto: SubscribeRestockDto,
-  ) {
+  async subscribe(@Param('slug') slug: string, @Body() dto: SubscribeRestockDto) {
     const product = await this.prisma.product.findUnique({
       where: { slug },
       select: {
@@ -46,7 +43,7 @@ export class RestockNotificationsController {
       },
     });
     if (!product || product.variants.length === 0) {
-      throw new NotFoundException("Product variant not found");
+      throw new NotFoundException('Product variant not found');
     }
     const result = await this.restock.subscribe(dto.variantId, dto.email);
     return {
@@ -58,24 +55,22 @@ export class RestockNotificationsController {
 }
 
 // Admin endpoint.
-@Controller("admin/restock-notifications")
+@Controller('admin/restock-notifications')
 @UseGuards(AuthGuard, RolesGuard)
-@Roles("ADMIN")
+@Roles('ADMIN')
 export class AdminRestockNotificationsController {
   constructor(private readonly restock: RestockNotificationsService) {}
 
   @Get()
-  list(@Query("variantId") variantId?: string) {
+  list(@Query('variantId') variantId?: string) {
     // We delegate to the service for the variant-filtered case so the
     // list endpoint stays a thin wrapper.
-    return variantId
-      ? this.restock["findPendingByVariant"](variantId)
-      : this.restock.listAll();
+    return variantId ? this.restock['findPendingByVariant'](variantId) : this.restock.listAll();
   }
 
-  @Delete(":variantId")
+  @Delete(':variantId')
   @HttpCode(200)
-  reset(@Param("variantId") variantId: string) {
+  reset(@Param('variantId') variantId: string) {
     return this.restock.clearNotified(variantId);
   }
 }

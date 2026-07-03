@@ -41,13 +41,13 @@ const DEFAULT_SETTINGS = {
 };
 
 function isObject(item: any): boolean {
-  return (item !== null && typeof item === 'object' && !Array.isArray(item));
+  return item !== null && typeof item === 'object' && !Array.isArray(item);
 }
 
 function deepMerge(target: any, source: any): any {
   const output = { ...target };
   if (isObject(target) && isObject(source)) {
-    Object.keys(source).forEach(key => {
+    Object.keys(source).forEach((key) => {
       if (isObject(source[key])) {
         if (!(key in target)) {
           Object.assign(output, { [key]: source[key] });

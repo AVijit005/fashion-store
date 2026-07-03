@@ -1,4 +1,10 @@
-import { Injectable, BadRequestException, Inject, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  Inject,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import Redis from 'ioredis';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../config/prisma.service';
@@ -43,7 +49,7 @@ export class CartService {
     private readonly prisma: PrismaService,
     private readonly settingsService: SettingsService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
-  ) { }
+  ) {}
 
   private getCacheKey(userId?: string, sessionId?: string): string {
     if (userId) {
@@ -192,6 +198,8 @@ export class CartService {
 
     let totalAmount = new Prisma.Decimal(0);
 
+    const settings = await this.settingsService.getAll();
+
     const hydratedItems = items
       .map((item) => {
         if (!item.variantId && item.customData) {
@@ -202,7 +210,6 @@ export class CartService {
 
           // Phase 1 (audit item 1.7): custom-print markup is configurable via
           // GlobalSettings (key: `studio.customPrintMarkup`). Default 200.
-          const settings = await this.settingsService.getAll();
           const basePrice = new Prisma.Decimal(baseProduct.basePrice.toString());
           const customPrice = basePrice.add(new Prisma.Decimal(settings.studio.customPrintMarkup));
           const itemTotal = customPrice.mul(item.quantity);
@@ -345,27 +352,28 @@ export class CartService {
     // it. Without the row lock, two concurrent updateItem calls on the
     // same item both read the old quantity and the final UPDATE is
     // last-write-wins — silently clobbering one of the user's intents.
-    return this.prisma.$transaction(async (tx) => {
-      const cart = await tx.cart.findFirst({
-        where: userId ? { userId } : { sessionId },
-      });
+    return this.prisma.$transaction(
+      async (tx) => {
+        const cart = await tx.cart.findFirst({
+          where: userId ? { userId } : { sessionId },
+        });
 
-      if (!cart) {
-        throw new NotFoundException('Cart not found');
-      }
+        if (!cart) {
+          throw new NotFoundException('Cart not found');
+        }
 
-      // Lock the target cart_item row so concurrent updates on the same
-      // item serialize. We accept either an id match or a productVariantId
-      // match (legacy callers), but the lookup itself happens under the
-      // row lock to avoid the read-then-lock race.
-      const lockedRows = await tx.$queryRaw<
-        Array<{
-          id: string;
-          cart_id: string;
-          product_variant_id: string | null;
-          quantity: number;
-        }>
-      >`
+        // Lock the target cart_item row so concurrent updates on the same
+        // item serialize. We accept either an id match or a productVariantId
+        // match (legacy callers), but the lookup itself happens under the
+        // row lock to avoid the read-then-lock race.
+        const lockedRows = await tx.$queryRaw<
+          Array<{
+            id: string;
+            cart_id: string;
+            product_variant_id: string | null;
+            quantity: number;
+          }>
+        >`
         SELECT id, cart_id, product_variant_id, quantity
           FROM cart_items
          WHERE cart_id = ${cart.id}
@@ -374,14 +382,14 @@ export class CartService {
          LIMIT 1
            FOR UPDATE
       `;
-      const item = lockedRows[0];
+        const item = lockedRows[0];
 
-      if (!item) {
-        throw new NotFoundException('Cart item not found');
-      }
+        if (!item) {
+          throw new NotFoundException('Cart item not found');
+        }
 
-      if (item.product_variant_id) {
-        const updatedCount = await tx.$executeRaw`
+        if (item.product_variant_id) {
+          const updatedCount = await tx.$executeRaw`
           UPDATE cart_items
           SET quantity = ${quantity}, updated_at = NOW()
           WHERE id = ${item.id}
@@ -393,21 +401,23 @@ export class CartService {
           )
         `;
 
-        if (updatedCount === 0) {
-          throw new BadRequestException('Requested quantity exceeds available stock');
+          if (updatedCount === 0) {
+            throw new BadRequestException('Requested quantity exceeds available stock');
+          }
+        } else {
+          await tx.cartItem.update({
+            where: { id: item.id },
+            data: { quantity },
+          });
         }
-      } else {
-        await tx.cartItem.update({
-          where: { id: item.id },
-          data: { quantity },
-        });
-      }
 
-      // Cache invalidation is queued for after the transaction commits —
-      // Redis calls are not transactional and would race with a reader
-      // that hasn't yet seen our write.
-      await tx.$executeRaw`SELECT 1`; // no-op, keeps tx alive
-    }, { timeout: 8_000 });
+        // Cache invalidation is queued for after the transaction commits —
+        // Redis calls are not transactional and would race with a reader
+        // that hasn't yet seen our write.
+        await tx.$executeRaw`SELECT 1`; // no-op, keeps tx alive
+      },
+      { timeout: 8_000 },
+    );
 
     await this.invalidateCache(userId, sessionId);
     return this.getCart(userId, sessionId);
@@ -500,7 +510,9 @@ export class CartService {
       for (const guestItem of guestCart.items) {
         if (!guestItem.productVariantId) {
           const existingCustom = existingUserItems.find(
-            (i) => !i.productVariantId && this.customDataKey(i.customData) === this.customDataKey(guestItem.customData)
+            (i) =>
+              !i.productVariantId &&
+              this.customDataKey(i.customData) === this.customDataKey(guestItem.customData),
           );
           if (existingCustom) {
             await tx.cartItem.update({
@@ -555,10 +567,7 @@ export class CartService {
     const normalizedToOriginal = new Map<string, string>();
     for (const key of Object.keys(customData)) {
       const lower = key.toLowerCase();
-      if (
-        lower.startsWith('design') ||
-        ['printurl', 'text', 'placement'].includes(lower)
-      ) {
+      if (lower.startsWith('design') || ['printurl', 'text', 'placement'].includes(lower)) {
         normalizedToOriginal.set(lower, key);
       }
     }

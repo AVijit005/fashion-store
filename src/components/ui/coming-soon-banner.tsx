@@ -18,10 +18,7 @@ export function ComingSoonBanner({
   message?: string;
 }) {
   return (
-    <div
-      role="status"
-      className="border-b border-line bg-fog/60"
-    >
+    <div role="status" className="border-b border-line bg-fog/60">
       <div className="mx-auto flex max-w-[1480px] flex-wrap items-center gap-3 px-5 py-3 text-[11px] uppercase tracking-[0.18em] text-mute lg:px-10">
         <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
         <span className="font-medium text-ink">{feature} — coming soon</span>

@@ -188,7 +188,8 @@ export class CatalogService {
         slug: 'monolith-oversized-hoodie',
         title: 'Monolith Oversized Hoodie',
         categorySlug: 'hoodies',
-        description: 'Heavyweight 400gsm brushed fleece. Dropped shoulders, boxy fit, tonal embroidery.',
+        description:
+          'Heavyweight 400gsm brushed fleece. Dropped shoulders, boxy fit, tonal embroidery.',
         price: 3500,
         imgIds: ['photo-1550614000-4b95d466f2fb', 'photo-1523398002811-999aa8d9511e'],
         tags: ['oversized', 'trending'],
@@ -208,12 +209,13 @@ export class CatalogService {
         slug: 'shogun-bomber-jacket',
         title: 'Shogun Bomber Jacket',
         categorySlug: 'jackets',
-        description: 'Satin finish with intricate back embroidery. Premium hardware and ribbed trims.',
+        description:
+          'Satin finish with intricate back embroidery. Premium hardware and ribbed trims.',
         price: 5500,
         imgIds: ['photo-1492288991661-058aa541ff43', 'photo-1552374196-1ab2a1c593e8'],
         tags: ['limited'],
         isFeatured: true,
-      }
+      },
     ];
 
     console.log('🌱 Seeding DB Natively...');

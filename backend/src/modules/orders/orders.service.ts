@@ -18,7 +18,7 @@ import { EmailService } from '../email/email.service';
 import { shippingUpdateTemplate } from '../email/templates/shipping-update';
 import { refundIssuedTemplate } from '../email/templates/refund-issued';
 import { deliveryConfirmedTemplate } from '../email/templates/delivery-confirmed';
-import { CheckoutDto, VerifyPaymentDto } from './dto/orders.dto';
+import { CheckoutDto, VerifyPaymentDto, CheckoutPricingDto } from './dto/orders.dto';
 import { OrderStatus, Order, Prisma, PaymentStatus, PaymentProvider } from '@prisma/client';
 import { InventoryService } from './inventory.service';
 import { RestockNotificationsService } from '../restock-notifications/restock-notifications.service';
@@ -38,7 +38,12 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PENDING]: [OrderStatus.PAYMENT_PENDING, OrderStatus.CANCELLED, OrderStatus.FAILED],
   [OrderStatus.PAYMENT_PENDING]: [OrderStatus.PAID, OrderStatus.CANCELLED, OrderStatus.FAILED],
   [OrderStatus.PAID]: [OrderStatus.PROCESSING, OrderStatus.REFUNDED],
-  [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.REFUNDED, OrderStatus.FAILED],
+  [OrderStatus.PROCESSING]: [
+    OrderStatus.SHIPPED,
+    OrderStatus.CANCELLED,
+    OrderStatus.REFUNDED,
+    OrderStatus.FAILED,
+  ],
   [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
   [OrderStatus.DELIVERED]: [OrderStatus.REFUNDED],
   [OrderStatus.CANCELLED]: [],
@@ -67,40 +72,43 @@ export class OrdersService {
   private async getOrCreateIdempotencyKey(
     idempotencyKey: string,
   ): Promise<{ response?: any } | null> {
-    return this.prisma.$transaction(async (tx) => {
-      const lockHash = crypto
-        .createHash('sha256')
-        .update(`idempotency_${idempotencyKey}`)
-        .digest();
-      const lockId = lockHash.readInt32LE(0);
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockId})`;
+    return this.prisma.$transaction(
+      async (tx) => {
+        const lockHash = crypto
+          .createHash('sha256')
+          .update(`idempotency_${idempotencyKey}`)
+          .digest();
+        const lockId = lockHash.readInt32LE(0);
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockId})`;
 
-      const existingKey = await tx.idempotencyKey.findUnique({
-        where: { key: idempotencyKey },
-      });
+        const existingKey = await tx.idempotencyKey.findUnique({
+          where: { key: idempotencyKey },
+        });
 
-      if (existingKey) {
-        if (existingKey.response !== null && existingKey.response !== undefined) {
-          return { response: existingKey.response };
+        if (existingKey) {
+          if (existingKey.response !== null && existingKey.response !== undefined) {
+            return { response: existingKey.response };
+          }
+
+          const ageMs = Date.now() - existingKey.createdAt.getTime();
+          if (ageMs <= 30000) {
+            throw new ConflictException('Checkout is already in progress for this request.');
+          }
+
+          await tx.idempotencyKey.delete({ where: { key: idempotencyKey } });
         }
 
-        const ageMs = Date.now() - existingKey.createdAt.getTime();
-        if (ageMs <= 30000) {
-          throw new ConflictException('Checkout is already in progress for this request.');
-        }
+        await tx.idempotencyKey.create({
+          data: {
+            key: idempotencyKey,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          },
+        });
 
-        await tx.idempotencyKey.delete({ where: { key: idempotencyKey } });
-      }
-
-      await tx.idempotencyKey.create({
-        data: {
-          key: idempotencyKey,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        },
-      });
-
-      return null;
-    }, { timeout: 8000 });
+        return null;
+      },
+      { timeout: 8000 },
+    );
   }
 
   // Checkout and reserve inventory
@@ -134,7 +142,7 @@ export class OrdersService {
       const totalDecimal = new Prisma.Decimal(cart.totalAmount);
       const guestToken = activeUserId
         ? null
-        : (guestSessionId || crypto.randomBytes(16).toString('hex'));
+        : guestSessionId || crypto.randomBytes(16).toString('hex');
 
       let discountAmount = new Prisma.Decimal(0);
       let shippingFee = new Prisma.Decimal(0);
@@ -142,146 +150,156 @@ export class OrdersService {
       let totalAmount = new Prisma.Decimal(0);
 
       // 2. Perform DB Transaction for inventory locking and order creation
-      const createdOrder = await this.prisma.$transaction(async (tx) => {
-        if (dto.paymentMethod === 'cod') {
-          const pendingCodCount = await tx.order.count({
+      const createdOrder = await this.prisma.$transaction(
+        async (tx) => {
+          if (dto.paymentMethod === 'cod') {
+            const pendingCodCount = await tx.order.count({
+              where: {
+                paymentProvider: PaymentProvider.COD,
+                status: OrderStatus.PROCESSING,
+                ...(activeUserId ? { userId: activeUserId } : { shippingEmail: dto.shippingEmail }),
+              },
+            });
+            if (pendingCodCount >= 2) {
+              throw new BadRequestException(
+                'You have too many unfulfilled COD orders. Please wait for them to be delivered.',
+              );
+            }
+          }
+
+          const inventoryItems = cart.items
+            .filter((item) => item.variantId !== null)
+            .map((item) => ({
+              variantId: item.variantId as string,
+              quantity: item.quantity,
+              sku: item.sku as string,
+            }));
+
+          const existingPendingOrders = await tx.order.findMany({
             where: {
-              paymentProvider: PaymentProvider.COD,
-              status: OrderStatus.PROCESSING,
+              status: OrderStatus.PAYMENT_PENDING,
               ...(activeUserId ? { userId: activeUserId } : { shippingEmail: dto.shippingEmail }),
             },
           });
-          if (pendingCodCount >= 2) {
-            throw new BadRequestException(
-              'You have too many unfulfilled COD orders. Please wait for them to be delivered.',
+
+          if (existingPendingOrders.length > 0) {
+            await tx.order.updateMany({
+              where: { id: { in: existingPendingOrders.map((o) => o.id) } },
+              data: { status: OrderStatus.CANCELLED },
+            });
+
+            await tx.orderStatusHistory.createMany({
+              data: existingPendingOrders.map((o) => ({
+                orderId: o.id,
+                oldStatus: OrderStatus.PAYMENT_PENDING,
+                newStatus: OrderStatus.CANCELLED,
+                changedBy: 'SYSTEM',
+                reason: 'Auto-cancelled due to new checkout initiation',
+              })),
+            });
+
+            await this.inventoryService.restoreBulkInventory(
+              existingPendingOrders.map((o) => o.id),
+              tx,
             );
-          }
-        }
 
-        const inventoryItems = cart.items
-          .filter((item) => item.variantId !== null)
-          .map((item) => ({
-            variantId: item.variantId as string,
-            quantity: item.quantity,
-            sku: item.sku as string,
-          }));
+            const couponCodes = existingPendingOrders
+              .map((o) => o.couponCode)
+              .filter((c): c is string => !!c);
+            if (couponCodes.length > 0) {
+              const counts = couponCodes.reduce(
+                (acc, code) => {
+                  acc[code] = (acc[code] || 0) + 1;
+                  return acc;
+                },
+                {} as Record<string, number>,
+              );
 
-        const existingPendingOrders = await tx.order.findMany({
-          where: {
-            status: OrderStatus.PAYMENT_PENDING,
-            ...(activeUserId ? { userId: activeUserId } : { shippingEmail: dto.shippingEmail }),
-          },
-        });
-
-        if (existingPendingOrders.length > 0) {
-          await tx.order.updateMany({
-            where: { id: { in: existingPendingOrders.map((o) => o.id) } },
-            data: { status: OrderStatus.CANCELLED },
-          });
-
-          await tx.orderStatusHistory.createMany({
-            data: existingPendingOrders.map((o) => ({
-              orderId: o.id,
-              oldStatus: OrderStatus.PAYMENT_PENDING,
-              newStatus: OrderStatus.CANCELLED,
-              changedBy: 'SYSTEM',
-              reason: 'Auto-cancelled due to new checkout initiation',
-            })),
-          });
-
-          await this.inventoryService.restoreBulkInventory(
-            existingPendingOrders.map((o) => o.id),
-            tx,
-          );
-
-          const couponCodes = existingPendingOrders
-            .map((o) => o.couponCode)
-            .filter((c): c is string => !!c);
-          if (couponCodes.length > 0) {
-            const counts = couponCodes.reduce((acc, code) => {
-              acc[code] = (acc[code] || 0) + 1;
-              return acc;
-            }, {} as Record<string, number>);
-
-            for (const [code, count] of Object.entries(counts)) {
-              await tx.coupon.updateMany({
-                where: { code, usageCount: { gte: count } },
-                data: { usageCount: { decrement: count } },
-              });
+              for (const [code, count] of Object.entries(counts)) {
+                await tx.coupon.updateMany({
+                  where: { code, usageCount: { gte: count } },
+                  data: { usageCount: { decrement: count } },
+                });
+              }
             }
           }
-        }
 
-        if (inventoryItems.length > 0) {
-          await this.inventoryService.reserveInventory(inventoryItems, tx);
-        }
-
-        if (dto.couponCode) {
-          try {
-            const couponRes = await this.applyCouponInTransaction(tx, dto.couponCode, cart.totalAmount);
-            discountAmount = new Prisma.Decimal(couponRes.discount);
-          } catch (e: any) {
-            throw new BadRequestException(`Coupon error: ${e.message}`);
+          if (inventoryItems.length > 0) {
+            await this.inventoryService.reserveInventory(inventoryItems, tx);
           }
-        }
 
-        const totalAmountBase = totalDecimal;
-        const discountedBase = totalAmountBase.sub(discountAmount);
+          if (dto.couponCode) {
+            try {
+              const couponRes = await this.applyCouponInTransaction(
+                tx,
+                dto.couponCode,
+                cart.totalAmount,
+              );
+              discountAmount = new Prisma.Decimal(couponRes.discount);
+            } catch (e: any) {
+              throw new BadRequestException(`Coupon error: ${e.message}`);
+            }
+          }
 
-        // Phase 1 (audit item 1.6): tax + shipping come from GlobalSettings,
-        // not hardcoded constants. Admin can tune GST % and shipping thresholds
-        // via /admin/settings without redeploying.
-        const settings = await this.settingsService.getAll();
-        shippingFee = discountedBase.greaterThan(settings.shipping.freeThreshold) || discountedBase.equals(0)
-          ? new Prisma.Decimal(0)
-          : new Prisma.Decimal(settings.shipping.flatRate);
+          const totals = await this.calculateTotals(totalDecimal, discountAmount);
+          shippingFee = totals.shippingFee;
+          tax = totals.tax;
+          totalAmount = totals.totalAmount;
 
-        tax = discountedBase.mul(settings.tax.gstPercent).div(100 + settings.tax.gstPercent);
-        totalAmount = discountedBase.add(shippingFee);
-
-        return tx.order.create({
-          data: {
-            userId: activeUserId || null,
-            guestToken,
-            couponCode: dto.couponCode ? dto.couponCode.toUpperCase() : null,
-            status: dto.paymentMethod === 'cod' ? OrderStatus.PROCESSING : OrderStatus.PAYMENT_PENDING,
-            totalAmount,
-            shippingFee,
-            tax,
-            shippingName: dto.shippingName,
-            shippingEmail: dto.shippingEmail,
-            shippingPhone: dto.shippingPhone,
-            shippingStreet: dto.shippingStreet,
-            shippingCity: dto.shippingCity,
-            shippingState: dto.shippingState,
-            shippingPostalCode: dto.shippingPostalCode,
-            shippingCountry: dto.shippingCountry,
-            paymentProvider: dto.paymentMethod === 'cod' ? PaymentProvider.COD : PaymentProvider.RAZORPAY,
-            paymentStatus: dto.paymentMethod === 'cod' ? PaymentStatus.COD : PaymentStatus.PENDING,
-            items: {
-              create: cart.items.map((item) => ({
-                productVariantId: item.variantId || undefined,
-                quantity: item.quantity,
-                priceAtPurchase: new Prisma.Decimal(item.unitPrice),
-                customData: item.customData ? (item.customData as any) : Prisma.JsonNull,
-                // Phase 3 (audit item 3.1): snapshot title + thumbnail + sku
-                // at order time so historical orders still render correctly
-                // even if the product or variant is later deleted.
-                productTitle: item.productTitle,
-                productThumbnail: item.thumbnailUrl ?? null,
-                productSku: item.sku ?? null,
-              })),
-            },
-            statusHistory: {
-              create: {
-                newStatus: dto.paymentMethod === 'cod' ? OrderStatus.PROCESSING : OrderStatus.PAYMENT_PENDING,
-                changedBy: activeUserId ? 'USER' : 'GUEST',
-                reason: dto.paymentMethod === 'cod' ? 'COD checkout completed.' : 'Checkout started, stock reserved.',
+          return tx.order.create({
+            data: {
+              userId: activeUserId || null,
+              guestToken,
+              couponCode: dto.couponCode ? dto.couponCode.toUpperCase() : null,
+              status:
+                dto.paymentMethod === 'cod' ? OrderStatus.PROCESSING : OrderStatus.PAYMENT_PENDING,
+              totalAmount,
+              shippingFee,
+              tax,
+              shippingName: dto.shippingName,
+              shippingEmail: dto.shippingEmail,
+              shippingPhone: dto.shippingPhone,
+              shippingStreet: dto.shippingStreet,
+              shippingCity: dto.shippingCity,
+              shippingState: dto.shippingState,
+              shippingPostalCode: dto.shippingPostalCode,
+              shippingCountry: dto.shippingCountry,
+              paymentProvider:
+                dto.paymentMethod === 'cod' ? PaymentProvider.COD : PaymentProvider.RAZORPAY,
+              paymentStatus:
+                dto.paymentMethod === 'cod' ? PaymentStatus.COD : PaymentStatus.PENDING,
+              items: {
+                create: cart.items.map((item) => ({
+                  productVariantId: item.variantId || undefined,
+                  quantity: item.quantity,
+                  priceAtPurchase: new Prisma.Decimal(item.unitPrice),
+                  customData: item.customData ? (item.customData as any) : Prisma.JsonNull,
+                  // Phase 3 (audit item 3.1): snapshot title + thumbnail + sku
+                  // at order time so historical orders still render correctly
+                  // even if the product or variant is later deleted.
+                  productTitle: item.productTitle,
+                  productThumbnail: item.thumbnailUrl ?? null,
+                  productSku: item.sku ?? null,
+                })),
+              },
+              statusHistory: {
+                create: {
+                  newStatus:
+                    dto.paymentMethod === 'cod'
+                      ? OrderStatus.PROCESSING
+                      : OrderStatus.PAYMENT_PENDING,
+                  changedBy: activeUserId ? 'USER' : 'GUEST',
+                  reason:
+                    dto.paymentMethod === 'cod'
+                      ? 'COD checkout completed.'
+                      : 'Checkout started, stock reserved.',
+                },
               },
             },
-          },
-        });
-      }, { timeout: 8000 });
+          });
+        },
+        { timeout: 8000 },
+      );
 
       // Schedule expiry job before making the Razorpay API call.
       try {
@@ -323,15 +341,18 @@ export class OrdersService {
         });
         razorpayOrderId = gatewayResult.razorpayOrderId;
       } catch (err) {
-        await this.prisma.$transaction(async (tx) => {
-          await this.transitionStatus(
-            createdOrder.id,
-            OrderStatus.FAILED,
-            'SYSTEM',
-            `Razorpay integration failed: ${(err as Error).message}`,
-            tx,
-          );
-        }, { timeout: 8000 });
+        await this.prisma.$transaction(
+          async (tx) => {
+            await this.transitionStatus(
+              createdOrder.id,
+              OrderStatus.FAILED,
+              'SYSTEM',
+              `Razorpay integration failed: ${(err as Error).message}`,
+              tx,
+            );
+          },
+          { timeout: 8000 },
+        );
 
         const message = (err as Error).message || '';
         if (
@@ -360,18 +381,22 @@ export class OrdersService {
       };
 
       if (idempotencyKey) {
-        await this.prisma.idempotencyKey.update({
-          where: { key: idempotencyKey },
-          data: { response: responseObj as any },
-        }).catch(() => null);
+        await this.prisma.idempotencyKey
+          .update({
+            where: { key: idempotencyKey },
+            data: { response: responseObj as any },
+          })
+          .catch(() => null);
       }
 
       return responseObj;
     } catch (error: any) {
       if (idempotencyKey) {
-        await this.prisma.idempotencyKey.delete({
-          where: { key: idempotencyKey },
-        }).catch(() => null);
+        await this.prisma.idempotencyKey
+          .delete({
+            where: { key: idempotencyKey },
+          })
+          .catch(() => null);
       }
       throw error;
     }
@@ -429,63 +454,72 @@ export class OrdersService {
 
     // 2. Serialize with a distributed lock per Razorpay order id.
     return this.paymentsService.withPaymentLock(dto.razorpayOrderId, async () => {
-      const result = await this.prisma.$transaction(async (tx) => {
-        const order = await tx.order.findUnique({
-          where: { razorpayOrderId: dto.razorpayOrderId },
-        });
+      const result = await this.prisma.$transaction(
+        async (tx) => {
+          const order = await tx.order.findUnique({
+            where: { razorpayOrderId: dto.razorpayOrderId },
+          });
 
-        // 404 on lookup failure — don't leak whether the order exists.
-        if (!order) {
-          throw new NotFoundException('Order not found');
-        }
-
-        if (order.userId) {
-          if (order.userId !== userId) {
+          // 404 on lookup failure — don't leak whether the order exists.
+          if (!order) {
             throw new NotFoundException('Order not found');
           }
-        } else {
-          if (!guestToken || order.guestToken !== guestToken) {
-            throw new NotFoundException('Order not found');
-          }
-        }
 
-        if (order.status === OrderStatus.PAID) {
-          if (order.razorpayPaymentId && order.razorpayPaymentId !== dto.razorpayPaymentId) {
-            throw new BadRequestException('Order has already been paid with a different payment');
+          if (order.userId) {
+            if (order.userId !== userId) {
+              throw new NotFoundException('Order not found');
+            }
+          } else {
+            if (!guestToken || order.guestToken !== guestToken) {
+              throw new NotFoundException('Order not found');
+            }
           }
+
+          if (order.status === OrderStatus.PAID) {
+            if (order.razorpayPaymentId && order.razorpayPaymentId !== dto.razorpayPaymentId) {
+              throw new BadRequestException('Order has already been paid with a different payment');
+            }
+            return {
+              success: true,
+              orderId: order.id,
+              status: order.status,
+              cartToClear: null,
+            };
+          }
+
+          // Transition to PAID inside the same transaction (acquires the
+          // FOR UPDATE lock on the orders row).
+          await this.transitionStatus(
+            order.id,
+            OrderStatus.PAID,
+            'USER',
+            'Payment signature verified.',
+            tx,
+          );
+
+          const marked = await this.paymentsService.markOrderPaid(
+            tx,
+            {
+              id: order.id,
+              status: order.status,
+              userId: order.userId,
+              guestToken: order.guestToken,
+            },
+            dto.razorpayPaymentId,
+            'USER',
+            'Payment signature verified.',
+            dto.razorpaySignature,
+          );
+
           return {
             success: true,
-            orderId: order.id,
-            status: order.status,
-            cartToClear: null,
+            orderId: marked.orderId,
+            status: marked.status,
+            cartToClear: marked.cartToClear,
           };
-        }
-
-        // Transition to PAID inside the same transaction (acquires the
-        // FOR UPDATE lock on the orders row).
-        await this.transitionStatus(order.id, OrderStatus.PAID, 'USER', 'Payment signature verified.', tx);
-
-        const marked = await this.paymentsService.markOrderPaid(
-          tx,
-          {
-            id: order.id,
-            status: order.status,
-            userId: order.userId,
-            guestToken: order.guestToken,
-          },
-          dto.razorpayPaymentId,
-          'USER',
-          'Payment signature verified.',
-          dto.razorpaySignature,
-        );
-
-        return {
-          success: true,
-          orderId: marked.orderId,
-          status: marked.status,
-          cartToClear: marked.cartToClear,
-        };
-      }, { timeout: 8000 });
+        },
+        { timeout: 8000 },
+      );
 
       if (result.cartToClear) {
         const cart = result.cartToClear;
@@ -497,6 +531,29 @@ export class OrdersService {
   }
 
   // ---------- Coupons ----------
+
+  async previewTotals(dto: CheckoutPricingDto, userId?: string) {
+    const activeUserId = userId || undefined;
+    const activeSessionId = activeUserId ? undefined : dto.guestSessionId;
+    const cart = await this.cartService.getCart(activeUserId, activeSessionId);
+    const subtotal = new Prisma.Decimal(cart.totalAmount);
+
+    let discountAmount = new Prisma.Decimal(0);
+    if (dto.couponCode) {
+      const couponRes = await this.applyCoupon(dto.couponCode, cart.totalAmount);
+      discountAmount = new Prisma.Decimal(couponRes.discount);
+    }
+
+    const totals = await this.calculateTotals(subtotal, discountAmount);
+    return {
+      subtotal: subtotal.toNumber(),
+      discount: discountAmount.toNumber(),
+      shippingFee: totals.shippingFee.toNumber(),
+      tax: totals.tax.toNumber(),
+      totalAmount: totals.totalAmount.toNumber(),
+      currency: 'INR',
+    };
+  }
 
   async applyCoupon(code: string, subtotal: number) {
     const coupon = await this.prisma.coupon.findUnique({
@@ -531,6 +588,18 @@ export class OrdersService {
     if (discount > subtotal) discount = subtotal;
 
     return { code: coupon.code, discount: Math.round(discount) };
+  }
+
+  private async calculateTotals(totalDecimal: Prisma.Decimal, discountAmount: Prisma.Decimal) {
+    const discountedBase = totalDecimal.sub(discountAmount);
+    const settings = await this.settingsService.getAll();
+    const shippingFee =
+      discountedBase.greaterThan(settings.shipping.freeThreshold) || discountedBase.equals(0)
+        ? new Prisma.Decimal(0)
+        : new Prisma.Decimal(settings.shipping.flatRate);
+    const tax = discountedBase.mul(settings.tax.gstPercent).div(100 + settings.tax.gstPercent);
+    const totalAmount = discountedBase.add(shippingFee);
+    return { discountedBase, shippingFee, tax, totalAmount };
   }
 
   private async applyCouponInTransaction(
@@ -749,10 +818,12 @@ export class OrdersService {
     if (newStatus === OrderStatus.FAILED || newStatus === OrderStatus.CANCELLED) {
       await this.inventoryService.restoreInventory(orderId, tx);
       if (order.coupon_code) {
-        await tx.coupon.updateMany({
-          where: { code: order.coupon_code, usageCount: { gte: 1 } },
-          data: { usageCount: { decrement: 1 } },
-        }).catch(() => null);
+        await tx.coupon
+          .updateMany({
+            where: { code: order.coupon_code, usageCount: { gte: 1 } },
+            data: { usageCount: { decrement: 1 } },
+          })
+          .catch(() => null);
       }
     }
 
@@ -830,6 +901,11 @@ export class OrdersService {
     return updatedOrder;
   }
 
+  async processRazorpayRefund(paymentId: string, amount: number): Promise<void> {
+    const amountInPaise = Math.round(amount * 100);
+    await this.paymentsService.refundPayment(paymentId, amountInPaise);
+  }
+
   // ---------- Helpers ----------
 
   /**
@@ -877,13 +953,10 @@ export class OrdersService {
     });
     if (!fullOrder) return;
 
-    const recipientEmail =
-      fullOrder.user?.email ?? fullOrder.shippingEmail;
+    const recipientEmail = fullOrder.user?.email ?? fullOrder.shippingEmail;
     if (!recipientEmail) return;
 
-    const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') ||
-      'http://localhost:5173';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     const orderUrl = `${frontendUrl.replace(/\/$/, '')}/account?order=${encodeURIComponent(orderId)}`;
 
     const template = shippingUpdateTemplate({
@@ -905,19 +978,14 @@ export class OrdersService {
     });
     if (!fullOrder) return;
 
-    const recipientEmail =
-      fullOrder.user?.email ?? fullOrder.shippingEmail;
+    const recipientEmail = fullOrder.user?.email ?? fullOrder.shippingEmail;
     if (!recipientEmail) return;
 
-    const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') ||
-      'http://localhost:5173';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     const orderUrl = `${frontendUrl.replace(/\/$/, '')}/account?order=${encodeURIComponent(orderId)}`;
 
     const refundAmount =
-      Number(fullOrder.totalAmount) +
-      Number(fullOrder.shippingFee) +
-      Number(fullOrder.tax);
+      Number(fullOrder.totalAmount) + Number(fullOrder.shippingFee) + Number(fullOrder.tax);
 
     const template = refundIssuedTemplate({
       name: fullOrder.user?.name ?? null,
@@ -940,13 +1008,10 @@ export class OrdersService {
     });
     if (!fullOrder) return;
 
-    const recipientEmail =
-      fullOrder.user?.email ?? fullOrder.shippingEmail;
+    const recipientEmail = fullOrder.user?.email ?? fullOrder.shippingEmail;
     if (!recipientEmail) return;
 
-    const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') ||
-      'http://localhost:5173';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     const orderUrl = `${frontendUrl.replace(/\/$/, '')}/account?order=${encodeURIComponent(orderId)}`;
 
     const template = deliveryConfirmedTemplate({

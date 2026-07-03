@@ -28,8 +28,7 @@ export const usersApi = {
   exportData: () => apiClient.get<unknown>("/users/me/export"),
 
   // GDPR account deletion (Art. 17) — soft-delete, revoke sessions.
-  deleteAccount: () =>
-    apiClient.delete<{ message: string }>("/users/me"),
+  deleteAccount: () => apiClient.delete<{ message: string }>("/users/me"),
 };
 
 export function useUpdatePreferences() {

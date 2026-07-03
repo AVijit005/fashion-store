@@ -1,8 +1,8 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "../../config/prisma.service";
-import { EmailService } from "../email/email.service";
-import { ConfigService } from "@nestjs/config";
-import { restockNotificationTemplate } from "../email/templates/restock-notification";
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../../config/prisma.service';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
+import { restockNotificationTemplate } from '../email/templates/restock-notification';
 
 /**
  * RestockNotificationsService — Phase 3 (audit item 3.1).
@@ -73,8 +73,8 @@ export class RestockNotificationsService {
     if (!variant) return { notified: 0 };
 
     const frontendUrl = (
-      this.configService.get<string>("FRONTEND_URL") ?? "http://localhost:5173"
-    ).replace(/\/$/, "");
+      this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173'
+    ).replace(/\/$/, '');
     const productUrl = `${frontendUrl}/p/${variant.product.slug}`;
 
     let notified = 0;
@@ -110,7 +110,7 @@ export class RestockNotificationsService {
 
   async listAll() {
     return this.prisma.restockNotification.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       include: {
         variant: {
           select: {

@@ -94,6 +94,15 @@ interface CheckoutResponse {
   guestToken: string | null;
 }
 
+interface PricingPreview {
+  subtotal: number;
+  discount: number;
+  shippingFee: number;
+  tax: number;
+  totalAmount: number;
+  currency: string;
+}
+
 // ---------------------------------------------------------------------------
 // Razorpay SDK loader — idempotent, only loads once per page session
 // ---------------------------------------------------------------------------
@@ -151,10 +160,43 @@ function CheckoutPage() {
   const [couponCode, setCouponCode] = useState("");
   const [couponError, setCouponError] = useState("");
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const [pricingPreview, setPricingPreview] = useState<PricingPreview | null>(null);
 
   const grandTotal = Math.max(sub - appliedCouponDiscount, 0);
   const ship = grandTotal > 999 || grandTotal === 0 ? 0 : 79;
   const total = grandTotal + ship;
+  const displayedSubtotal = pricingPreview?.subtotal ?? sub;
+  const displayedShipping = pricingPreview?.shippingFee ?? ship;
+  const displayedTotal = pricingPreview?.totalAmount ?? total;
+
+  useEffect(() => {
+    if (!hydrated || items.length === 0) {
+      setPricingPreview(null);
+      return;
+    }
+
+    let cancelled = false;
+    const guestSessionId = getOrCreateCartSessionId() || undefined;
+    apiClient
+      .post<PricingPreview>(
+        "/orders/pricing-preview",
+        {
+          guestSessionId,
+          couponCode: appliedCouponCode || undefined,
+        },
+        { silent: true },
+      )
+      .then((preview) => {
+        if (!cancelled) setPricingPreview(preview);
+      })
+      .catch(() => {
+        if (!cancelled) setPricingPreview(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, items.length, sub, appliedCouponCode]);
 
   const applyCoupon = async () => {
     if (!couponCode.trim()) return;
@@ -506,7 +548,7 @@ function CheckoutPage() {
                     id: "standard",
                     t: "Standard (India Only)",
                     d: "3–5 business days",
-                    p: grandTotal > 999 ? 0 : 79,
+                    p: displayedShipping,
                   },
                 ].map((o) => (
                   <label
@@ -631,7 +673,7 @@ function CheckoutPage() {
                   {pay === "cod" ? "Processing..." : "Opening secure payment..."}
                 </>
               ) : (
-                <>Place order · {inr(total)}</>
+                <>Place order · {inr(displayedTotal)}</>
               )}
             </button>
           )}
@@ -706,7 +748,7 @@ function CheckoutPage() {
           <dl className="space-y-1.5 p-5 text-sm">
             <div className="flex justify-between">
               <dt className="text-mute">Subtotal</dt>
-              <dd className="tabular-nums">{inr(sub)}</dd>
+              <dd className="tabular-nums">{inr(displayedSubtotal)}</dd>
             </div>
             {savingsAmt > 0 && (
               <div className="flex justify-between text-accent">
@@ -716,7 +758,9 @@ function CheckoutPage() {
             )}
             <div className="flex justify-between">
               <dt className="text-mute">Shipping</dt>
-              <dd className="tabular-nums">{ship === 0 ? "Free (India Only)" : inr(ship)}</dd>
+              <dd className="tabular-nums">
+                {displayedShipping === 0 ? "Free (India Only)" : inr(displayedShipping)}
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-mute">GST</dt>
@@ -724,7 +768,7 @@ function CheckoutPage() {
             </div>
             <div className="mt-3 flex items-baseline justify-between border-t border-line pt-3">
               <dt className="text-[11px] uppercase tracking-[0.22em] text-mute">Total</dt>
-              <dd className="font-display text-3xl tabular-nums">{inr(total)}</dd>
+              <dd className="font-display text-3xl tabular-nums">{inr(displayedTotal)}</dd>
             </div>
           </dl>
         </div>

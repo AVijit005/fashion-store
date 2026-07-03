@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  BadRequestException,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CartService } from '../cart/cart.service';
@@ -51,10 +46,7 @@ export class WebhooksService {
     private readonly cartService: CartService,
   ) {}
 
-  async handleRazorpayWebhook(
-    rawBody: string,
-    signature: string,
-  ): Promise<WebhookHandleResult> {
+  async handleRazorpayWebhook(rawBody: string, signature: string): Promise<WebhookHandleResult> {
     // 1. Verify signature first — never even parse the body of an
     //    unauthenticated request.
     this.paymentsService.verifyWebhookSignature(rawBody, signature);
@@ -99,85 +91,93 @@ export class WebhooksService {
     }
 
     return this.paymentsService.withPaymentLock(razorpayOrderId, async () => {
-      const result = await this.prisma.$transaction(async (tx) => {
-        const order = await tx.order.findUnique({
-          where: { razorpayOrderId },
-        });
-
-        if (!order) {
-          await tx.webhookEvent.create({
-            data: {
-              id: eventId,
-              status: WebhookEventStatus.SKIPPED,
-              payload: payload as object,
-            },
+      const result = await this.prisma.$transaction(
+        async (tx) => {
+          const order = await tx.order.findUnique({
+            where: { razorpayOrderId },
           });
-          return {
-            status: WebhookEventStatus.SKIPPED as WebhookEventStatus,
-            cartToClear: null as { userId?: string; guestToken?: string } | null,
-          };
-        }
 
-        // Use OrdersService.transitionStatus via a DB-side approach here
-        // so the FOR UPDATE row lock on orders is held while we update.
-        // We inline a minimal status flip rather than depending on the
-        // OrdersService to avoid a circular module dependency.
-        const orders = await tx.$queryRaw<
-          Array<{ id: string; status: OrderStatus; user_id: string | null; guest_token: string | null }>
-        >`SELECT id, status, user_id, guest_token FROM orders WHERE id = ${order.id} FOR UPDATE`;
+          if (!order) {
+            await tx.webhookEvent.create({
+              data: {
+                id: eventId,
+                status: WebhookEventStatus.SKIPPED,
+                payload: payload as object,
+              },
+            });
+            return {
+              status: WebhookEventStatus.SKIPPED as WebhookEventStatus,
+              cartToClear: null as { userId?: string; guestToken?: string } | null,
+            };
+          }
 
-        if (!orders.length) {
-          throw new NotFoundException('Order disappeared during webhook processing');
-        }
-        const locked = orders[0];
+          // Use OrdersService.transitionStatus via a DB-side approach here
+          // so the FOR UPDATE row lock on orders is held while we update.
+          // We inline a minimal status flip rather than depending on the
+          // OrdersService to avoid a circular module dependency.
+          const orders = await tx.$queryRaw<
+            Array<{
+              id: string;
+              status: OrderStatus;
+              user_id: string | null;
+              guest_token: string | null;
+            }>
+          >`SELECT id, status, user_id, guest_token FROM orders WHERE id = ${order.id} FOR UPDATE`;
 
-        if (locked.status === OrderStatus.PAID) {
-          await tx.webhookEvent.create({
+          if (!orders.length) {
+            throw new NotFoundException('Order disappeared during webhook processing');
+          }
+          const locked = orders[0];
+
+          if (locked.status === OrderStatus.PAID) {
+            await tx.webhookEvent.create({
+              data: {
+                id: eventId,
+                status: WebhookEventStatus.SKIPPED,
+                payload: payload as object,
+              },
+            });
+            return {
+              status: WebhookEventStatus.SKIPPED as WebhookEventStatus,
+              cartToClear: null,
+            };
+          }
+
+          await tx.order.update({
+            where: { id: locked.id },
             data: {
-              id: eventId,
-              status: WebhookEventStatus.SKIPPED,
-              payload: payload as object,
-            },
-          });
-          return {
-            status: WebhookEventStatus.SKIPPED as WebhookEventStatus,
-            cartToClear: null,
-          };
-        }
-
-        await tx.order.update({
-          where: { id: locked.id },
-          data: {
-            status: OrderStatus.PAID,
-            razorpayPaymentId,
-            paymentStatus: 'PAID',
-            statusHistory: {
-              create: {
-                oldStatus: locked.status,
-                newStatus: OrderStatus.PAID,
-                changedBy: 'WEBHOOK',
-                reason: `Payment captured via webhook: ${eventType}`,
+              status: OrderStatus.PAID,
+              razorpayPaymentId,
+              paymentStatus: 'PAID',
+              statusHistory: {
+                create: {
+                  oldStatus: locked.status,
+                  newStatus: OrderStatus.PAID,
+                  changedBy: 'WEBHOOK',
+                  reason: `Payment captured via webhook: ${eventType}`,
+                },
               },
             },
-          },
-        });
+          });
 
-        await tx.webhookEvent.create({
-          data: {
-            id: eventId,
-            status: WebhookEventStatus.PROCESSED,
-            payload: payload as object,
-          },
-        });
+          await tx.webhookEvent.create({
+            data: {
+              id: eventId,
+              status: WebhookEventStatus.PROCESSED,
+              payload: payload as object,
+            },
+          });
 
-        return {
-          status: WebhookEventStatus.PROCESSED as WebhookEventStatus,
-          cartToClear: {
-            userId: locked.user_id || undefined,
-            guestToken: locked.guest_token || undefined,
-          },
-        };
-      }, { timeout: 8_000 });
+          return {
+            status: WebhookEventStatus.PROCESSED as WebhookEventStatus,
+            cartToClear: {
+              userId: locked.user_id || undefined,
+              guestToken: locked.guest_token || undefined,
+            },
+          };
+        },
+        { timeout: 8_000 },
+      );
 
       // Clear the cart outside the transaction (cart service hits Redis
       // and S3 metadata; not transactional state).

@@ -59,9 +59,7 @@ describe('CartService', () => {
 
   describe('getCartItems', () => {
     it('should return cached items on a cache hit', async () => {
-      const cached = [
-        { id: 'item-1', variantId: 'variant-1', quantity: 2, customData: null },
-      ];
+      const cached = [{ id: 'item-1', variantId: 'variant-1', quantity: 2, customData: null }];
       redisClient.get.mockResolvedValue(JSON.stringify(cached));
 
       const result = await service.getCartItems('user-1');
@@ -116,9 +114,7 @@ describe('CartService', () => {
       redisClient.get.mockResolvedValue(null);
       redisClient.set.mockResolvedValue(null); // lock is always busy
 
-      const calls = Array.from({ length: 5 }, () =>
-        service.getCartItems('user-1'),
-      );
+      const calls = Array.from({ length: 5 }, () => service.getCartItems('user-1'));
       const results = await Promise.all(calls);
 
       for (const result of results) {
@@ -129,9 +125,7 @@ describe('CartService', () => {
     });
 
     it('should re-read the cache between lock retries and return populated data', async () => {
-      const cached = [
-        { id: 'cached-item', variantId: 'variant-1', quantity: 5, customData: null },
-      ];
+      const cached = [{ id: 'cached-item', variantId: 'variant-1', quantity: 5, customData: null }];
       let getCallCount = 0;
       redisClient.get.mockImplementation(() => {
         getCallCount += 1;
@@ -268,9 +262,7 @@ describe('CartService', () => {
     });
 
     beforeEach(() => {
-      prismaService.$transaction.mockImplementation(async (callback: any) =>
-        callback(buildTx()),
-      );
+      prismaService.$transaction.mockImplementation(async (callback: any) => callback(buildTx()));
     });
 
     it('should merge custom items with the same logical customData but different key order', async () => {
@@ -312,9 +304,7 @@ describe('CartService', () => {
       prismaService.cartItem.deleteMany.mockResolvedValue({});
       prismaService.cart.delete.mockResolvedValue({});
 
-      jest
-        .spyOn(service, 'getCart')
-        .mockResolvedValue({ items: [], totalAmount: 0 });
+      jest.spyOn(service, 'getCart').mockResolvedValue({ items: [], totalAmount: 0 });
 
       await service.mergeCart('guest-session', 'user-1');
 
@@ -362,9 +352,7 @@ describe('CartService', () => {
       prismaService.cartItem.deleteMany.mockResolvedValue({});
       prismaService.cart.delete.mockResolvedValue({});
 
-      jest
-        .spyOn(service, 'getCart')
-        .mockResolvedValue({ items: [], totalAmount: 0 });
+      jest.spyOn(service, 'getCart').mockResolvedValue({ items: [], totalAmount: 0 });
 
       await service.mergeCart('guest-session', 'user-1');
 

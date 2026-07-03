@@ -4,7 +4,7 @@ import { PrismaService } from '../../config/prisma.service';
 
 @Injectable()
 export class AdminDropsService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async getDrops() {
     const drops = await this.prisma.drop.findMany({

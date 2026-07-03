@@ -22,7 +22,9 @@ export class OrderExpiryProcessor extends WorkerHost implements OnModuleDestroy 
   // BE-007: Dead Letter Queue Trap
   @OnWorkerEvent('failed')
   onFailed(job: Job, error: Error) {
-    this.logger.error(`[DEAD LETTER] Job ${job?.id} (Type: ${job?.name}) failed permanently. Reason: ${error.message}`);
+    this.logger.error(
+      `[DEAD LETTER] Job ${job?.id} (Type: ${job?.name}) failed permanently. Reason: ${error.message}`,
+    );
     // Future: Persist to a DLQ Postgres table or push to Datadog/Sentry
   }
 

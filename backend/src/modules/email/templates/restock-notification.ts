@@ -1,4 +1,4 @@
-import type { EmailTemplate } from "./types";
+import type { EmailTemplate } from './types';
 
 export interface RestockNotificationTemplateData {
   productTitle: string;
@@ -11,9 +11,7 @@ export interface RestockNotificationTemplateData {
  * Back-in-stock notification email. Sent when a previously out-of-stock
  * variant comes back and at least one customer had subscribed.
  */
-export function restockNotificationTemplate(
-  d: RestockNotificationTemplateData,
-): EmailTemplate {
+export function restockNotificationTemplate(d: RestockNotificationTemplateData): EmailTemplate {
   const subject = `\u2705 Back in stock: ${d.productTitle} (${d.size}/${d.color})`;
   const html = `
     <div style="font-family: -apple-system, system-ui, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
@@ -40,9 +38,9 @@ export function restockNotificationTemplate(
 
 function escapeHtml(s: string): string {
   return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

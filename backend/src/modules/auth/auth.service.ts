@@ -76,8 +76,7 @@ export class AuthService {
     });
 
     try {
-      const frontendUrl =
-        this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
       const verifyUrl = `${frontendUrl}/verify-email?token=${encodeURIComponent(rawToken)}`;
       const template = welcomeTemplate({ name: user.name ?? null, verifyUrl });
       await this.emailService.sendTemplate(user.email, template);
@@ -145,8 +144,7 @@ export class AuthService {
     });
 
     try {
-      const frontendUrl =
-        this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
       const verifyUrl = `${frontendUrl}/verify-email?token=${encodeURIComponent(rawToken)}`;
       const template = verifyEmailTemplate({ name: user.name ?? null, verifyUrl });
       await this.emailService.sendTemplate(user.email, template);
@@ -184,8 +182,7 @@ export class AuthService {
     });
 
     try {
-      const frontendUrl =
-        this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
       const resetUrl = `${frontendUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
       const expiresInMinutes = Math.floor(PASSWORD_RESET_TOKEN_TTL_MS / 60_000);
       const template = passwordResetTemplate({
@@ -217,10 +214,7 @@ export class AuthService {
       if (!user) {
         throw new BadRequestException('Invalid or expired reset token');
       }
-      if (
-        user.passwordResetExpires &&
-        user.passwordResetExpires.getTime() < Date.now()
-      ) {
+      if (user.passwordResetExpires && user.passwordResetExpires.getTime() < Date.now()) {
         throw new BadRequestException('Invalid or expired reset token');
       }
 
@@ -513,8 +507,7 @@ export class AuthService {
   ) {
     const refreshToken = this.generateRandomToken();
     const tokenHash = this.hashToken(refreshToken);
-    const expiryDays =
-      this.configService.get<number>('REFRESH_TOKEN_EXPIRES_IN_DAYS') || 7;
+    const expiryDays = this.configService.get<number>('REFRESH_TOKEN_EXPIRES_IN_DAYS') || 7;
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expiryDays);
     const session = await this.prisma.session.create({

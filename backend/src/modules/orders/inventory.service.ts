@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   // Locks and reserves inventory for checkout
   async reserveInventory(
@@ -14,10 +14,7 @@ export class InventoryService {
   ) {
     const qtyByVariant = new Map<string, number>();
     for (const item of items) {
-      qtyByVariant.set(
-        item.variantId,
-        (qtyByVariant.get(item.variantId) || 0) + item.quantity,
-      );
+      qtyByVariant.set(item.variantId, (qtyByVariant.get(item.variantId) || 0) + item.quantity);
     }
     const sortedVariantIds = Array.from(qtyByVariant.keys()).sort();
     if (sortedVariantIds.length === 0) return;
@@ -53,8 +50,8 @@ export class InventoryService {
       if (quantityToDeduct === 0) continue;
 
       const updateResult = await tx.productVariant.updateMany({
-        where: force 
-          ? { id: variantId } 
+        where: force
+          ? { id: variantId }
           : {
               id: variantId,
               stockQuantity: { gte: quantityToDeduct },

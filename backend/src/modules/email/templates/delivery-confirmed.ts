@@ -7,9 +7,7 @@ export interface DeliveryConfirmedTemplateData {
   orderUrl: string;
 }
 
-export function deliveryConfirmedTemplate(
-  d: DeliveryConfirmedTemplateData,
-): EmailTemplate {
+export function deliveryConfirmedTemplate(d: DeliveryConfirmedTemplateData): EmailTemplate {
   const greeting = d.name ? `Hi ${d.name},` : 'Hi there,';
   const subject = `Order #${d.orderShortId} delivered \u2014 enjoy!`;
   const html = `

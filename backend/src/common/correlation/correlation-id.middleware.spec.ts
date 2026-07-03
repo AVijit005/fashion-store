@@ -1,5 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { correlationIdMiddleware, CORRELATION_ID_HEADER, REQUEST_ID_HEADER } from './correlation-id.middleware';
+import {
+  correlationIdMiddleware,
+  CORRELATION_ID_HEADER,
+  REQUEST_ID_HEADER,
+} from './correlation-id.middleware';
 import { getCorrelationId } from './correlation-id.store';
 
 describe('correlationIdMiddleware', () => {
@@ -46,7 +50,9 @@ describe('correlationIdMiddleware', () => {
 
     correlationIdMiddleware(req, res, () => {
       const headerValue = (res.setHeader as jest.Mock).mock.calls[0][1];
-      expect(headerValue).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+      expect(headerValue).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      );
       expect(getCorrelationId()).toBe(headerValue);
       done();
     });

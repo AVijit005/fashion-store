@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service';
 
 @Injectable()
@@ -10,7 +11,6 @@ export class AdminCustomersService {
     if (q) {
       where.email = { contains: q, mode: 'insensitive' };
     }
-    const { Prisma } = require('@prisma/client');
     const skip = (page - 1) * limit;
 
     const baseSql = Prisma.sql`

@@ -22,9 +22,7 @@ function fmt(amount: number, currency: string): string {
   return `${currency} ${amount.toLocaleString()}`;
 }
 
-export function refundIssuedTemplate(
-  d: RefundIssuedTemplateData,
-): EmailTemplate {
+export function refundIssuedTemplate(d: RefundIssuedTemplateData): EmailTemplate {
   const greeting = d.name ? `Hi ${d.name},` : 'Hi there,';
   const currency = d.currency ?? 'INR';
   const subject = `Refund of ${fmt(d.refundAmount, currency)} issued for order #${d.orderShortId}`;

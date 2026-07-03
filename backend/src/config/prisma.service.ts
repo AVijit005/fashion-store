@@ -9,13 +9,17 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   constructor(configService: ConfigService<Env>) {
     const finalUrl = buildDatabaseUrl(configService.get<string>('DATABASE_URL'));
 
-    super(finalUrl ? {
-      datasources: {
-        db: {
-          url: finalUrl,
-        },
-      },
-    } : undefined);
+    super(
+      finalUrl
+        ? {
+            datasources: {
+              db: {
+                url: finalUrl,
+              },
+            },
+          }
+        : undefined,
+    );
   }
 
   async onModuleInit() {

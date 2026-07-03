@@ -44,8 +44,7 @@ type Layer =
 // products via the admin UI; the backend uses Prisma `hasSome` to match.
 // Until any product is tagged, the studio shows an empty picker — admin
 // must opt-in products to the custom-print program.
-const STUDIO_PLACEHOLDER =
-  "https://placehold.co/900x900/f5f3ee/0d0d0d?text=No+Image";
+const STUDIO_PLACEHOLDER = "https://placehold.co/900x900/f5f3ee/0d0d0d?text=No+Image";
 
 const COLORS = [
   { name: "Bone", hex: "#f5f3ee" },
@@ -111,10 +110,7 @@ function Studio() {
       // that survives design-versioning, cart serialization, and sharing.
       const result = await uploadImageFile(f);
       const id = `l${Date.now()}`;
-      setLayers([
-        ...layers,
-        { id, type: "image", src: result.publicUrl, x: 50, y: 50, size: 30 },
-      ]);
+      setLayers([...layers, { id, type: "image", src: result.publicUrl, x: 50, y: 50, size: 30 }]);
       setSelected(id);
       toast.success("Image uploaded");
     } catch (err) {
@@ -220,8 +216,8 @@ function Studio() {
                 ) : products.length === 0 ? (
                   <p className="col-span-2 text-[12px] text-mute">
                     No customizable products yet. Admin must tag products with{" "}
-                    <code className="rounded bg-fog px-1">custom-print</code> to enable them
-                    in the studio.
+                    <code className="rounded bg-fog px-1">custom-print</code> to enable them in the
+                    studio.
                   </p>
                 ) : (
                   products.map((p) => (

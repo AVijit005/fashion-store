@@ -1,4 +1,13 @@
-import { IsString, IsEmail, IsNotEmpty, IsOptional, IsUUID, IsNumber, IsIn, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsNumber,
+  IsIn,
+  MaxLength,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CheckoutDto {
@@ -88,6 +97,18 @@ export class VerifyPaymentDto {
   @IsString()
   @IsNotEmpty()
   razorpaySignature!: string;
+}
+
+export class CheckoutPricingDto {
+  @ApiProperty({ description: 'Guest cart session ID (if not logged in)', required: false })
+  @IsUUID()
+  @IsOptional()
+  guestSessionId?: string;
+
+  @ApiProperty({ description: 'Applied coupon code', required: false })
+  @IsString()
+  @IsOptional()
+  couponCode?: string;
 }
 
 export class ApplyCouponDto {

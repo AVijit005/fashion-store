@@ -6,12 +6,14 @@ const isVercelPreview =
   window.location.hostname.includes("vercel.app") &&
   !window.location.hostname.startsWith("fashion-store");
 const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3000";
+const API_PREFIX = "/api/v1";
 
 import { toast } from "sonner";
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
   validate?: (data: unknown) => boolean | unknown;
+  silent?: boolean;
 }
 
 export class APIError extends Error {
@@ -27,6 +29,15 @@ export class APIError extends Error {
 }
 
 let refreshPromise: Promise<void> | null = null;
+let csrfPromise: Promise<void> | null = null;
+
+function buildApiUrl(path: string): URL {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const base = BASE_URL.replace(/\/$/, "");
+  const basePath = new URL(base).pathname.replace(/\/$/, "");
+  const prefix = basePath.endsWith(API_PREFIX) ? "" : API_PREFIX;
+  return new URL(`${base}${prefix}${normalizedPath}`);
+}
 
 function getXsrfToken(): string | undefined {
   if (typeof document === "undefined") return undefined;
@@ -50,12 +61,43 @@ function unwrapApiData<T>(parsed: unknown, validate?: (data: unknown) => boolean
   }
   return data as T;
 }
+
+async function ensureCsrfToken(): Promise<void> {
+  if (typeof window === "undefined" || getXsrfToken()) return;
+  if (!csrfPromise) {
+    csrfPromise = fetch(buildApiUrl("/auth/csrf").toString(), {
+      method: "GET",
+      credentials: "include",
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new APIError("Unable to initialize CSRF token", response.status, null);
+        }
+      })
+      .finally(() => {
+        csrfPromise = null;
+      });
+  }
+  await csrfPromise;
+}
+
+function isMutatingMethod(method?: string): boolean {
+  return !["GET", "HEAD", "OPTIONS"].includes((method || "GET").toUpperCase());
+}
+
+function isCsrfEndpoint(path: string): boolean {
+  return path === "/auth/csrf" || path === "auth/csrf";
+}
 // isVercelPreview reserved for future deployment-aware routing
 void isVercelPreview;
 
 export const apiClient = {
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const url = new URL(`${BASE_URL}${path.startsWith("/") ? path : `/${path}`}`);
+    if (isMutatingMethod(options.method) && !isCsrfEndpoint(path)) {
+      await ensureCsrfToken();
+    }
+
+    const url = buildApiUrl(path);
 
     if (options.params) {
       Object.entries(options.params).forEach(([key, val]) => {
@@ -109,7 +151,8 @@ export const apiClient = {
         if (typeof window !== "undefined" && localStorage.getItem("ink_logged_in") === "true") {
           if (!refreshPromise) {
             refreshPromise = (async () => {
-              const refreshUrl = new URL(`${BASE_URL}/auth/refresh`);
+              await ensureCsrfToken();
+              const refreshUrl = buildApiUrl("/auth/refresh");
               const refreshXsrf = getXsrfToken();
               const refreshHeaders: Record<string, string> = {
                 "Content-Type": "application/json",
@@ -189,7 +232,7 @@ export const apiClient = {
         }
       }
 
-      if (typeof window !== "undefined") {
+      if (typeof window !== "undefined" && !options.silent) {
         if (response.status === 403) {
           toast.error("Access denied. You do not have permission.");
         } else if (response.status >= 400 && response.status < 500) {

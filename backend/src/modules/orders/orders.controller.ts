@@ -17,7 +17,12 @@ import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from './orders.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
-import { CheckoutDto, VerifyPaymentDto, ApplyCouponDto } from './dto/orders.dto';
+import {
+  CheckoutDto,
+  VerifyPaymentDto,
+  ApplyCouponDto,
+  CheckoutPricingDto,
+} from './dto/orders.dto';
 import { OptionalAuthGuard } from '../../common/guards/optional-auth.guard';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -52,6 +57,19 @@ export class OrdersController {
       );
     }
     return this.ordersService.checkout(dto, user?.id);
+  }
+
+  @Post('pricing-preview')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @UseGuards(OptionalAuthGuard)
+  @ApiOperation({ summary: 'Calculate checkout totals from backend pricing settings' })
+  async pricingPreview(@Body() dto: CheckoutPricingDto, @CurrentUser() user?: RequestUser) {
+    if (!user?.id && !dto.guestSessionId) {
+      throw new BadRequestException(
+        'Session identifier (guestSessionId) is required for guest checkout pricing',
+      );
+    }
+    return this.ordersService.previewTotals(dto, user?.id);
   }
 
   @Post('apply-coupon')
@@ -90,10 +108,7 @@ export class OrdersController {
     summary: 'Legacy Razorpay webhook path (deprecated — use /webhooks/razorpay)',
     deprecated: true,
   })
-  async webhook(
-    @Req() req: RawBodyRequest,
-    @Headers('x-razorpay-signature') signature?: string,
-  ) {
+  async webhook(@Req() req: RawBodyRequest, @Headers('x-razorpay-signature') signature?: string) {
     if (!signature || typeof signature !== 'string') {
       throw new BadRequestException('Webhook signature header missing or invalid format');
     }

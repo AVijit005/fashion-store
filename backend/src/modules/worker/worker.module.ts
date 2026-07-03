@@ -46,16 +46,8 @@ export class WorkerModule {
       // side) lives in OrdersModule and is loaded by BOTH replicas so
       // API calls can enqueue jobs even from a process with no consumer.
       imports: [OrdersModule],
-      providers: [
-        OrderExpiryProcessor,
-        AbandonedCartCron,
-        PaymentPendingReconciliationCron,
-      ],
-      exports: [
-        OrderExpiryProcessor,
-        AbandonedCartCron,
-        PaymentPendingReconciliationCron,
-      ],
+      providers: [OrderExpiryProcessor, AbandonedCartCron, PaymentPendingReconciliationCron],
+      exports: [OrderExpiryProcessor, AbandonedCartCron, PaymentPendingReconciliationCron],
     };
   }
 }

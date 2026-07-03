@@ -42,7 +42,7 @@ export class AdminOrdersService {
         orderBy: { createdAt: 'desc' },
         include: {
           user: {
-            select: { id: true, email: true, name: true, role: true }
+            select: { id: true, email: true, name: true, role: true },
           },
           items: {
             include: {
@@ -88,6 +88,9 @@ export class AdminOrdersService {
           productVariantId: variant.id,
           quantity: item.qty,
           priceAtPurchase: variant.priceOverride || variant.product.basePrice,
+          productTitle: variant.product.title,
+          productThumbnail: variant.product.mediaUrls?.[0] ?? null,
+          productSku: variant.sku,
         });
       }
 
@@ -170,7 +173,10 @@ export class AdminOrdersService {
     }
 
     if (order.paymentProvider === PaymentProvider.RAZORPAY && order.razorpayPaymentId) {
-      await this.ordersService.processRazorpayRefund(order.razorpayPaymentId, Number(order.totalAmount));
+      await this.ordersService.processRazorpayRefund(
+        order.razorpayPaymentId,
+        Number(order.totalAmount),
+      );
     }
 
     // Process refund using OrdersService to ensure inventory restoration

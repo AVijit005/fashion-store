@@ -50,8 +50,7 @@ export class ReturnsService {
     }
 
     const settings = await this.settingsService.getAll();
-    const daysSinceDelivered =
-      (Date.now() - item.order.updatedAt.getTime()) / 86_400_000;
+    const daysSinceDelivered = (Date.now() - item.order.updatedAt.getTime()) / 86_400_000;
     if (daysSinceDelivered > settings.refunds.autoApproveWindowDays) {
       throw new BadRequestException(
         `Return window of ${settings.refunds.autoApproveWindowDays} days has expired`,
@@ -136,9 +135,7 @@ export class ReturnsService {
     });
     if (!ret) throw new NotFoundException('Return not found');
     if (!canTransition(ret.status, dto.decision)) {
-      throw new BadRequestException(
-        `Cannot transition from ${ret.status} to ${dto.decision}`,
-      );
+      throw new BadRequestException(`Cannot transition from ${ret.status} to ${dto.decision}`);
     }
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.returnRequest.update({
@@ -164,25 +161,17 @@ export class ReturnsService {
     });
   }
 
-  async initiateRefund(
-    returnId: string,
-    adminId: string,
-    dto: InitiateRefundDto,
-  ) {
+  async initiateRefund(returnId: string, adminId: string, dto: InitiateRefundDto) {
     const ret = await this.prisma.returnRequest.findUnique({
       where: { id: returnId },
       include: { order: true, refund: true },
     });
     if (!ret) throw new NotFoundException('Return not found');
     if (!canTransition(ret.status, ReturnStatus.REFUND_INITIATED)) {
-      throw new BadRequestException(
-        `Cannot initiate refund from status ${ret.status}`,
-      );
+      throw new BadRequestException(`Cannot initiate refund from status ${ret.status}`);
     }
     if (!ret.order.razorpayPaymentId) {
-      throw new BadRequestException(
-        'No payment id on order — cannot refund via gateway',
-      );
+      throw new BadRequestException('No payment id on order — cannot refund via gateway');
     }
     if (ret.refund && ret.refund.status === RefundStatus.PROCESSED) {
       throw new ConflictException('Refund already processed');
@@ -209,10 +198,7 @@ export class ReturnsService {
         });
 
     try {
-      await this.payments.refundPayment(
-        ret.order.razorpayPaymentId,
-        dto.amountInPaise,
-      );
+      await this.payments.refundPayment(ret.order.razorpayPaymentId, dto.amountInPaise);
       await this.prisma.refund.update({
         where: { id: refund.id },
         data: {
@@ -221,9 +207,7 @@ export class ReturnsService {
         },
       });
     } catch (err) {
-      this.logger.error(
-        `Razorpay refund failed returnId=${returnId}: ${(err as Error).message}`,
-      );
+      this.logger.error(`Razorpay refund failed returnId=${returnId}: ${(err as Error).message}`);
       await this.prisma.refund.update({
         where: { id: refund.id },
         data: { status: RefundStatus.FAILED },
@@ -263,14 +247,10 @@ export class ReturnsService {
       throw new BadRequestException('No refund record found for this return');
     }
     if (ret.refund.status !== RefundStatus.PROCESSED) {
-      throw new BadRequestException(
-        `Refund not yet processed (status: ${ret.refund.status})`,
-      );
+      throw new BadRequestException(`Refund not yet processed (status: ${ret.refund.status})`);
     }
     if (!canTransition(ret.status, ReturnStatus.REFUNDED)) {
-      throw new BadRequestException(
-        `Cannot transition from ${ret.status} to REFUNDED`,
-      );
+      throw new BadRequestException(`Cannot transition from ${ret.status} to REFUNDED`);
     }
 
     await this.prisma.$transaction([

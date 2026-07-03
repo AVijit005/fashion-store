@@ -2,6 +2,8 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
+import type { QueueOptions } from 'bullmq';
+import Redis from 'ioredis';
 import { validateEnv, Env } from './config/env.config';
 import { AppConfigModule } from './config/app-config.module';
 import { PrismaModule } from './config/prisma.module';
@@ -47,7 +49,9 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env>) => ({
         throttlers: [{ ttl: 60000, limit: 100 }],
-        storage: new ThrottlerStorageRedisService(config.get<string>('REDIS_URL') || 'redis://localhost:6379'),
+        storage: new ThrottlerStorageRedisService(
+          config.get<string>('REDIS_URL') || 'redis://localhost:6379',
+        ),
       }),
     }),
     BullModule.forRootAsync({
@@ -59,8 +63,9 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
             const [host, port] = node.split(':');
             return { host, port: parseInt(port, 10) };
           });
-          const Redis = require('ioredis');
-          return { connection: new Redis.Cluster(nodes) };
+          return {
+            connection: new Redis.Cluster(nodes) as unknown as QueueOptions['connection'],
+          };
         }
 
         const redisUrl = configService.get<string>('REDIS_URL');
@@ -74,7 +79,13 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
             port: parseInt(url.port || '6379', 10),
             username: url.username || undefined,
             password: url.password || undefined,
-            tls: url.protocol === 'rediss:' ? { rejectUnauthorized: configService.get('NODE_ENV', 'development') === 'production' } : undefined,
+            tls:
+              url.protocol === 'rediss:'
+                ? {
+                    rejectUnauthorized:
+                      configService.get('NODE_ENV', 'development') === 'production',
+                  }
+                : undefined,
           },
         };
       },

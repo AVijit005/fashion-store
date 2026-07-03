@@ -1,4 +1,16 @@
-import { Controller, Get, Put, Post, Patch, Param, Body, UseGuards, Query, ParseUUIDPipe, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Put,
+  Post,
+  Patch,
+  Param,
+  Body,
+  UseGuards,
+  Query,
+  ParseUUIDPipe,
+  Req,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AdminOrdersService } from './admin.orders.service';
@@ -57,6 +69,11 @@ export class AdminOrdersController {
     const adminUserId = (req as any).user?.id as string | undefined;
     const rawIp = req.ip || req.headers['x-forwarded-for']?.toString();
     const ipAddress = rawIp?.split(',')[0]?.trim();
-    return this.ordersService.updateBulkOrderStatus(dto.orderIds, dto.status, adminUserId, ipAddress);
+    return this.ordersService.updateBulkOrderStatus(
+      dto.orderIds,
+      dto.status,
+      adminUserId,
+      ipAddress,
+    );
   }
 }

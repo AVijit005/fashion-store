@@ -25,7 +25,7 @@ const createMockContext = (options: {
 
   return {
     getHandler: () => handler,
-    getClass: () => ({} as any),
+    getClass: () => ({}) as any,
     switchToHttp: () => ({
       getRequest: () => request,
       getResponse: () => response,

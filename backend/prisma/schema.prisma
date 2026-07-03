@@ -113,10 +113,6 @@ model User {
   submissionsReviewed  StudioSubmission[]    @relation("ReviewerSubmissions")
   statusHistories      StudioStatusHistory[]
   reviews              Review[]
-
-  @@index([googleId])
-  @@map("users")
-}
   auditLogs            AuditLog[]
   sessions             Session[]
   contactSubmissions   ContactSubmission[]
@@ -207,31 +203,31 @@ model Drop {
 }
 
 model Product {
-  id              String           @id @default(uuid())
-  categoryId      String           @map("category_id")
-  category        Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  dropId          String?          @map("drop_id")
-  drop            Drop?            @relation(fields: [dropId], references: [id], onDelete: SetNull)
-  title           String
-  slug            String           @unique
-  description     String
+  id                String           @id @default(uuid())
+  categoryId        String           @map("category_id")
+  category          Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  dropId            String?          @map("drop_id")
+  drop              Drop?            @relation(fields: [dropId], references: [id], onDelete: SetNull)
+  title             String
+  slug              String           @unique
+  description       String
   basePrice         Decimal          @map("base_price") @db.Decimal(10, 2)
   mrp               Decimal?         @map("mrp") @db.Decimal(10, 2)
   lowStockThreshold Int              @default(5) @map("low_stock_threshold")
   customizable      Boolean          @default(false) @map("customizable")
   isFeatured        Boolean          @default(false) @map("is_featured")
-  mediaUrls       String[]         @map("media_urls")
-  status          ProductStatus    @default(DRAFT)
-  tags            String[]         @default([])
-  metaTitle       String?          @map("meta_title")
-  metaDescription String?          @map("meta_description")
-  collections     Collection[]     @relation("ProductCollections")
-  isDeleted       Boolean          @default(false) @map("is_deleted")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  variants        ProductVariant[]
-  wishlistItems   WishlistItem[]
-  reviews         Review[]
+  mediaUrls         String[]         @map("media_urls")
+  status            ProductStatus    @default(DRAFT)
+  tags              String[]         @default([])
+  metaTitle         String?          @map("meta_title")
+  metaDescription   String?          @map("meta_description")
+  collections       Collection[]     @relation("ProductCollections")
+  isDeleted         Boolean          @default(false) @map("is_deleted")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  variants          ProductVariant[]
+  wishlistItems     WishlistItem[]
+  reviews           Review[]
 
   @@index([categoryId])
   @@index([dropId])
@@ -242,20 +238,20 @@ model Product {
 }
 
 model ProductVariant {
-  id            String      @id @default(uuid())
-  productId     String      @map("product_id")
-  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  sku           String      @unique
-  size          String
-  color         String
-  stockQuantity      Int             @default(0) @map("stock_quantity")
-  lowStockThreshold  Int             @default(5) @map("low_stock_threshold")
-  priceOverride      Decimal?        @map("price_override") @db.Decimal(10, 2)
-  isDeleted          Boolean         @default(false) @map("is_deleted")
-  mediaUrls          String[]        @map("media_urls")
-  thumbnailUrl       String?         @map("thumbnail_url")
-  orderItems         OrderItem[]
-  cartItems          CartItem[]
+  id                   String                @id @default(uuid())
+  productId            String                @map("product_id")
+  product              Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku                  String                @unique
+  size                 String
+  color                String
+  stockQuantity        Int                   @default(0) @map("stock_quantity")
+  lowStockThreshold    Int                   @default(5) @map("low_stock_threshold")
+  priceOverride        Decimal?              @map("price_override") @db.Decimal(10, 2)
+  isDeleted            Boolean               @default(false) @map("is_deleted")
+  mediaUrls            String[]              @map("media_urls")
+  thumbnailUrl         String?               @map("thumbnail_url")
+  orderItems           OrderItem[]
+  cartItems            CartItem[]
   restockNotifications RestockNotification[]
 
   @@index([productId])
@@ -301,21 +297,21 @@ model Order {
 }
 
 model OrderItem {
-  id                String          @id @default(uuid())
-  orderId           String          @map("order_id")
-  order             Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productVariantId  String?         @map("product_variant_id")
-  productVariant    ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
-  customData        Json?           @map("custom_data")
-  quantity          Int
-  priceAtPurchase   Decimal         @map("price_at_purchase") @db.Decimal(10, 2)
-  returnRequest     ReturnRequest?
+  id               String          @id @default(uuid())
+  orderId          String          @map("order_id")
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productVariantId String?         @map("product_variant_id")
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+  customData       Json?           @map("custom_data")
+  quantity         Int
+  priceAtPurchase  Decimal         @map("price_at_purchase") @db.Decimal(10, 2)
+  returnRequest    ReturnRequest?
   // Phase 3 (audit item 3.1): snapshot the product title + thumbnail
   // at order time so historical orders still render correctly even if
   // the product or variant is later deleted / soft-deleted / hidden.
-  productTitle      String          @map("product_title")
-  productThumbnail  String?         @map("product_thumbnail")
-  productSku        String?         @map("product_sku")
+  productTitle     String          @map("product_title")
+  productThumbnail String?         @map("product_thumbnail")
+  productSku       String?         @map("product_sku")
 
   @@index([orderId])
   @@index([productVariantId])
@@ -502,10 +498,10 @@ model CartItem {
 }
 
 model WebhookEvent {
-  id        String              @id
-  status    WebhookEventStatus  @default(RECEIVED)
+  id        String             @id
+  status    WebhookEventStatus @default(RECEIVED)
   payload   Json
-  createdAt DateTime            @default(now()) @map("created_at")
+  createdAt DateTime           @default(now()) @map("created_at")
 
   @@index([status])
   @@map("webhook_events")
@@ -664,17 +660,17 @@ model ReturnStatusHistory {
 }
 
 model Refund {
-  id               String        @id @default(uuid())
-  orderId          String        @map("order_id")
-  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  paymentId        String?       @map("payment_id")
-  razorpayRefundId String?       @unique @map("razorpay_refund_id")
-  amountInPaise    Int           @map("amount_in_paise")
+  id               String         @id @default(uuid())
+  orderId          String         @map("order_id")
+  order            Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  paymentId        String?        @map("payment_id")
+  razorpayRefundId String?        @unique @map("razorpay_refund_id")
+  amountInPaise    Int            @map("amount_in_paise")
   reason           String?
-  status           RefundStatus  @default(INITIATED)
-  processedAt      DateTime?     @map("processed_at")
-  createdAt        DateTime      @default(now()) @map("created_at")
-  updatedAt        DateTime      @updatedAt @map("updated_at")
+  status           RefundStatus   @default(INITIATED)
+  processedAt      DateTime?      @map("processed_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
   return           ReturnRequest?
 
   @@index([orderId])

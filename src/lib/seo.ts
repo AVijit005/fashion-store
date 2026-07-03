@@ -7,7 +7,7 @@
 // and every URL goes through `getAbsoluteUrl()` so the site origin
 // matches across sitemap / canonical / OG / JSON-LD.
 
-import { SITE_URL, getAbsoluteUrl } from './env';
+import { SITE_URL, getAbsoluteUrl } from "./env";
 
 // ---- Types ----
 
@@ -41,12 +41,12 @@ interface BreadcrumbItem {
 // the pre-serialised JSON string — TanStack Router inserts the result as
 // the script body.
 export interface JsonLdScript {
-  type: 'application/ld+json';
+  type: "application/ld+json";
   children: string;
 }
 
 function absoluteUrl(path: string): string {
-  return path.startsWith('http') ? path : getAbsoluteUrl(path);
+  return path.startsWith("http") ? path : getAbsoluteUrl(path);
 }
 
 function stringified(payload: Record<string, unknown>): string {
@@ -55,7 +55,7 @@ function stringified(payload: Record<string, unknown>): string {
   // Otherwise search engines and devtools can flag mismatched JSON.
   const sortKeys = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(sortKeys);
-    if (value && typeof value === 'object') {
+    if (value && typeof value === "object") {
       const obj = value as Record<string, unknown>;
       return Object.keys(obj)
         .sort()
@@ -84,22 +84,22 @@ function stringified(payload: Record<string, unknown>): string {
 export function productJsonLd(p: ProductLike): JsonLdScript {
   const url = getAbsoluteUrl(`/p/${(p as { slug?: string }).slug ?? p.id}`);
   return {
-    type: 'application/ld+json',
+    type: "application/ld+json",
     children: stringified({
-      '@context': 'https://schema.org',
-      '@type': 'Product',
+      "@context": "https://schema.org",
+      "@type": "Product",
       name: p.name,
       description: p.story,
       image: p.images.map(absoluteUrl),
       sku: p.id,
-      brand: { '@type': 'Brand', name: 'Ink Studio' },
+      brand: { "@type": "Brand", name: "Ink Studio" },
       offers: {
-        '@type': 'Offer',
-        priceCurrency: 'INR',
+        "@type": "Offer",
+        priceCurrency: "INR",
         price: p.price,
-        availability: 'https://schema.org/InStock',
+        availability: "https://schema.org/InStock",
         url,
-        seller: { '@type': 'Organization', name: 'Ink Studio', url: SITE_URL },
+        seller: { "@type": "Organization", name: "Ink Studio", url: SITE_URL },
       },
     }),
   };
@@ -112,24 +112,24 @@ export function productJsonLd(p: ProductLike): JsonLdScript {
  */
 export function organizationJsonLd(): JsonLdScript {
   return {
-    type: 'application/ld+json',
+    type: "application/ld+json",
     children: stringified({
-      '@context': 'https://schema.org',
-      '@type': 'Organization',
-      name: 'Ink Studio',
-      alternateName: 'Aura Streetwear',
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "Ink Studio",
+      alternateName: "Aura Streetwear",
       description:
-        'Heavyweight cotton tees, anime drops, hoodies, jackets, and a print studio for one-of-one pieces.',
+        "Heavyweight cotton tees, anime drops, hoodies, jackets, and a print studio for one-of-one pieces.",
       url: SITE_URL,
-      logo: getAbsoluteUrl('/favicon.svg'),
+      logo: getAbsoluteUrl("/favicon.svg"),
       contactPoint: {
-        '@type': 'ContactPoint',
-        contactType: 'customer support',
-        url: getAbsoluteUrl('/contact'),
+        "@type": "ContactPoint",
+        contactType: "customer support",
+        url: getAbsoluteUrl("/contact"),
       },
       sameAs: [
         // Add real social URLs here as the brand grows.
-        'https://www.instagram.com/inkstudio',
+        "https://www.instagram.com/inkstudio",
       ],
     }),
   };
@@ -141,21 +141,21 @@ export function organizationJsonLd(): JsonLdScript {
  */
 export function websiteJsonLd(): JsonLdScript {
   return {
-    type: 'application/ld+json',
+    type: "application/ld+json",
     children: stringified({
-      '@context': 'https://schema.org',
-      '@type': 'WebSite',
-      name: 'Ink Studio',
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "Ink Studio",
       url: SITE_URL,
       potentialAction: {
-        '@type': 'SearchAction',
+        "@type": "SearchAction",
         target: {
-          '@type': 'EntryPoint',
+          "@type": "EntryPoint",
           urlTemplate: `${SITE_URL}/search?q={search_term_string}`,
         },
         // OGP expects the property "query-input" — must be a literal
         // string with the {search_term_string} placeholder.
-        'query-input': 'required name=search_term_string',
+        "query-input": "required name=search_term_string",
       },
     }),
   };
@@ -163,12 +163,12 @@ export function websiteJsonLd(): JsonLdScript {
 
 export function breadcrumbJsonLd(items: BreadcrumbItem[]): JsonLdScript {
   return {
-    type: 'application/ld+json',
+    type: "application/ld+json",
     children: stringified({
-      '@context': 'https://schema.org',
-      '@type': 'BreadcrumbList',
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
       itemListElement: items.map((it, i) => ({
-        '@type': 'ListItem',
+        "@type": "ListItem",
         position: i + 1,
         name: it.name,
         item: absoluteUrl(it.path),
@@ -179,17 +179,17 @@ export function breadcrumbJsonLd(items: BreadcrumbItem[]): JsonLdScript {
 
 export function collectionJsonLd(c: CollectionLike): JsonLdScript {
   return {
-    type: 'application/ld+json',
+    type: "application/ld+json",
     children: stringified({
-      '@context': 'https://schema.org',
-      '@type': 'CollectionPage',
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
       name: c.name,
       description: c.description,
       url: absoluteUrl(c.path),
       ...(c.itemCount
         ? {
             mainEntity: {
-              '@type': 'ItemList',
+              "@type": "ItemList",
               numberOfItems: c.itemCount,
             },
           }
@@ -200,4 +200,4 @@ export function collectionJsonLd(c: CollectionLike): JsonLdScript {
 
 // Re-export the env helpers so existing callers of `seo.ts` (like the
 // sitemap route) can pull them from a single import.
-export { SITE_URL, getAbsoluteUrl } from './env';
+export { SITE_URL, getAbsoluteUrl } from "./env";

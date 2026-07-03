@@ -16,11 +16,7 @@ import { ReturnStatus } from '@prisma/client';
  * transition out of a terminal state throws BadRequestException.
  */
 const ALLOWED: Record<ReturnStatus, ReturnStatus[]> = {
-  [ReturnStatus.REQUESTED]: [
-    ReturnStatus.APPROVED,
-    ReturnStatus.REJECTED,
-    ReturnStatus.CANCELLED,
-  ],
+  [ReturnStatus.REQUESTED]: [ReturnStatus.APPROVED, ReturnStatus.REJECTED, ReturnStatus.CANCELLED],
   [ReturnStatus.APPROVED]: [ReturnStatus.RECEIVED, ReturnStatus.CANCELLED],
   [ReturnStatus.REJECTED]: [],
   [ReturnStatus.RECEIVED]: [ReturnStatus.REFUND_INITIATED],

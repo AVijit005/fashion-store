@@ -29,8 +29,7 @@ export class RequestLoggerMiddleware implements NestMiddleware {
     const pathOnly = req.originalUrl.split('?')[0];
 
     res.on('finish', () => {
-      const durationMs =
-        Number(process.hrtime.bigint() - startNs) / 1_000_000;
+      const durationMs = Number(process.hrtime.bigint() - startNs) / 1_000_000;
 
       // The HTTP status class (2xx, 4xx, 5xx) is more useful than the
       // raw code for alerting \u2014 a single 4xx vs a single 5xx matters
@@ -45,9 +44,7 @@ export class RequestLoggerMiddleware implements NestMiddleware {
           statusClass,
           durationMs: Math.round(durationMs * 10) / 10,
           ip:
-            (req.headers['x-forwarded-for'] as string | undefined)
-              ?.split(',')[0]
-              ?.trim() ?? req.ip,
+            (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ?? req.ip,
           userAgent: req.headers['user-agent'],
           // Carry the correlation id (set by CorrelationIdMiddleware) so
           // the HTTP log line can be joined to application logs.

@@ -15,9 +15,7 @@ export interface ShippingUpdateTemplateData {
   estimatedDelivery?: string;
 }
 
-export function shippingUpdateTemplate(
-  d: ShippingUpdateTemplateData,
-): EmailTemplate {
+export function shippingUpdateTemplate(d: ShippingUpdateTemplateData): EmailTemplate {
   const greeting = d.name ? `Hi ${d.name},` : 'Hi there,';
   const subject = `Your order #${d.orderShortId} is on its way`;
   const trackingLine =

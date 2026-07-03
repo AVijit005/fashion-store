@@ -50,9 +50,7 @@ export function ReviewForm({ slug }: { slug: string }) {
       }}
       className="mt-6 space-y-3 border border-line p-4"
     >
-      <p className="text-[11px] uppercase tracking-[0.22em] text-mute">
-        Your rating
-      </p>
+      <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Your rating</p>
       <div className="flex gap-1">
         {[1, 2, 3, 4, 5].map((i) => (
           <button
@@ -62,11 +60,7 @@ export function ReviewForm({ slug }: { slug: string }) {
             aria-label={`Rate ${i} star${i === 1 ? "" : "s"}`}
             className="press p-1"
           >
-            <Star
-              className={`h-5 w-5 ${
-                i <= rating ? "fill-ink text-ink" : "text-line"
-              }`}
-            />
+            <Star className={`h-5 w-5 ${i <= rating ? "fill-ink text-ink" : "text-line"}`} />
           </button>
         ))}
       </div>

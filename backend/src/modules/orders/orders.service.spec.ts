@@ -7,7 +7,12 @@ import { AuditService } from '../audit/audit.service';
 import { Prisma, WebhookEventStatus } from '@prisma/client';
 import { InventoryService } from './inventory.service';
 import { getQueueToken } from '@nestjs/bullmq';
-import { NotFoundException, BadRequestException, ConflictException, InternalServerErrorException } from '@nestjs/common';
+import {
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
 import * as crypto from 'crypto';
 
@@ -39,7 +44,16 @@ describe('OrdersService', () => {
         { provide: CartService, useValue: cartService },
         { provide: ConfigService, useValue: configService },
         { provide: InventoryService, useValue: inventoryService },
-        { provide: 'REDIS_CLIENT', useValue: { get: jest.fn(), set: jest.fn(), del: jest.fn(), incr: jest.fn(), expire: jest.fn() } },
+        {
+          provide: 'REDIS_CLIENT',
+          useValue: {
+            get: jest.fn(),
+            set: jest.fn(),
+            del: jest.fn(),
+            incr: jest.fn(),
+            expire: jest.fn(),
+          },
+        },
         { provide: getQueueToken('order-expiry'), useValue: { add: jest.fn() } },
         { provide: AuditService, useValue: { create: jest.fn() } },
       ],
@@ -289,17 +303,19 @@ describe('OrdersService', () => {
       prismaService.$executeRaw = jest.fn().mockResolvedValue(undefined);
       prismaService.$queryRaw = jest.fn().mockResolvedValue([]);
 
-      prismaService.$transaction = jest.fn().mockImplementation(async (callback: any, _opts?: any) => {
-        const tx = {
-          idempotencyKey: prismaService.idempotencyKey,
-          order: prismaService.order,
-          orderStatusHistory: prismaService.orderStatusHistory,
-          coupon: prismaService.coupon,
-          $executeRaw: prismaService.$executeRaw,
-          $queryRaw: prismaService.$queryRaw,
-        };
-        return callback(tx);
-      });
+      prismaService.$transaction = jest
+        .fn()
+        .mockImplementation(async (callback: any, _opts?: any) => {
+          const tx = {
+            idempotencyKey: prismaService.idempotencyKey,
+            order: prismaService.order,
+            orderStatusHistory: prismaService.orderStatusHistory,
+            coupon: prismaService.coupon,
+            $executeRaw: prismaService.$executeRaw,
+            $queryRaw: prismaService.$queryRaw,
+          };
+          return callback(tx);
+        });
     });
 
     it('should return cached response for duplicate idempotency key', async () => {
@@ -489,31 +505,25 @@ describe('OrdersService', () => {
       jest.restoreAllMocks();
     });
 
-    it(
-      'should open circuit after 5 consecutive 5xx errors',
-      async () => {
-        const fetchSpy = jest
-          .spyOn(global, 'fetch')
-          .mockResolvedValue(mockFetchResponse(500, { error: 'Internal Server Error' }));
+    it('should open circuit after 5 consecutive 5xx errors', async () => {
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(mockFetchResponse(500, { error: 'Internal Server Error' }));
 
-        // Each checkout performs up to 3 fetch attempts, so two checkouts are enough
-        // to accumulate the 5 countable failures required to open the circuit.
-        await expect(service.checkout(baseCheckoutDto)).rejects.toThrow(
-          'Payment gateway is temporarily unavailable',
-        );
-        await expect(service.checkout(baseCheckoutDto)).rejects.toThrow(
-          'Payment gateway is temporarily unavailable',
-        );
+      // Each checkout performs up to 3 fetch attempts, so two checkouts are enough
+      // to accumulate the 5 countable failures required to open the circuit.
+      await expect(service.checkout(baseCheckoutDto)).rejects.toThrow(
+        'Payment gateway is temporarily unavailable',
+      );
+      await expect(service.checkout(baseCheckoutDto)).rejects.toThrow(
+        'Payment gateway is temporarily unavailable',
+      );
 
-        // The next checkout should see the open circuit and not invoke fetch.
-        await expect(service.checkout(baseCheckoutDto)).rejects.toThrow(
-          'Circuit breaker open',
-        );
+      // The next checkout should see the open circuit and not invoke fetch.
+      await expect(service.checkout(baseCheckoutDto)).rejects.toThrow('Circuit breaker open');
 
-        expect(fetchSpy).toHaveBeenCalledTimes(6);
-      },
-      20000,
-    );
+      expect(fetchSpy).toHaveBeenCalledTimes(6);
+    }, 20000);
 
     it('should not open circuit for 4xx errors', async () => {
       const fetchSpy = jest
@@ -590,16 +600,16 @@ describe('OrdersService', () => {
     });
 
     it('should only transition once when verifyPayment and handleWebhook race', async () => {
-      jest.spyOn(service as any, 'generateLockToken').mockReturnValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
+      jest
+        .spyOn(service as any, 'generateLockToken')
+        .mockReturnValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
       redisClient.set.mockResolvedValueOnce('OK').mockResolvedValueOnce(null);
       redisClient.get.mockResolvedValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
       redisClient.del.mockResolvedValue(1);
 
       prismaService.order.findUnique.mockResolvedValue(makePendingOrder());
 
-      const transitionSpy = jest
-        .spyOn(service, 'transitionStatus')
-        .mockResolvedValue({} as any);
+      const transitionSpy = jest.spyOn(service, 'transitionStatus').mockResolvedValue({} as any);
 
       const payload = {
         id: 'evt-1',
@@ -654,7 +664,9 @@ describe('OrdersService', () => {
     });
 
     it('should return idempotently from verifyPayment when order is already PAID', async () => {
-      jest.spyOn(service as any, 'generateLockToken').mockReturnValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
+      jest
+        .spyOn(service as any, 'generateLockToken')
+        .mockReturnValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
       redisClient.set.mockResolvedValue('OK');
       redisClient.get.mockResolvedValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
       redisClient.del.mockResolvedValue(1);
@@ -687,7 +699,9 @@ describe('OrdersService', () => {
     });
 
     it('should return skipped from handleWebhook when order is already PAID', async () => {
-      jest.spyOn(service as any, 'generateLockToken').mockReturnValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
+      jest
+        .spyOn(service as any, 'generateLockToken')
+        .mockReturnValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
       redisClient.set.mockResolvedValue('OK');
       redisClient.get.mockResolvedValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
       redisClient.del.mockResolvedValue(1);

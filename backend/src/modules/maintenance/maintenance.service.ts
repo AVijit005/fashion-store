@@ -150,9 +150,7 @@ export class MaintenanceService {
         adminProductsUrl: `${frontendUrl}/admin/products`,
       });
       await this.emailService.sendTemplate(adminEmail, template);
-      this.logger.log(
-        `Sent low-stock digest (${items.length} variants) to ${adminEmail}.`,
-      );
+      this.logger.log(`Sent low-stock digest (${items.length} variants) to ${adminEmail}.`);
     } catch (error) {
       this.logger.error('Failed to send low-stock digest', error);
     }

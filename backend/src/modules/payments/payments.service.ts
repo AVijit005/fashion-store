@@ -13,7 +13,10 @@ import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import * as crypto from 'crypto';
 import Redis from 'ioredis';
 import { EmailService } from '../email/email.service';
-import { orderConfirmationTemplate, OrderConfirmationTemplateData } from '../email/templates/order-confirmation';
+import {
+  orderConfirmationTemplate,
+  OrderConfirmationTemplateData,
+} from '../email/templates/order-confirmation';
 
 const LOCK_RELEASE_LUA = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -86,7 +89,16 @@ export class PaymentsService {
   ): Promise<T> {
     const lockKey = `payment:verify:${razorpayOrderId}`;
     const token = crypto.randomUUID();
-    const ok = await this.redisClient.set(lockKey, token, 'PX', timeoutMs, 'NX');
+    let ok: 'OK' | null;
+    try {
+      ok = await this.redisClient.set(lockKey, token, 'PX', timeoutMs, 'NX');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(
+        `Redis payment lock unavailable for ${razorpayOrderId}; falling back to DB advisory lock: ${msg}`,
+      );
+      return this.withPaymentDbLock(razorpayOrderId, fn);
+    }
     if (!ok) {
       throw new ConflictException('Payment verification already in progress.');
     }
@@ -100,6 +112,19 @@ export class PaymentsService {
         this.logger.error(`Failed to release payment lock ${lockKey}: ${msg}`);
       }
     }
+  }
+
+  private async withPaymentDbLock<T>(razorpayOrderId: string, fn: () => Promise<T>): Promise<T> {
+    const lockHash = crypto
+      .createHash('sha256')
+      .update(`payment:verify:${razorpayOrderId}`)
+      .digest();
+    const lockId = lockHash.readInt32LE(0);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockId})`;
+      return fn();
+    });
   }
 
   // ---------- Signature verification ----------
@@ -239,9 +264,7 @@ export class PaymentsService {
       } catch (e) {
         lastErr = e;
         const isCountableFailure =
-          !response ||
-          response.status >= 500 ||
-          (e instanceof Error && e.name === 'AbortError');
+          !response || response.status >= 500 || (e instanceof Error && e.name === 'AbortError');
         if (isCountableFailure) {
           this.razorpayFailures += 1;
           if (this.razorpayFailures >= this.CIRCUIT_FAILURE_THRESHOLD) {
@@ -402,23 +425,19 @@ export class PaymentsService {
     });
     if (!fullOrder) return;
 
-    const recipientEmail =
-      fullOrder.user?.email ?? fullOrder.shippingEmail;
+    const recipientEmail = fullOrder.user?.email ?? fullOrder.shippingEmail;
     if (!recipientEmail) return;
 
-    const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') ||
-      'http://localhost:5173';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     const orderUrl = `${frontendUrl.replace(/\/$/, '')}/checkout/success?orderId=${encodeURIComponent(fullOrder.id)}`;
 
     const items = fullOrder.items.map((it) => {
       const name =
-        (it as unknown as { productVariant?: { product?: { title?: string } } })
-          .productVariant?.product?.title ?? 'Item';
-      const size = (it as unknown as { productVariant?: { size?: string } })
-        .productVariant?.size;
-      const color = (it as unknown as { productVariant?: { color?: string } })
-        .productVariant?.color;
+        (it as unknown as { productVariant?: { product?: { title?: string } } }).productVariant
+          ?.product?.title ?? 'Item';
+      const size = (it as unknown as { productVariant?: { size?: string } }).productVariant?.size;
+      const color = (it as unknown as { productVariant?: { color?: string } }).productVariant
+        ?.color;
       const image = (
         it as unknown as {
           productVariant?: { thumbnailUrl?: string | null };
@@ -445,10 +464,7 @@ export class PaymentsService {
       subtotal: Number(fullOrder.totalAmount),
       shipping: Number(fullOrder.shippingFee),
       tax: Number(fullOrder.tax),
-      total:
-        Number(fullOrder.totalAmount) +
-        Number(fullOrder.shippingFee) +
-        Number(fullOrder.tax),
+      total: Number(fullOrder.totalAmount) + Number(fullOrder.shippingFee) + Number(fullOrder.tax),
       currency: 'INR',
       paymentMethod: paymentMethodLabel,
       orderUrl,

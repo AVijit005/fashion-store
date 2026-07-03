@@ -150,9 +150,9 @@ describe('AssetsController', () => {
         ContentType: 'text/html',
       });
 
-      await expect(
-        controller.confirmUpload(mockRequest, 'asset-123'),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(controller.confirmUpload(mockRequest, 'asset-123')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
 
       expect(prismaService.asset.update).toHaveBeenCalledWith({
         where: { id: 'asset-123' },

@@ -7,6 +7,8 @@ import { ResponseTransformInterceptor } from './common/interceptors/response.int
 import { correlationIdMiddleware } from './common/correlation/correlation-id.middleware';
 
 export function configureApp(app: INestApplication, configService: ConfigService) {
+  const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+
   app.use(correlationIdMiddleware);
 
   app.setGlobalPrefix('api');
@@ -17,18 +19,43 @@ export function configureApp(app: INestApplication, configService: ConfigService
 
   app.use(
     helmet({
-      crossOriginEmbedderPolicy: true,
       contentSecurityPolicy: {
+        useDefaults: true,
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", 'https://checkout.razorpay.com'],
-          frameSrc: ["'self'", 'https://checkout.razorpay.com'],
-          styleSrc: ["'self'"],
-          imgSrc: ["'self'", 'data:', 'https://*'],
-          connectSrc: ["'self'", 'https://api.razorpay.com'],
-          upgradeInsecureRequests: [],
+          scriptSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://checkout.razorpay.com',
+            'https://js.stripe.com',
+          ],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+          imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+          connectSrc: ["'self'", 'https://api.razorpay.com', 'https://*.sentry.io'],
+          frameSrc: ['https://checkout.razorpay.com', 'https://js.stripe.com'],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          frameAncestors: ["'none'"],
+          upgradeInsecureRequests: nodeEnv === 'production' ? [] : null,
         },
       },
+      crossOriginEmbedderPolicy: false,
+      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      strictTransportSecurity: {
+        maxAge: 63_072_000,
+        includeSubDomains: true,
+        preload: nodeEnv === 'production',
+      },
+      xContentTypeOptions: true,
+      xDnsPrefetchControl: { allow: false },
+      xDownloadOptions: true,
+      xFrameOptions: { action: 'deny' },
+      xPermittedCrossDomainPolicies: { permittedPolicies: 'none' },
+      xPoweredBy: false,
     }),
   );
   app.use(cookieParser());
@@ -43,7 +70,8 @@ export function configureApp(app: INestApplication, configService: ConfigService
     origin: allowedOrigins.length > 0 ? allowedOrigins : false,
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type, Accept, Authorization, x-cart-session-id, x-requested-with, x-xsrf-token',
+    allowedHeaders:
+      'Content-Type, Accept, Authorization, x-cart-session-id, x-requested-with, x-xsrf-token',
   });
 
   app.useGlobalPipes(

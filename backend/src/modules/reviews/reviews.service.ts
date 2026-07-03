@@ -51,11 +51,7 @@ export class ReviewsService {
     };
   }
 
-  async listForProduct(
-    productId: string,
-    limit = 20,
-    offset = 0,
-  ): Promise<ReviewListResponse> {
+  async listForProduct(productId: string, limit = 20, offset = 0): Promise<ReviewListResponse> {
     const [items, aggregate] = await Promise.all([
       this.prisma.review.findMany({
         where: { productId, isApproved: true },
@@ -89,11 +85,7 @@ export class ReviewsService {
    * least one DELIVERED order containing this product. One review per
    * user per product.
    */
-  async create(
-    productId: string,
-    userId: string,
-    dto: CreateReviewDto,
-  ): Promise<{ id: string }> {
+  async create(productId: string, userId: string, dto: CreateReviewDto): Promise<{ id: string }> {
     const owned = await this.prisma.orderItem.findFirst({
       where: {
         productVariant: { productId },
@@ -101,9 +93,7 @@ export class ReviewsService {
       },
     });
     if (!owned) {
-      throw new ForbiddenException(
-        'Only customers who purchased this product can review it',
-      );
+      throw new ForbiddenException('Only customers who purchased this product can review it');
     }
 
     const existing = await this.prisma.review.findFirst({
@@ -126,9 +116,7 @@ export class ReviewsService {
       select: { id: true },
     });
 
-    this.logger.log(
-      `Review created productId=${productId} userId=${userId} rating=${dto.rating}`,
-    );
+    this.logger.log(`Review created productId=${productId} userId=${userId} rating=${dto.rating}`);
 
     return created;
   }

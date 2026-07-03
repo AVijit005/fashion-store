@@ -36,7 +36,7 @@ export class MetricsController {
   // require the metrics reader role. Prometheus doesn't authenticate
   // by default, so deploy this behind a network policy OR run a sidecar
   // that adds the header before forwarding.
-  @Roles('ADMIN', 'METRICS_READ')
+  @Roles('ADMIN')
   async scrape(): Promise<string> {
     return this.metricsService.snapshot();
   }

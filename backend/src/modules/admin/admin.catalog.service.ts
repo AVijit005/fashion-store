@@ -43,7 +43,21 @@ export class AdminCatalogService {
   }
 
   async createProduct(data: any) {
-    const { categoryId, collectionId, variantsData, images, image, name, price, isActive, compareAtPrice, dropId, isFeatured, slug, description } = data;
+    const {
+      categoryId,
+      collectionId,
+      variantsData,
+      images,
+      image,
+      name,
+      price,
+      isActive,
+      compareAtPrice,
+      dropId,
+      isFeatured,
+      slug,
+      description,
+    } = data;
     return this.prisma.product.create({
       data: {
         title: name,
@@ -77,7 +91,21 @@ export class AdminCatalogService {
       throw new NotFoundException('Product not found');
     }
 
-    const { variantsData, images, image, categoryId, collectionId, dropId, name, price, isActive, compareAtPrice, slug, description, isFeatured } = data;
+    const {
+      variantsData,
+      images,
+      image,
+      categoryId,
+      collectionId,
+      dropId,
+      name,
+      price,
+      isActive,
+      compareAtPrice,
+      slug,
+      description,
+      isFeatured,
+    } = data;
 
     return this.prisma.$transaction(async (tx) => {
       if (variantsData) {
@@ -123,7 +151,7 @@ export class AdminCatalogService {
           categoryId,
           dropId,
           collections: collectionId ? { set: [{ id: collectionId }] } : undefined,
-          mediaUrls: images ? images : (image ? [image] : undefined),
+          mediaUrls: images ? images : image ? [image] : undefined,
         },
       });
     });

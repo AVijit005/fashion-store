@@ -36,7 +36,8 @@ export function ReturnRequestModal({
   const qc = useQueryClient();
 
   const submit = useMutation({
-    mutationFn: () => returnsApi.create({ orderItemId, reason, description: description || undefined }),
+    mutationFn: () =>
+      returnsApi.create({ orderItemId, reason, description: description || undefined }),
     onSuccess: () => {
       toast.success("Return request submitted — we'll review within 24h");
       qc.invalidateQueries({ queryKey: ["my-returns"] });
@@ -84,9 +85,7 @@ export function ReturnRequestModal({
         </div>
 
         <div>
-          <label className="block text-[11px] uppercase tracking-[0.22em] text-mute">
-            Reason
-          </label>
+          <label className="block text-[11px] uppercase tracking-[0.22em] text-mute">Reason</label>
           <select
             required
             value={reason}
@@ -117,8 +116,8 @@ export function ReturnRequestModal({
         </div>
 
         <p className="text-[11px] text-mute">
-          We accept returns within {`15`} days of delivery. Custom studio pieces are
-          non-returnable unless defective.
+          We accept returns within {`15`} days of delivery. Custom studio pieces are non-returnable
+          unless defective.
         </p>
 
         <div className="flex gap-2">

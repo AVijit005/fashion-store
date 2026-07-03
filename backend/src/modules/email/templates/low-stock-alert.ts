@@ -14,9 +14,7 @@ export interface LowStockAlertTemplateData {
   adminProductsUrl: string;
 }
 
-export function lowStockAlertTemplate(
-  d: LowStockAlertTemplateData,
-): EmailTemplate {
+export function lowStockAlertTemplate(d: LowStockAlertTemplateData): EmailTemplate {
   const rows = d.items
     .map(
       (it) => `

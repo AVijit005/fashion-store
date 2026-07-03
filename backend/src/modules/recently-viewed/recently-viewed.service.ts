@@ -1,5 +1,5 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "../../config/prisma.service";
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../../config/prisma.service';
 
 const MAX_PER_USER = 50;
 
@@ -69,7 +69,7 @@ export class RecentlyViewedService {
   async list(userId: string, limit = 12) {
     const rows = await this.prisma.recentlyViewed.findMany({
       where: { userId },
-      orderBy: { viewedAt: "desc" },
+      orderBy: { viewedAt: 'desc' },
       take: Math.min(limit, MAX_PER_USER),
       include: {
         user: false, // suppress the user payload in the response
@@ -93,7 +93,7 @@ export class RecentlyViewedService {
       },
     });
     const products = await this.prisma.product.findMany({
-      where: { id: { in: ids }, isDeleted: false, status: "PUBLISHED" },
+      where: { id: { in: ids }, isDeleted: false, status: 'PUBLISHED' },
       select: {
         id: true,
         slug: true,

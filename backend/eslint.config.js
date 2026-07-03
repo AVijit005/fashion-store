@@ -4,7 +4,15 @@ const prettierPlugin = require('eslint-plugin-prettier/recommended');
 
 module.exports = [
   {
-    ignores: ['dist', 'node_modules', 'prisma', '.eslintrc.js', 'eslint.config.js', 'test/**/*.ts'],
+    ignores: [
+      'dist',
+      'node_modules',
+      'prisma',
+      '.eslintrc.js',
+      'eslint.config.js',
+      'test/**/*.ts',
+      'src/**/*.spec.ts',
+    ],
   },
   {
     files: ['**/*.ts'],

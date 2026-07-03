@@ -1,9 +1,15 @@
-import { Injectable, Logger, BadRequestException, UnauthorizedException, NotFoundException } from "@nestjs/common";
-import { PrismaService } from "../../config/prisma.service";
-import { ConfigService } from "@nestjs/config";
-import * as speakeasy from "speakeasy";
-import * as QRCode from "qrcode";
-import * as crypto from "crypto";
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../../config/prisma.service';
+import { ConfigService } from '@nestjs/config';
+import * as speakeasy from 'speakeasy';
+import * as QRCode from 'qrcode';
+import * as crypto from 'crypto';
 
 /**
  * TwoFactorService — Phase 5 (audit item 5.2).
@@ -45,11 +51,11 @@ export class TwoFactorService {
    */
   async generateSecret(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException("User not found");
+    if (!user) throw new NotFoundException('User not found');
 
     const secret = speakeasy.generateSecret({
       name: `Aura Streetwear (${user.email})`,
-      issuer: this.configService.get<string>("APP_NAME") ?? "Aura Streetwear",
+      issuer: this.configService.get<string>('APP_NAME') ?? 'Aura Streetwear',
       length: 32,
     });
 
@@ -77,12 +83,12 @@ export class TwoFactorService {
   async verifyAndEnable(userId: string, code: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.twoFactorSecret) {
-      throw new BadRequestException("2FA setup not started — call /auth/2fa/setup first");
+      throw new BadRequestException('2FA setup not started — call /auth/2fa/setup first');
     }
 
     const isValid = this.verifyTotp(user.twoFactorSecret, code);
     if (!isValid) {
-      throw new BadRequestException("Invalid 2FA code");
+      throw new BadRequestException('Invalid 2FA code');
     }
 
     // Generate backup codes (single-use). Store hashes only.
@@ -107,14 +113,14 @@ export class TwoFactorService {
   async disable(userId: string, code: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.twoFactorSecret) {
-      throw new BadRequestException("2FA is not enabled");
+      throw new BadRequestException('2FA is not enabled');
     }
 
     // Accept either a TOTP code OR a valid backup code.
     const totpOk = this.verifyTotp(user.twoFactorSecret, code);
     const backupOk = !totpOk ? this.verifyBackupCode(user.twoFactorBackupCodes, code) : false;
     if (!totpOk && !backupOk) {
-      throw new UnauthorizedException("Invalid 2FA code");
+      throw new UnauthorizedException('Invalid 2FA code');
     }
 
     await this.prisma.user.update({
@@ -144,20 +150,18 @@ export class TwoFactorService {
   private verifyTotp(secretBase32: string, code: string): boolean {
     return speakeasy.totp.verify({
       secret: secretBase32,
-      encoding: "base32",
-      token: code.replace(/\s+/g, ""),
+      encoding: 'base32',
+      token: code.replace(/\s+/g, ''),
       window: 1, // ±30 seconds
     });
   }
 
   private generateBackupCodes(count: number): string[] {
-    return Array.from({ length: count }, () =>
-      crypto.randomBytes(4).toString("hex").toUpperCase(),
-    );
+    return Array.from({ length: count }, () => crypto.randomBytes(4).toString('hex').toUpperCase());
   }
 
   private hashBackupCode(code: string): string {
-    return crypto.createHash("sha256").update(code.toUpperCase()).digest("hex");
+    return crypto.createHash('sha256').update(code.toUpperCase()).digest('hex');
   }
 
   private verifyBackupCode(hashedCodes: string[], code: string): boolean {

@@ -1,1 +1,1 @@
-export { GoogleStrategy } from "./google.strategy";
+export { GoogleStrategy } from './google.strategy';
