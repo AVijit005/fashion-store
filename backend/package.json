@@ -54,7 +54,6 @@
     "ioredis": "^5.5.0",
     "multer": "2.2.0",
     "nest-winston": "^1.10.2",
-    "nestjs-throttler-storage-redis": "^0.5.1",
     "nodemailer": "^9.0.3",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",

@@ -1,5 +1,4 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import type { QueueOptions } from 'bullmq';
@@ -37,6 +36,7 @@ import { ContactModule } from './modules/contact/contact.module';
 import { RecentlyViewedModule } from './modules/recently-viewed/recently-viewed.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
+import { RedisThrottlerStorage } from './common/throttler/redis-throttler-storage';
 
 @Module({
   imports: [
@@ -49,8 +49,9 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env>) => ({
         throttlers: [{ ttl: 60000, limit: 100 }],
-        storage: new ThrottlerStorageRedisService(
+        storage: new RedisThrottlerStorage(
           config.get<string>('REDIS_URL') || 'redis://localhost:6379',
+          config.get('NODE_ENV', 'development') === 'production',
         ),
       }),
     }),

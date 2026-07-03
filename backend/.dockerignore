@@ -33,7 +33,6 @@ test
 .lovable
 
 # Frontend code accidentally inherited via monorepo
-src
 public
 old_seed*.ts
 replace-mock.cjs
