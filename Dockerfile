@@ -39,7 +39,7 @@ RUN bun run build
 # ---------- Stage 2: serve ----------
 # nginx-unprivileged ships as user `nginx` (UID 101) and listens on 8080 by
 # default. No root process in the container.
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runner
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runner
 
 # Copy the static bundle produced by the Nitro / Vercel preset.
 # Vite outputs here, NOT to /app/dist (the prior Dockerfile had this wrong).
