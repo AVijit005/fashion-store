@@ -58,7 +58,7 @@ jobs:
         run: bun run typecheck
 
       - name: Setup Node (Backend)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20.18'
           cache: 'npm'
@@ -127,7 +127,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20.18'
           cache: 'npm'
@@ -230,7 +230,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20.18'
           cache: 'npm'
