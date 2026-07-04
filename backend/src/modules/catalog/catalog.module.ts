@@ -5,9 +5,10 @@ import { SearchService } from './search.service';
 import { PostgresSearchService } from './postgres-search.service';
 
 import { AuthModule } from '../auth/auth.module';
+import { ReviewsModule } from '../reviews/reviews.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, ReviewsModule],
   controllers: [CatalogController],
   providers: [
     CatalogService,
