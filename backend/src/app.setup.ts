@@ -67,7 +67,13 @@ export function configureApp(app: INestApplication, configService: ConfigService
   const allowedOrigins = frontendOrigins ? frontendOrigins.split(',').map((o) => o.trim()) : [];
 
   app.enableCors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : false,
+    origin: function (origin, callback) {
+      if (!origin || origin.endsWith('.vercel.app') || origin.includes('localhost') || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders:
