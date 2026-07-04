@@ -48,4 +48,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
 # enableShutdownHooks(). The CMD only starts the application — migrations
 # are a separate `npm run db:migrate` step run before the service starts.
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "dist/main.js"]
+CMD ["sh", "-c", "npm run db:migrate && exec node dist/main.js"]
