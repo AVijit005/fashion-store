@@ -24,8 +24,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AppThrottlerGuard } from './common/guards/throttler.guard';
 import { APP_GUARD } from '@nestjs/core';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
-import { CsrfGuard } from './common/guards/csrf.guard';
-import { CsrfService } from './common/guards/csrf.service';
+import { CsrfModule } from './common/guards/csrf.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { NewsletterModule } from './modules/newsletter/newsletter.module';
@@ -119,6 +118,8 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler-storag
     // Phase 8: MetricsModule is @Global so any service can inject
     // MetricsService to increment counters / observe histograms.
     MetricsModule,
+    // Global CSRF configuration
+    CsrfModule,
     // Phase 6: conditionally enable BullMQ processors + @Cron jobs.
     // API replica runs with RUN_WORKERS unset/false (worker classes
     // are not provided, no @Processor subscribes to a queue, no @Cron
@@ -132,11 +133,6 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler-storag
       provide: APP_GUARD,
       useClass: AppThrottlerGuard,
     },
-    {
-      provide: APP_GUARD,
-      useClass: CsrfGuard,
-    },
-    CsrfService,
   ],
 })
 export class AppModule implements NestModule {
