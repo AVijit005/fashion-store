@@ -2,13 +2,40 @@ import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { inr } from "@/lib/format";
 import type { Product } from "@/lib/api/catalog";
+import { useCart } from "@/lib/store/cart";
+import { toast } from "sonner";
 
 export function CompleteTheLook({ items }: { items: Product[] }) {
+  const add = useCart((s) => s.add);
+  const setOpen = useCart((s) => s.setOpen);
+
   if (items.length === 0) return null;
   const total = items.reduce((s, p) => s + p.price, 0);
   // Phase 1 (audit item 1.2): mrp is nullable; treat null as 0 in the bundle
   // total so we never display a fake strikethrough for products without MRP.
   const mrp = items.reduce((s, p) => s + (p.mrp ?? 0), 0);
+
+  const handleAddLook = () => {
+    items.forEach((p) => {
+      const defaultVariant = p.variants?.[0];
+      const defaultSize = defaultVariant?.size || p.sizes?.[0] || "M";
+      const defaultColor = defaultVariant?.color || p.colors?.[0]?.name || "Ink";
+
+      add({
+        id: p.id,
+        variantId: defaultVariant?.id,
+        slug: p.slug,
+        name: p.name,
+        image: p.images[0],
+        price: p.price,
+        mrp: p.mrp ?? p.price,
+        size: defaultSize,
+        color: defaultColor,
+      });
+    });
+    toast.success("Added look to bag!");
+    setOpen(true);
+  };
 
   return (
     <section className="mx-auto max-w-[1480px] px-5 py-20 lg:px-10">
@@ -42,7 +69,10 @@ export function CompleteTheLook({ items }: { items: Product[] }) {
           <p className="text-[11px] uppercase tracking-[0.22em] text-mute">Bundle total</p>
           <p className="mt-2 font-display text-4xl tabular-nums">{inr(total)}</p>
           <p className="mt-1 text-[12px] text-mute line-through tabular-nums">{inr(mrp)}</p>
-          <button className="mt-6 w-full bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-paper">
+          <button
+            onClick={handleAddLook}
+            className="mt-6 w-full cursor-pointer bg-ink py-4 text-[12px] uppercase tracking-[0.22em] text-paper hover:bg-graphite transition"
+          >
             Add the look
           </button>
           <p className="mt-3 text-[11px] text-mute">Save 12% when bought together.</p>
