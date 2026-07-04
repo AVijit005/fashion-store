@@ -62,14 +62,22 @@ export class SettingsService implements OnModuleInit {
       ['studio.customPrintMarkup', DEFAULTS.studio.customPrintMarkup],
       ['refunds.autoApproveWindowDays', DEFAULTS.refunds.autoApproveWindowDays],
     ];
-    for (const [key, value] of rows) {
-      await this.prisma.globalSetting.upsert({
-        where: { key },
-        update: {},
-        create: { key, value: value as object },
-      });
+    try {
+      for (const [key, value] of rows) {
+        await this.prisma.globalSetting.upsert({
+          where: { key },
+          update: {},
+          create: { key, value: value as object },
+        });
+      }
+      this.logger.log(`Seeded ${rows.length} global settings rows`);
+    } catch (e: any) {
+      if (e?.code === 'P2021') {
+        this.logger.warn('Skipping default settings seed: table does not exist yet.');
+      } else {
+        throw e;
+      }
     }
-    this.logger.log(`Seeded ${rows.length} global settings rows`);
   }
 
   async getAll(): Promise<AppSettings> {

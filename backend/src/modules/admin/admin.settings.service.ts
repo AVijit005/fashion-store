@@ -67,16 +67,24 @@ export class AdminSettingsService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit() {
-    const existing = await this.prisma.globalSetting.findUnique({
-      where: { key: 'admin_config' },
-    });
-    if (!existing) {
-      await this.prisma.globalSetting.create({
-        data: {
-          key: 'admin_config',
-          value: DEFAULT_SETTINGS,
-        },
+    try {
+      const existing = await this.prisma.globalSetting.findUnique({
+        where: { key: 'admin_config' },
       });
+      if (!existing) {
+        await this.prisma.globalSetting.create({
+          data: {
+            key: 'admin_config',
+            value: DEFAULT_SETTINGS,
+          },
+        });
+      }
+    } catch (e: any) {
+      if (e?.code === 'P2021') {
+        console.warn('AdminSettingsService: Skipping onModuleInit, table does not exist yet.');
+      } else {
+        throw e;
+      }
     }
   }
 
