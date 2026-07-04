@@ -236,7 +236,7 @@ async function main() {
         await prisma.productVariant.create({
           data: {
             productId: productRecord.id,
-            sku: `${p.slug.toUpperCase().slice(0, 10)}-${color.name.toUpperCase().slice(0, 3)}-${size}`,
+            sku: `${p.slug.toUpperCase().slice(0, 15)}-${Math.floor(Math.random()*10000)}-${color.name.toUpperCase().slice(0, 3)}-${size}`,
             size,
             color: color.name,
             stockQuantity: 50, // 50 items stock
