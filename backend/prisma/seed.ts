@@ -239,9 +239,9 @@ for (let i = 0; i < 1000; i++) {
   const desc = DESCRIPTIONS[Math.floor(Math.random() * DESCRIPTIONS.length)];
   const price = Math.floor(Math.random() * (7000 - 1200 + 1) + 1200);
   
-  const img1 = PHOTO_IDS[Math.floor(Math.random() * PHOTO_IDS.length)];
-  let img2 = PHOTO_IDS[Math.floor(Math.random() * PHOTO_IDS.length)];
-  while(img2 === img1) { img2 = PHOTO_IDS[Math.floor(Math.random() * PHOTO_IDS.length)]; }
+  const img1 = PHOTO_URLS[Math.floor(Math.random() * PHOTO_URLS.length)];
+  let img2 = PHOTO_URLS[Math.floor(Math.random() * PHOTO_URLS.length)];
+  while(img2 === img1) { img2 = PHOTO_URLS[Math.floor(Math.random() * PHOTO_URLS.length)]; }
 
   const numTags = Math.floor(Math.random() * 3) + 1;
   const tags = [];
