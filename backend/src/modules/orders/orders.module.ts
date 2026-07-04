@@ -9,6 +9,7 @@ import { AuditModule } from '../audit/audit.module';
 import { InventoryService } from './inventory.service';
 import { PaymentsModule } from '../payments/payments.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
+import { EmailModule } from '../email/email.module';
 
 /**
  * OrdersModule is the HTTP + lifecycle surface for orders.
@@ -29,6 +30,7 @@ import { WebhooksModule } from '../webhooks/webhooks.module';
     AuditModule,
     PaymentsModule,
     WebhooksModule,
+    EmailModule,
   ],
   controllers: [OrdersController],
   providers: [
