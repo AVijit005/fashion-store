@@ -10,6 +10,7 @@ import { InventoryService } from './inventory.service';
 import { PaymentsModule } from '../payments/payments.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { EmailModule } from '../email/email.module';
+import { RestockNotificationsModule } from '../restock-notifications/restock-notifications.module';
 
 /**
  * OrdersModule is the HTTP + lifecycle surface for orders.
@@ -31,6 +32,7 @@ import { EmailModule } from '../email/email.module';
     PaymentsModule,
     WebhooksModule,
     EmailModule,
+    RestockNotificationsModule,
   ],
   controllers: [OrdersController],
   providers: [
