@@ -1,0 +1,144 @@
+services:
+  # 1. Backend API Service
+  - type: web
+    name: aura-backend
+    env: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npm run start:prod
+    rootDir: backend
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aura-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: aura-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: ap-south-1
+      - key: AWS_S3_BUCKET
+        sync: false
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: aura-frontend
+          property: url
+
+  # 2. Background Worker Service
+  - type: worker
+    name: aura-worker
+    env: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npm run start:worker
+    rootDir: backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aura-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: aura-redis
+          property: connectionString
+      - key: JWT_SECRET
+        fromService:
+          type: web
+          name: aura-backend
+          property: envVar:JWT_SECRET
+      - key: RAZORPAY_KEY_ID
+        fromService:
+          type: web
+          name: aura-backend
+          property: envVar:RAZORPAY_KEY_ID
+      - key: RAZORPAY_KEY_SECRET
+        fromService:
+          type: web
+          name: aura-backend
+          property: envVar:RAZORPAY_KEY_SECRET
+      - key: RAZORPAY_WEBHOOK_SECRET
+        fromService:
+          type: web
+          name: aura-backend
+          property: envVar:RAZORPAY_WEBHOOK_SECRET
+      - key: AWS_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: aura-backend
+          property: envVar:AWS_ACCESS_KEY_ID
+      - key: AWS_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: aura-backend
+          property: envVar:AWS_SECRET_ACCESS_KEY
+      - key: AWS_REGION
+        value: ap-south-1
+      - key: AWS_S3_BUCKET
+        fromService:
+          type: web
+          name: aura-backend
+          property: envVar:AWS_S3_BUCKET
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: aura-frontend
+          property: url
+
+  # 3. Frontend Service (TanStack Start Node Server)
+  - type: web
+    name: aura-frontend
+    env: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: node .vercel/output/server/index.mjs
+    envVars:
+      - key: NITRO_PRESET
+        value: node-server
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: aura-backend
+          property: url
+      - key: VITE_SITE_URL
+        fromService:
+          type: web
+          name: aura-frontend
+          property: url
+      - key: VITE_RAZORPAY_KEY_ID
+        fromService:
+          type: web
+          name: aura-backend
+          property: envVar:RAZORPAY_KEY_ID
+
+databases:
+  - name: aura-db
+    plan: starter
+    databaseName: aura_db
+    user: aura
+
+redis:
+  - name: aura-redis
+    plan: starter
+    ipAllowList: [] # Private network only

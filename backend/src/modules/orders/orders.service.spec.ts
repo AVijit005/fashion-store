@@ -4,7 +4,7 @@ import { PrismaService } from '../../config/prisma.service';
 import { CartService } from '../cart/cart.service';
 import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../audit/audit.service';
-import { Prisma, WebhookEventStatus } from '@prisma/client';
+import { Prisma, WebhookEventStatus, OrderStatus } from '@prisma/client';
 import { InventoryService } from './inventory.service';
 import { getQueueToken } from '@nestjs/bullmq';
 import {
@@ -15,6 +15,10 @@ import {
 } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
 import * as crypto from 'crypto';
+import { PaymentsService } from '../payments/payments.service';
+import { EmailService } from '../email/email.service';
+import { SettingsService } from '../../config/settings.service';
+import { RestockNotificationsService } from '../restock-notifications/restock-notifications.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -24,6 +28,11 @@ describe('OrdersService', () => {
   let inventoryService: any;
   let configService: any;
   let redisClient: any;
+
+  let paymentsService: any;
+  let emailService: any;
+  let settingsService: any;
+  let restockNotificationsService: any;
 
   beforeEach(async () => {
     prismaService = {
@@ -37,13 +46,32 @@ describe('OrdersService', () => {
     inventoryService = {};
     configService = { get: jest.fn() };
 
+    emailService = {
+      sendTemplate: jest.fn().mockResolvedValue(undefined),
+    };
+
+    settingsService = {
+      getAll: jest.fn().mockResolvedValue({
+        tax: { gstPercent: 18, hsnCode: '6109' },
+        shipping: { freeThreshold: 0, flatRate: 0 },
+        studio: { customPrintMarkup: 250 },
+        refunds: { autoApproveWindowDays: 7 },
+      }),
+    };
+
+    restockNotificationsService = {};
+
     testingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
+        PaymentsService,
         { provide: PrismaService, useValue: prismaService },
         { provide: CartService, useValue: cartService },
         { provide: ConfigService, useValue: configService },
         { provide: InventoryService, useValue: inventoryService },
+        { provide: EmailService, useValue: emailService },
+        { provide: SettingsService, useValue: settingsService },
+        { provide: RestockNotificationsService, useValue: restockNotificationsService },
         {
           provide: 'REDIS_CLIENT',
           useValue: {
@@ -52,6 +80,7 @@ describe('OrdersService', () => {
             del: jest.fn(),
             incr: jest.fn(),
             expire: jest.fn(),
+            eval: jest.fn(),
           },
         },
         { provide: getQueueToken('order-expiry'), useValue: { add: jest.fn() } },
@@ -60,7 +89,19 @@ describe('OrdersService', () => {
     }).compile();
 
     service = testingModule.get<OrdersService>(OrdersService);
+    paymentsService = testingModule.get<PaymentsService>(PaymentsService);
     redisClient = testingModule.get('REDIS_CLIENT');
+
+    // Default spies on PaymentsService
+    jest.spyOn(paymentsService, 'createGatewayOrder').mockResolvedValue({ razorpayOrderId: '' });
+    jest.spyOn(paymentsService, 'verifyPaymentSignature').mockImplementation((() => {}) as any);
+    jest.spyOn(paymentsService, 'withPaymentLock').mockImplementation((async (key: string, cb: any) => cb()) as any);
+    jest.spyOn(paymentsService, 'markOrderPaid').mockResolvedValue({
+      orderId: 'ord-1',
+      status: OrderStatus.PAID,
+      cartToClear: { userId: 'user-1', guestToken: null },
+    } as any);
+    jest.spyOn(paymentsService, 'refundPayment').mockResolvedValue(undefined);
   });
 
   describe('applyCoupon', () => {
@@ -415,6 +456,15 @@ describe('OrdersService', () => {
       }) as unknown as Response;
 
     beforeEach(() => {
+      // Restore createGatewayOrder mock so it runs the real implementation using fetch
+      const createOrderSpy = jest.spyOn(paymentsService, 'createGatewayOrder');
+      if (createOrderSpy.mockRestore) {
+        createOrderSpy.mockRestore();
+      }
+
+      (paymentsService as any).razorpayFailures = 0;
+      (paymentsService as any).razorpayCircuitOpenUntil = 0;
+
       configService.get.mockImplementation((key: string) => {
         if (key === 'RAZORPAY_KEY_ID') return 'rzp_test_abcdef12345678';
         if (key === 'RAZORPAY_KEY_SECRET') return 'secret12345678';
@@ -478,7 +528,15 @@ describe('OrdersService', () => {
         updateMany: jest.fn().mockResolvedValue({}),
       };
 
-      prismaService.$queryRaw = jest.fn().mockResolvedValue([]);
+      prismaService.$queryRaw = jest.fn().mockResolvedValue([
+        {
+          id: 'order-id-1',
+          status: 'PAYMENT_PENDING',
+          user_id: 'user-1',
+          guest_token: null,
+          coupon_code: null,
+        },
+      ]);
       prismaService.$queryRawUnsafe = jest.fn().mockResolvedValue([
         {
           id: 'order-id-1',
@@ -531,8 +589,8 @@ describe('OrdersService', () => {
         .mockResolvedValue(mockFetchResponse(400, { error: 'Bad Request' }));
 
       await expect(service.checkout(baseCheckoutDto)).rejects.toThrow('Razorpay API error');
-      expect((service as any).razorpayFailures).toBe(0);
-      expect((service as any).razorpayCircuitOpenUntil).toBe(0);
+      expect((paymentsService as any).razorpayFailures).toBe(0);
+      expect((paymentsService as any).razorpayCircuitOpenUntil).toBe(0);
 
       await expect(service.checkout(baseCheckoutDto)).rejects.toThrow('Razorpay API error');
       expect(fetchSpy).toHaveBeenCalledTimes(2);
@@ -543,16 +601,12 @@ describe('OrdersService', () => {
     const razorpayOrderId = 'order_rzp_1';
     const razorpayPaymentId = 'pay_1';
     const keySecret = 'razorpay-secret';
-    const webhookSecret = 'webhook-secret';
 
     const makeVerifySignature = () =>
       crypto
         .createHmac('sha256', keySecret)
         .update(`${razorpayOrderId}|${razorpayPaymentId}`)
         .digest('hex');
-
-    const makeWebhookSignature = (payload: any) =>
-      crypto.createHmac('sha256', webhookSecret).update(JSON.stringify(payload)).digest('hex');
 
     const makePendingOrder = (overrides: any = {}) => ({
       id: 'ord-1',
@@ -565,31 +619,25 @@ describe('OrdersService', () => {
     });
 
     beforeEach(() => {
-      redisClient.set = jest.fn();
-      redisClient.get = jest.fn();
-      redisClient.del = jest.fn();
-
       cartService.clearCart = jest.fn().mockResolvedValue(undefined);
-
-      configService.get.mockImplementation((key: string) => {
-        if (key === 'RAZORPAY_KEY_SECRET') return keySecret;
-        if (key === 'RAZORPAY_WEBHOOK_SECRET') return webhookSecret;
-        return undefined;
-      });
 
       prismaService.order = {
         findUnique: jest.fn(),
         update: jest.fn().mockResolvedValue({}),
       };
 
-      prismaService.webhookEvent = {
-        create: jest.fn().mockResolvedValue({}),
-      };
-
       prismaService.$transaction = jest.fn().mockImplementation(async (callback: any) => {
         const tx = {
           order: prismaService.order,
-          webhookEvent: prismaService.webhookEvent,
+          $queryRaw: jest.fn().mockResolvedValue([
+            {
+              id: 'ord-1',
+              status: 'PAYMENT_PENDING',
+              user_id: 'user-1',
+              guest_token: null,
+              coupon_code: null,
+            },
+          ]),
         };
         return callback(tx);
       });
@@ -599,86 +647,13 @@ describe('OrdersService', () => {
       jest.restoreAllMocks();
     });
 
-    it('should only transition once when verifyPayment and handleWebhook race', async () => {
-      jest
-        .spyOn(service as any, 'generateLockToken')
-        .mockReturnValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
-      redisClient.set.mockResolvedValueOnce('OK').mockResolvedValueOnce(null);
-      redisClient.get.mockResolvedValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
-      redisClient.del.mockResolvedValue(1);
-
+    it('should transition to PAID and clear cart when order is PAYMENT_PENDING', async () => {
       prismaService.order.findUnique.mockResolvedValue(makePendingOrder());
-
-      const transitionSpy = jest.spyOn(service, 'transitionStatus').mockResolvedValue({} as any);
-
-      const payload = {
-        id: 'evt-1',
-        event: 'order.paid',
-        payload: {
-          payment: {
-            entity: {
-              order_id: razorpayOrderId,
-              id: razorpayPaymentId,
-            },
-          },
-        },
-      };
-
-      const [verifyResult, webhookResult] = await Promise.allSettled([
-        service.verifyPayment(
-          {
-            razorpayOrderId,
-            razorpayPaymentId,
-            razorpaySignature: makeVerifySignature(),
-          },
-          'user-1',
-        ),
-        service.handleWebhook(JSON.stringify(payload), makeWebhookSignature(payload)),
-      ]);
-
-      expect(verifyResult.status).toBe('fulfilled');
-      expect((verifyResult as any).value).toEqual({
-        success: true,
+      (paymentsService.markOrderPaid as jest.Mock).mockResolvedValue({
         orderId: 'ord-1',
-        status: 'PAID',
+        status: OrderStatus.PAID,
+        cartToClear: { userId: 'user-1', guestToken: null },
       });
-
-      expect(webhookResult.status).toBe('rejected');
-      expect((webhookResult as any).reason).toBeInstanceOf(ConflictException);
-      expect((webhookResult as any).reason.message).toBe(
-        'Payment verification already in progress.',
-      );
-
-      expect(transitionSpy).toHaveBeenCalledTimes(1);
-      expect(transitionSpy).toHaveBeenCalledWith(
-        'ord-1',
-        'PAID',
-        'USER',
-        'Payment signature verified.',
-        expect.anything(),
-      );
-
-      expect(cartService.clearCart).toHaveBeenCalledTimes(1);
-      expect(cartService.clearCart).toHaveBeenCalledWith('user-1', undefined);
-      expect(redisClient.del).toHaveBeenCalledWith(`payment:verify:${razorpayOrderId}`);
-    });
-
-    it('should return idempotently from verifyPayment when order is already PAID', async () => {
-      jest
-        .spyOn(service as any, 'generateLockToken')
-        .mockReturnValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
-      redisClient.set.mockResolvedValue('OK');
-      redisClient.get.mockResolvedValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
-      redisClient.del.mockResolvedValue(1);
-
-      prismaService.order.findUnique.mockResolvedValue(
-        makePendingOrder({
-          status: 'PAID',
-          razorpayPaymentId,
-        }),
-      );
-
-      const transitionSpy = jest.spyOn(service, 'transitionStatus');
 
       const result = await service.verifyPayment(
         {
@@ -694,18 +669,19 @@ describe('OrdersService', () => {
         orderId: 'ord-1',
         status: 'PAID',
       });
-      expect(transitionSpy).not.toHaveBeenCalled();
-      expect(cartService.clearCart).not.toHaveBeenCalled();
+
+      expect(paymentsService.markOrderPaid).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ id: 'ord-1' }),
+        razorpayPaymentId,
+        'USER',
+        'Payment signature verified.',
+        expect.any(String),
+      );
+      expect(cartService.clearCart).toHaveBeenCalledWith('user-1', null);
     });
 
-    it('should return skipped from handleWebhook when order is already PAID', async () => {
-      jest
-        .spyOn(service as any, 'generateLockToken')
-        .mockReturnValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
-      redisClient.set.mockResolvedValue('OK');
-      redisClient.get.mockResolvedValue('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
-      redisClient.del.mockResolvedValue(1);
-
+    it('should return idempotently from verifyPayment when order is already PAID', async () => {
       prismaService.order.findUnique.mockResolvedValue(
         makePendingOrder({
           status: 'PAID',
@@ -713,36 +689,39 @@ describe('OrdersService', () => {
         }),
       );
 
-      const transitionSpy = jest.spyOn(service, 'transitionStatus');
-
-      const payload = {
-        id: 'evt-2',
-        event: 'order.paid',
-        payload: {
-          payment: {
-            entity: {
-              order_id: razorpayOrderId,
-              id: razorpayPaymentId,
-            },
-          },
+      const result = await service.verifyPayment(
+        {
+          razorpayOrderId,
+          razorpayPaymentId,
+          razorpaySignature: makeVerifySignature(),
         },
-      };
-
-      const result = await service.handleWebhook(
-        JSON.stringify(payload),
-        makeWebhookSignature(payload),
+        'user-1',
       );
 
-      expect(result).toEqual({ status: WebhookEventStatus.SKIPPED });
-      expect(transitionSpy).not.toHaveBeenCalled();
-      expect(cartService.clearCart).not.toHaveBeenCalled();
-      expect(prismaService.webhookEvent.create).toHaveBeenCalledWith({
-        data: {
-          id: 'evt-2',
-          status: WebhookEventStatus.SKIPPED,
-          payload,
-        },
+      expect(result).toEqual({
+        success: true,
+        orderId: 'ord-1',
+        status: 'PAID',
       });
+      expect(paymentsService.markOrderPaid).not.toHaveBeenCalled();
+      expect(cartService.clearCart).not.toHaveBeenCalled();
+    });
+
+    it('should propagate ConflictException when lock is busy', async () => {
+      paymentsService.withPaymentLock.mockRejectedValueOnce(
+        new ConflictException('Payment verification already in progress.'),
+      );
+
+      await expect(
+        service.verifyPayment(
+          {
+            razorpayOrderId,
+            razorpayPaymentId,
+            razorpaySignature: makeVerifySignature(),
+          },
+          'user-1',
+        ),
+      ).rejects.toThrow(ConflictException);
     });
   });
 });

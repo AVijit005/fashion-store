@@ -2,11 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { CartService } from './cart.service';
 import { PrismaService } from '../../config/prisma.service';
+import { SettingsService } from '../../config/settings.service';
 
 describe('CartService', () => {
   let service: CartService;
   let prismaService: any;
   let redisClient: any;
+  let settingsService: any;
 
   beforeEach(async () => {
     redisClient = {
@@ -36,10 +38,20 @@ describe('CartService', () => {
       $executeRaw: jest.fn(),
     };
 
+    settingsService = {
+      getAll: jest.fn().mockResolvedValue({
+        tax: { gstPercent: 18, hsnCode: '6109' },
+        shipping: { freeThreshold: 5000, flatRate: 150 },
+        studio: { customPrintMarkup: 250 },
+        refunds: { autoApproveWindowDays: 7 },
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CartService,
         { provide: PrismaService, useValue: prismaService },
+        { provide: SettingsService, useValue: settingsService },
         { provide: 'REDIS_CLIENT', useValue: redisClient },
       ],
     }).compile();

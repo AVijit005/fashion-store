@@ -99,7 +99,9 @@ describe('validateEnv', () => {
         JWT_SECRET: 'a-very-strong-production-jwt-secret-32-plus',
         RAZORPAY_KEY_ID: 'rzp_live_strong_key_id_value',
         RAZORPAY_KEY_SECRET: 'strong_razorpay_key_secret_value',
-        RAZORPAY_WEBHOOK_SECRET: 'strong_razorpay_webhook_secret',
+        RAZORPAY_WEBHOOK_SECRET: 'strong_razorpay_webhook_secret_32_chars',
+        AWS_ACCESS_KEY_ID: 'strong_aws_access_key_id_value',
+        AWS_SECRET_ACCESS_KEY: 'strong_aws_secret_access_key_value_32_chars',
       });
       expect(env.NODE_ENV).toBe('production');
     });
