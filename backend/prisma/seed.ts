@@ -191,61 +191,60 @@ async function main() {
   });
   console.log('✅ Seeded active Drop.');
 
-  // Seed Products and Variants
-  for (const p of PRODUCTS_MOCK) {
-    const categoryId = categoryMap.get(p.categorySlug);
-    if (!categoryId) {
-      console.warn(`Category not found for slug: ${p.categorySlug}`);
-      continue;
-    }
+  // Seed Products and Variants in chunks to bypass network latency
+  const chunkSize = 50;
+  for (let i = 0; i < PRODUCTS_MOCK.length; i += chunkSize) {
+    const chunk = PRODUCTS_MOCK.slice(i, i + chunkSize);
+    
+    await Promise.all(chunk.map(async (p) => {
+      const categoryId = categoryMap.get(p.categorySlug);
+      if (!categoryId) return;
 
-    const imageUrls = p.imgIds.map(
-      (id: string) => `https://images.unsplash.com/photo-${id}?w=1200&q=80&auto=format&fit=crop`,
-    );
+      const imageUrls = p.imgIds.map(
+        (id: string) => `https://images.unsplash.com/photo-${id}?w=1200&q=80&auto=format&fit=crop`,
+      );
 
-    // Pick 1-2 random collections
-    const numCols = Math.floor(Math.random() * 2) + 1;
-    const selectedCols = [];
-    for(let j=0; j<numCols; j++) {
-      selectedCols.push({ id: collectionIds[Math.floor(Math.random() * collectionIds.length)] });
-    }
-
-    const productRecord = await prisma.product.create({
-      data: {
-        title: p.title,
-        slug: p.slug,
-        description: p.description,
-        basePrice: p.price,
-        isFeatured: p.isFeatured,
-        mediaUrls: imageUrls,
-        status: ProductStatus.PUBLISHED,
-        categoryId: categoryId,
-        tags: p.tags,
-        dropId: p.categorySlug === 'anime' ? drop.id : null,
-        collections: {
-          connect: selectedCols
-        }
-      },
-    });
-
-    // Create unique variants for sizes and colors
-    // Use Bone, Graphite, Ink, Forest as default variants
-    const colors = COLORS.slice(0, 3);
-    const variantsData = [];
-    for (const color of colors) {
-      for (const size of SIZES) {
-        variantsData.push({
-            productId: productRecord.id,
-            sku: `${p.slug.toUpperCase().slice(0, 15)}-${Math.floor(Math.random()*100000)}-${color.name.toUpperCase().slice(0, 3)}-${size}`,
-            size,
-            color: color.name,
-            stockQuantity: 50,
-            mediaUrls: imageUrls,
-            thumbnailUrl: imageUrls[0],
-        });
+      // Pick 1-2 random collections
+      const numCols = Math.floor(Math.random() * 2) + 1;
+      const selectedCols = [];
+      for(let j=0; j<numCols; j++) {
+        selectedCols.push({ id: collectionIds[Math.floor(Math.random() * collectionIds.length)] });
       }
-    }
-    await prisma.productVariant.createMany({ data: variantsData });
+
+      const productRecord = await prisma.product.create({
+        data: {
+          title: p.title,
+          slug: p.slug,
+          description: p.description,
+          basePrice: p.price,
+          isFeatured: p.isFeatured,
+          mediaUrls: imageUrls,
+          status: ProductStatus.PUBLISHED,
+          categoryId: categoryId,
+          tags: p.tags,
+          dropId: p.categorySlug === 'anime' ? drop.id : null,
+          collections: { connect: selectedCols }
+        },
+      });
+
+      const colors = COLORS.slice(0, 3);
+      const variantsData = [];
+      for (const color of colors) {
+        for (const size of SIZES) {
+          variantsData.push({
+              productId: productRecord.id,
+              sku: `${p.slug.toUpperCase().slice(0, 15)}-${Math.floor(Math.random()*100000)}-${color.name.toUpperCase().slice(0, 3)}-${size}`,
+              size,
+              color: color.name,
+              stockQuantity: 50,
+              mediaUrls: imageUrls,
+              thumbnailUrl: imageUrls[0],
+          });
+        }
+      }
+      await prisma.productVariant.createMany({ data: variantsData });
+    }));
+    console.log(`✅ Seeded ${Math.min(i + chunkSize, PRODUCTS_MOCK.length)} / ${PRODUCTS_MOCK.length} products...`);
   }
 
   console.log(`✅ Seeded ${PRODUCTS_MOCK.length} products with aesthetic images & collections.`);
