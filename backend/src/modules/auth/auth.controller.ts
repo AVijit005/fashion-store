@@ -221,7 +221,7 @@ export class AuthController {
       httpOnly: true,
       secure: isProduction,
       path: '/api/v1/auth/refresh',
-      sameSite: 'lax',
+      sameSite: isProduction ? 'none' : 'lax',
       maxAge: expiryDays * 24 * 60 * 60 * 1000,
     });
   }
@@ -231,7 +231,7 @@ export class AuthController {
     res.cookie('refresh_token', '', {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: isProduction ? 'none' : 'lax',
       path: '/api/v1/auth/refresh',
       expires: new Date(0),
     });
@@ -242,7 +242,7 @@ export class AuthController {
     res.cookie('access_token', token, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: isProduction ? 'none' : 'strict',
       path: '/api/v1',
       maxAge: 15 * 60 * 1000, // 15 minutes
     });
@@ -253,7 +253,7 @@ export class AuthController {
     res.cookie('access_token', '', {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: isProduction ? 'none' : 'strict',
       path: '/api/v1',
       expires: new Date(0),
     });
@@ -264,7 +264,7 @@ export class AuthController {
     res.cookie('XSRF-TOKEN', token, {
       httpOnly: false,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: isProduction ? 'none' : 'strict',
       path: '/',
     });
   }

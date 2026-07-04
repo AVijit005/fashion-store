@@ -106,20 +106,20 @@ export class TwoFactorController {
       httpOnly: true,
       secure: isProduction,
       path: '/api/v1/auth/refresh',
-      sameSite: 'lax',
+      sameSite: isProduction ? 'none' : 'lax',
       maxAge: expiryDays * 24 * 60 * 60 * 1000,
     });
     res.cookie('access_token', tokens.accessToken, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: isProduction ? 'none' : 'strict',
       path: '/',
       maxAge: 15 * 60 * 1000,
     });
     res.cookie('XSRF-TOKEN', this.csrfService.generateToken(), {
       httpOnly: false,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: isProduction ? 'none' : 'strict',
       path: '/',
     });
     return { user: tokens.user };
