@@ -11,6 +11,7 @@ import { RedisModule } from './config/redis.module';
 import { HealthModule } from './modules/health/health.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { TwoFactorModule } from './modules/two-factor/two-factor.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { CartModule } from './modules/cart/cart.module';
 import { OrdersModule } from './modules/orders/orders.module';
@@ -98,6 +99,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler-storag
     HealthModule,
     UsersModule,
     AuthModule,
+    TwoFactorModule,
     CatalogModule,
     CartModule,
     OrdersModule,

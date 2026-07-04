@@ -8,7 +8,6 @@ import { UsersModule } from '../users/users.module';
 import { AuditModule } from '../audit/audit.module';
 import { EmailModule } from '../email/email.module';
 import { GoogleStrategy } from './strategies';
-import { TwoFactorModule } from '../two-factor/two-factor.module';
 
 @Module({
   imports: [
@@ -18,10 +17,9 @@ import { TwoFactorModule } from '../two-factor/two-factor.module';
     BullModule.registerQueue({ name: 'email-queue' }),
     JwtModule.register({ global: true }),
     PassportModule.register({ defaultStrategy: 'jwt', session: false }),
-    TwoFactorModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, GoogleStrategy],
-  exports: [AuthService, JwtModule, TwoFactorModule],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
