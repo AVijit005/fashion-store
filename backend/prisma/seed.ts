@@ -26,16 +26,20 @@ const CATEGORIES = [
 ];
 
 const PHOTO_IDS = [
-  'photo-1550614000-4b95d466f2fb', 'photo-1523398002811-999aa8d9511e', 'photo-1539109136881-3be0616acf4b',
-  'photo-1512436991641-6745cdb1723f', 'photo-1492288991661-058aa541ff43', 'photo-1552374196-1ab2a1c593e8',
-  'photo-1529139574466-a303027c1d8b', 'photo-1487222477894-8943e31ef7b2', 'photo-1483985988355-763728e1935b',
-  'photo-1503342217505-b0a15ec3261c', 'photo-1507680434267-3236ca9eece4', 'photo-1620799140408-edc6dcb6d633',
-  'photo-1515886657613-9f3515b0c78f', 'photo-1551028719-00167b16eac5', 'photo-1517841905240-472988babdf9',
-  'photo-1521572163474-6864f9cf17ab', 'photo-1556821840-3a63f95609a7', 'photo-1445205170230-053b83016050',
-  'photo-1520975954732-57dd22299614', 'photo-1544441893-675973e31985', 'photo-1485231183945-fffde7cecebe',
-  'photo-1581655353564-df123a1eb820', 'photo-1583743814966-8936f5b7be1a', 'photo-1554568218-0f1715e72254',
-  'photo-1611312449408-fcece27cdbb1', 'photo-1578587018452-892bace03574', 'photo-1618354691373-d851c5c3a990',
-  'photo-1529374255404-311a2a4f1fd9', 'photo-1469334031218-e382a71b716b', 'photo-1503341504253-dff4815485f1'
+  "luIWvCbY27Y","bO3S03I2Aw8","J-YQ36vC2F8","YsiSAp3ccvk","VYCs2WnAdc0","QW9FrzPj70U","I6zJ-SYLJYY","2GHCdtW45Uw","KtWQNkFTzyY","dwvtsZsyTZw",
+  "4TQJPykwpR0","-7oth7kZEo8","Tt3niyJNIfI","N-t9hvcMTK0","yf50syI_Dwg","20Bxjm6XrYM","xTqR2Js61lY","aNj8Hvbrss8","Zbrz62vBmb0","WcwCGMETMaM",
+  "zEIcgD9ByFQ","PKMvkg7vnUo","UqT55tGBqzI","FO-zQd7Wqio","Ou_qAxGXgAw","4_90zmmdo_4","HbAddptme1Q","bWUOx0SaSAk","XLGp2f98j5s","qUp0UsT89BY",
+  "6ugQ978v-zg","1tjMpBTvFAA","2fmeu4TM0s8","DQP03Vq78Z4","HlVjI5WmoQY","J4TEzb9mb3A","ODxDFR5eSF8","aWQOX_2cLMo","WJ85c_l6JSE","XIzZ0eRDUuo",
+  "FWhedlR-NB0","kJXGTOY1wLQ","a_KC8ocB650","SXpun7pdECU","QsnEj9MHsR8","ZCoqcrWp9GY","ggcJKGpx3pI","REOoETloFqE","5kDousA_mFI","mWSXyWe2H9Q",
+  "QWlXPidIgI8","ikLELWYbyxk","NvgnUnlHuu0","T_8gjuk1Weo","AGwMgxZs1L0","YjxcPMb7JGw","SUA238ozrU4","N6BP12FB_XU","E3NUmCScugo","eIjEDkRzbOQ",
+  "CNfL-6ryEMg","GREEBEtyR9Y","mlKE8dEMc_8","TysFvOl78u0","-RCEPHyCrfU","tT6k5S0fvxs","3h-390a18dE","jeeVeM86xKw","oAjRnndSIbs","BRDiOWVhfyA",
+  "4BZqOyWyWzg","J69l0Z2c-h0","_NTxalBDieo","VAKgOEborN8","EfWgpl_bkYI","ryVx7NgAzys","B0VeVVsosQw","9ldWUhmhQ98","y8JrDRdwO0M","ZQqpq882kpk",
+  "_1RHO9z8veg","UbpugDwd7aU","A-jQFU_YBj4","-upHwnSlzgU","nR_7ouIp4MQ","BrgWLDXXDRY","nxTGK83K_0g","NqQ5vQfIks8","By6VIlRdSUM","APruJbRC2Ws",
+  "x-qrFAMZgyA","LY7bAU7-Km0","LZO4U6Z86og","i-oDmoREEMY","EK1vH8JhI_4","qoKjMBMWRrU","1Q9BUQL7v1w","Bl05nJb1xyU","wawa1fW57zA","dhOqw0S_4bQ",
+  "1-6q3sT4zuA","TS--uNw-JqE","5gkYsrH_ebY","QZGQO3NvsLo","z_U3jYqOpTw","fr0J5-GIVyg","A2M4F2Ryk10","Tqv3noCldRc","iRw6IKXn7gY","oa7pqZmmhuA",
+  "rz3sw-8VNCw","AKqGrt7Q1DU","Aqr_bPlqj-o","1WV-QdVf5V8","Apw4z0D9xVE","x8Llz_0QhDk","VJeK3RPK8y4","oLSnyhU2BVU","2122jrt79G8","SnlmvzWKNqM",
+  "ft2UhxkefwE","164_6wVEHfI","kP6knT7tjn4","jvoZ-Aux9aw","gKEp40qEezc","su7PjvuQ-1c","SD9Jyl1xNQ4","a-QH9MAAVNI","xw-Wr37B_gQ","dwKiHoqqxk8",
+  "LxVxPA1LOVM","sYbEa40YhWQ","fHp119FuLlE","SxAXphIPWeg","J2-wAQDckus","PqbL_mxmaUE","kYfWXbyuh-s","NOpsC3nWTzY","mV54HFd3xOQ","aDZ5YIuedQg"
 ];
 
 const NOUNS = [
@@ -96,11 +100,12 @@ const DESCRIPTIONS = [
   'Architecturally structured with raw edges and subtle tonal branding.'
 ];
 
-const TAGS_POOL = ['oversized', 'bestseller', 'trending', 'new', 'limited', 'anime'];
+const TAGS_POOL = ['oversized', 'bestseller', 'trending', 'new', 'limited', 'anime', 'y2k', 'cyberpunk', 'essential'];
 
 const PRODUCTS_MOCK: any[] = [];
 
-for (let i = 0; i < 500; i++) {
+// Generating 1000 aesthetic products
+for (let i = 0; i < 1000; i++) {
   const adj = ADJECTIVES[i % ADJECTIVES.length];
   const nounObj = NOUNS[Math.floor(Math.random() * NOUNS.length)];
   const title = `${adj} ${nounObj.term}`;
@@ -131,6 +136,15 @@ for (let i = 0; i < 500; i++) {
   });
 }
 
+const COLLECTIONS_SEED = [
+  { name: 'Summer Collection', slug: 'summer-collection', desc: 'Lightweight styles for hot seasons' },
+  { name: 'Winter Drop', slug: 'winter-drop', desc: 'Heavyweight fleece and outerwear' },
+  { name: 'Cyberpunk Core', slug: 'cyberpunk-core', desc: 'Techwear and futuristic aesthetics' },
+  { name: 'Y2K Archives', slug: 'y2k-archives', desc: 'Nostalgic 2000s inspired pieces' },
+  { name: 'Essentials', slug: 'essentials', desc: 'Minimalist everyday basics' },
+  { name: 'Anime Collabs', slug: 'anime-collabs', desc: 'Exclusive anime inspired designs' },
+];
+
 async function main() {
   console.log('🌱 Seeding DB...');
 
@@ -152,15 +166,19 @@ async function main() {
   console.log(`✅ Seeded ${categoryMap.size} categories.`);
 
   // Seed Collections
-  const collection = await prisma.collection.create({
-    data: {
-      name: 'Summer Collection',
-      slug: 'summer-collection',
-      description: 'Lightweight styles for hot seasons',
-      isActive: true,
-    },
-  });
-  console.log('✅ Seeded Summer Collection.');
+  const collectionIds: string[] = [];
+  for (const col of COLLECTIONS_SEED) {
+    const record = await prisma.collection.create({
+      data: {
+        name: col.name,
+        slug: col.slug,
+        description: col.desc,
+        isActive: true,
+      },
+    });
+    collectionIds.push(record.id);
+  }
+  console.log(`✅ Seeded ${collectionIds.length} Collections.`);
 
   // Seed Drops
   const drop = await prisma.drop.create({
@@ -182,8 +200,15 @@ async function main() {
     }
 
     const imageUrls = p.imgIds.map(
-      (id: string) => `https://images.unsplash.com/${id}?w=1200&q=80&auto=format&fit=crop`,
+      (id: string) => `https://images.unsplash.com/photo-${id}?w=1200&q=80&auto=format&fit=crop`,
     );
+
+    // Pick 1-2 random collections
+    const numCols = Math.floor(Math.random() * 2) + 1;
+    const selectedCols = [];
+    for(let j=0; j<numCols; j++) {
+      selectedCols.push({ id: collectionIds[Math.floor(Math.random() * collectionIds.length)] });
+    }
 
     const productRecord = await prisma.product.create({
       data: {
@@ -197,6 +222,9 @@ async function main() {
         categoryId: categoryId,
         tags: p.tags,
         dropId: p.categorySlug === 'anime' ? drop.id : null,
+        collections: {
+          connect: selectedCols
+        }
       },
     });
 
@@ -220,7 +248,7 @@ async function main() {
     }
   }
 
-  console.log(`✅ Seeded ${PRODUCTS_MOCK.length} products with variants.`);
+  console.log(`✅ Seeded ${PRODUCTS_MOCK.length} products with aesthetic images & collections.`);
   console.log('🌱 Database Seeding Completed!');
 }
 
