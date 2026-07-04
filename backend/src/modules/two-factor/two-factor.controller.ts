@@ -116,13 +116,14 @@ export class TwoFactorController {
       path: '/',
       maxAge: 15 * 60 * 1000,
     });
-    res.cookie('XSRF-TOKEN', this.csrfService.generateToken(), {
+    const token = this.csrfService.generateToken();
+    res.cookie('XSRF-TOKEN', token, {
       httpOnly: false,
       secure: isProduction,
       sameSite: isProduction ? 'none' : 'strict',
       path: '/',
     });
-    return { user: tokens.user };
+    return { user: tokens.user, csrfToken: token };
   }
 
   /**

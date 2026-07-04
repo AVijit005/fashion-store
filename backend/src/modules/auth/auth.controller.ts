@@ -38,8 +38,9 @@ export class AuthController {
   @ApiOperation({ summary: 'Set the XSRF-TOKEN cookie for CSRF protection' })
   @ApiResponse({ status: 200, description: 'CSRF cookie set' })
   async getCsrf(@Res({ passthrough: true }) res: Response) {
-    this.setXsrfTokenCookie(res, this.csrfService.generateToken());
-    return { message: 'CSRF cookie set' };
+    const token = this.csrfService.generateToken();
+    this.setXsrfTokenCookie(res, token);
+    return { message: 'CSRF cookie set', csrfToken: token };
   }
 
   @Post('signup')
@@ -48,8 +49,9 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'User successfully registered' })
   async signUp(@Body() signUpDto: SignUpDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.signUp(signUpDto);
-    this.setXsrfTokenCookie(res, this.csrfService.generateToken());
-    return result;
+    const token = this.csrfService.generateToken();
+    this.setXsrfTokenCookie(res, token);
+    return { ...result, csrfToken: token };
   }
 
   @Get('me')
@@ -76,9 +78,10 @@ export class AuthController {
     const tokens = await this.authService.login(loginDto, ipAddress, userAgent);
     this.setRefreshTokenCookie(res, tokens.refreshToken);
     this.setAccessTokenCookie(res, tokens.accessToken);
-    this.setXsrfTokenCookie(res, this.csrfService.generateToken());
+    const token = this.csrfService.generateToken();
+    this.setXsrfTokenCookie(res, token);
 
-    return { user: tokens.user };
+    return { user: tokens.user, csrfToken: token };
   }
 
   @Post('refresh')

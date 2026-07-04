@@ -39,7 +39,10 @@ function buildApiUrl(path: string): URL {
   return new URL(`${base}${prefix}${normalizedPath}`);
 }
 
+let memoryXsrfToken: string | undefined;
+
 function getXsrfToken(): string | undefined {
+  if (memoryXsrfToken) return memoryXsrfToken;
   if (typeof document === "undefined") return undefined;
   const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : undefined;
@@ -69,9 +72,19 @@ async function ensureCsrfToken(): Promise<void> {
       method: "GET",
       credentials: "include",
     })
-      .then((response) => {
+      .then(async (response) => {
         if (!response.ok) {
           throw new APIError("Unable to initialize CSRF token", response.status, null);
+        }
+        try {
+          const data = await response.json();
+          if (data && typeof data === "object" && "csrfToken" in data) {
+            memoryXsrfToken = data.csrfToken as string;
+          } else if (data && data.data && typeof data.data === "object" && "csrfToken" in data.data) {
+            memoryXsrfToken = data.data.csrfToken as string;
+          }
+        } catch (e) {
+          // ignore parsing error
         }
       })
       .finally(() => {
@@ -193,7 +206,13 @@ export const apiClient = {
               if (retryResponse.status === 204) {
                 return null as T;
               }
-              return unwrapApiData<T>(await retryResponse.json(), options.validate);
+              const parsed = await retryResponse.json();
+              if (parsed && typeof parsed === "object" && "csrfToken" in parsed) {
+                memoryXsrfToken = parsed.csrfToken as string;
+              } else if (parsed && parsed.data && typeof parsed.data === "object" && "csrfToken" in parsed.data) {
+                memoryXsrfToken = parsed.data.csrfToken as string;
+              }
+              return unwrapApiData<T>(parsed, options.validate);
             }
           } catch (err) {
             console.error("Token rotation retry failed:", err);
@@ -250,7 +269,13 @@ export const apiClient = {
     }
 
     try {
-      return unwrapApiData<T>(await response.json(), options.validate);
+      const parsed = await response.json();
+      if (parsed && typeof parsed === "object" && "csrfToken" in parsed) {
+        memoryXsrfToken = parsed.csrfToken as string;
+      } else if (parsed && parsed.data && typeof parsed.data === "object" && "csrfToken" in parsed.data) {
+        memoryXsrfToken = parsed.data.csrfToken as string;
+      }
+      return unwrapApiData<T>(parsed, options.validate);
     } catch (err) {
       if (err instanceof TypeError || err instanceof APIError) {
         throw err;
