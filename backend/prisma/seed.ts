@@ -231,21 +231,21 @@ async function main() {
     // Create unique variants for sizes and colors
     // Use Bone, Graphite, Ink, Forest as default variants
     const colors = COLORS.slice(0, 3);
+    const variantsData = [];
     for (const color of colors) {
       for (const size of SIZES) {
-        await prisma.productVariant.create({
-          data: {
+        variantsData.push({
             productId: productRecord.id,
-            sku: `${p.slug.toUpperCase().slice(0, 15)}-${Math.floor(Math.random()*10000)}-${color.name.toUpperCase().slice(0, 3)}-${size}`,
+            sku: `${p.slug.toUpperCase().slice(0, 15)}-${Math.floor(Math.random()*100000)}-${color.name.toUpperCase().slice(0, 3)}-${size}`,
             size,
             color: color.name,
-            stockQuantity: 50, // 50 items stock
+            stockQuantity: 50,
             mediaUrls: imageUrls,
             thumbnailUrl: imageUrls[0],
-          },
         });
       }
     }
+    await prisma.productVariant.createMany({ data: variantsData });
   }
 
   console.log(`✅ Seeded ${PRODUCTS_MOCK.length} products with aesthetic images & collections.`);
