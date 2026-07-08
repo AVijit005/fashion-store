@@ -98,7 +98,7 @@ jobs:
 
       - name: Send Slack notification on failure
         if: failure()
-        uses: slackapi/slack-github-action@v1
+        uses: slackapi/slack-github-action@v3
         with:
           payload: |
             text: ":fire: Aura smoke test failed on ${{ github.workflow_run.head_branch || github.ref }} \u2014 ${{ github.run_id }}"
