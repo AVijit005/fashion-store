@@ -35,7 +35,7 @@ jobs:
     name: Lint + Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -124,7 +124,7 @@ jobs:
       AWS_S3_BUCKET: aura-test-bucket
       AWS_S3_ENDPOINT: http://localhost:9000
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -172,7 +172,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint-typecheck
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -227,7 +227,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -266,7 +266,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -334,7 +334,7 @@ jobs:
       packages: read
       id-token: write   # required for OIDC
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Configure AWS credentials via OIDC. The role's trust policy must
       # allow the repo + branch. See DEPLOY.md (Phase 10).
